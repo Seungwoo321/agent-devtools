@@ -1,0 +1,68 @@
+{
+  "name": "@agent-devtools/react",
+  "version": "0.0.0",
+  "description": "React 19 adapter for agent-devtools — fiber walker + DOM picker + closed Shadow DOM widget",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "react",
+    "react-devtools",
+    "claude",
+    "llm",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/react#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
+  },
+  "dependencies": {
+    "@agent-devtools/core": "workspace:*",
+    "dompurify": "^3.2.7",
+    "marked": "^16.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "happy-dom": "^20.9.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/react"
+  }
+}
