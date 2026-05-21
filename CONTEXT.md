@@ -33,11 +33,11 @@ OSS, 거의 같은 컨셉의 floating widget + 요소 picker (https://stagewise.
 ```
 agent-devtools/
 ├── packages/
-│   ├── core/              → @agent-devtools/core           (server, widget shell — 프레임워크 무관)
+│   ├── core/              → @agent-devtools/core           (server + widget shell + CLI bin, 프레임워크 무관)
 │   ├── harness-core/      → @agent-devtools/harness-core   (LLM provider 추상화 + loop 전략, 도메인 무관)
-│   ├── react/             → @agent-devtools/react          (React 19 fiber walker + DOM picker)
-│   ├── vite/              → @agent-devtools/vite           (Vite plugin — auto-inject + dev-only 게이트)
-│   └── e2e/               → @agent-devtools/e2e            (E2E 검증)
+│   ├── react/             → @agent-devtools/react          (React 19 fiber walker + DOM picker + widget UI)
+│   ├── vite/              → @agent-devtools/vite           (Vite 8 plugin — auto-inject + dev-only 게이트)
+│   └── e2e/               → @agent-devtools/e2e            (Playwright E2E, private)
 ├── examples/
 │   └── react-vite/        → Phase 0 종단 검증 샘플
 ├── docs/                  → 사용자 가이드 사이트 (Astro Starlight, ko/en)

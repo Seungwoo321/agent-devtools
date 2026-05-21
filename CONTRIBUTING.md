@@ -62,11 +62,14 @@ CI (GitHub Actions) 도 동일 게이트를 통과해야 머지됩니다.
 
 ```
 packages/
-├── core/    @agent-devtools/core   (framework-agnostic)
-├── react/   @agent-devtools/react  (peerDeps: react ≥19, react-dom ≥19)
-└── vite/    @agent-devtools/vite   (peerDeps: vite ≥8)
+├── core/          @agent-devtools/core          (framework-agnostic — server + widget shell, CLI bin)
+├── harness-core/  @agent-devtools/harness-core  (도메인-무관 loop 전략 + LLM provider 추상화, optional peerDeps)
+├── react/         @agent-devtools/react         (peerDeps: react ≥19, react-dom ≥19)
+├── vite/          @agent-devtools/vite          (peerDeps: vite ≥8)
+└── e2e/           @agent-devtools/e2e           (Playwright end-to-end suite, private)
 examples/
-└── react-vite/  Phase 0 종단 검증 샘플
+└── react-vite/    @agent-devtools/example-react-vite (Phase 0 종단 검증 샘플)
+docs/              Astro Starlight 사용자 가이드 (워크스페이스 멤버)
 ```
 
 새 어댑터 패키지 (vue/next/nuxt) 는 후속 milestone 입니다 — 사전 issue 없이 PR 으로 추가하지 말아주세요.
