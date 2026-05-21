@@ -1,0 +1,74 @@
+{
+  "name": "@agent-devtools/core",
+  "version": "0.0.0",
+  "description": "Framework-agnostic core for agent-devtools — server, agent engine, widget shell",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "claude",
+    "agent",
+    "llm",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    }
+  },
+  "bin": {
+    "agent-devtools": "./bin/agent-devtools.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/core"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.33.1",
+    "@agentclientprotocol/sdk": "0.21.1",
+    "@anthropic-ai/claude-agent-sdk": "0.2.140"
+  }
+}
