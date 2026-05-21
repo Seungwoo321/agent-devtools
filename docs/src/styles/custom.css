@@ -1,0 +1,13 @@
+/* agent-devtools docs — Starlight overrides */
+
+/* Header social icons (GitHub etc.) — keep them in the regular text color so
+   they sit visually beside the theme/lang select icons, only flip to the
+   accent on hover/focus. Default Starlight paints them in the accent color
+   which makes GitHub look "highlighted" against neutral chrome. */
+.social-icons a {
+  color: var(--sl-color-text);
+}
+.social-icons a:hover,
+.social-icons a:focus-visible {
+  color: var(--sl-color-text-accent);
+}

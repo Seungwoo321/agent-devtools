@@ -1,0 +1,24 @@
+{
+  "name": "@agent-devtools/docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "agent-devtools 사용자 가이드 사이트 (Astro Starlight, ko/en)",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "astro": "^5.10.0",
+    "@astrojs/starlight": "^0.36.0",
+    "sharp": "^0.34.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "typescript": "^6.0.3"
+  }
+}
