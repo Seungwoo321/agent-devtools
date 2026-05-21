@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="agent-devtools favicon">
+  <title>agent-devtools</title>
+  <rect width="32" height="32" rx="6" fill="#4f46e5"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 11 V7 H11"/>
+    <path d="M21 7 H25 V11"/>
+    <path d="M25 21 V25 H21"/>
+    <path d="M11 25 H7 V21"/>
+  </g>
+  <path d="M13 11.5 L19 16 L13 20.5" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
