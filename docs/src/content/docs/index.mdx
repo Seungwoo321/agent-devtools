@@ -1,0 +1,39 @@
+---
+title: agent-devtools
+description: 페이지 안에서 바로 동작하는 in-page 에이전트 데브툴. 본인의 Claude 구독을 그대로 활용.
+template: splash
+hero:
+  tagline: 페이지 안에서 바로 코드까지 고치는 in-page 에이전트 데브툴. 본인의 Claude Pro / Max 구독을 그대로 활용.
+  actions:
+    - text: 시작하기
+      link: /guides/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/Seungwoo321/agent-devtools
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="UI 에서 바로 고친다" icon="pencil">
+		플로팅 위젯에서 자연어 프롬프트를 보내면 로컬 Claude Code 가 그 자리에서 코드를 편집합니다.
+	</Card>
+	<Card title="본인 구독 그대로" icon="seti:lock">
+		Anthropic API 키가 아니라 `~/.claude` 의 OAuth 토큰을 재사용합니다. 새 결제 없음.
+	</Card>
+	<Card title="2개 provider" icon="laptop">
+		C (ACP) child process 와 A (SDK) in-process 두 가지 — 위젯에서 전환 가능.
+	</Card>
+	<Card title="페이지 컨텍스트 자동 첨부" icon="setting">
+		Pick 으로 element 선택 → React fiber 메타 (`componentName`, `sourceLocation`) 자동 첨부.
+	</Card>
+</CardGrid>
+
+## 다음 단계
+
+- [소개](/guides/introduction/)에서 무엇을 하는 도구인지부터 읽기
+- [설치](/guides/installation/)에서 Vite + React 프로젝트에 5분 안에 붙이기
+- [Provider 가이드](/guides/providers/)에서 ACP vs SDK 트레이드오프 확인
