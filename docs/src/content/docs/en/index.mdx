@@ -1,0 +1,39 @@
+---
+title: agent-devtools
+description: An in-page agent devtool that edits your code in place — powered by your own Claude subscription.
+template: splash
+hero:
+  tagline: An in-page agent devtool that edits your code in place — powered by your own Claude Pro / Max subscription.
+  actions:
+    - text: Get started
+      link: /en/guides/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/Seungwoo321/agent-devtools
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="Edit from the UI" icon="pencil">
+		Type a prompt into the floating widget; your local Claude Code edits the source files directly.
+	</Card>
+	<Card title="Reuses your subscription" icon="seti:lock">
+		No API key — the local CLI reuses your `~/.claude` OAuth session. No extra billing.
+	</Card>
+	<Card title="Two providers" icon="laptop">
+		C (ACP) runs Claude as a child process; A (SDK) runs it in-process. Switch from the widget.
+	</Card>
+	<Card title="Page context, automatic" icon="setting">
+		Pick an element and the widget attaches its React fiber metadata (`componentName`, `sourceLocation`) to the prompt.
+	</Card>
+</CardGrid>
+
+## Next steps
+
+- Read the [Introduction](/en/guides/introduction/) to learn what it is and what it isn't.
+- Follow [Installation](/en/guides/installation/) to wire it into a Vite + React app in 5 minutes.
+- Compare providers in the [Provider guide](/en/guides/providers/).
