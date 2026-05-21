@@ -1,0 +1,59 @@
+{
+  "name": "agent-devtools-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "OSS in-page agent devtools for React/Vue/Next/Nuxt — BYO Claude subscription",
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "packageManager": "pnpm@11.1.1",
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/**\" run build",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -r --filter=!@agent-devtools/e2e run test",
+    "e2e": "pnpm --filter @agent-devtools/e2e test",
+    "e2e:install": "pnpm --filter @agent-devtools/e2e install:browsers",
+    "clean": "pnpm -r exec rm -rf dist .turbo node_modules/.cache",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint-react/eslint-plugin": "^5.7.7",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,cjs,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
