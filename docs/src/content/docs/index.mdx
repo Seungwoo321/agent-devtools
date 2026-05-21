@@ -25,10 +25,10 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 		Anthropic API 키가 아니라 `~/.claude` 의 OAuth 토큰을 재사용합니다. 새 결제 없음.
 	</Card>
 	<Card title="2개 provider" icon="laptop">
-		C (ACP) child process 와 A (SDK) in-process 두 가지 — 위젯에서 전환 가능.
+		`acp` (Claude Code 자식 프로세스) 와 `sdk` (in-process Claude Agent SDK) 두 가지 — 위젯 설정 패널에서 전환 가능.
 	</Card>
 	<Card title="페이지 컨텍스트 자동 첨부" icon="setting">
-		Pick 으로 element 선택 → React fiber 메타 (`componentName`, `sourceLocation`) 자동 첨부.
+		Pick 으로 element 선택 → React fiber 메타 (`componentName`, `fileName`, `lineNumber`) 자동 첨부.
 	</Card>
 </CardGrid>
 
