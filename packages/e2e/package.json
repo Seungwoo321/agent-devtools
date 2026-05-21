@@ -1,0 +1,21 @@
+{
+  "name": "@agent-devtools/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright end-to-end suite — drives the example React + Vite app against live SDK and ACP providers.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "typecheck": "tsc --noEmit",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/example-react-vite": "workspace:*",
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3"
+  }
+}
