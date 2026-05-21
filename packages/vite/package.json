@@ -1,0 +1,65 @@
+{
+  "name": "@agent-devtools/vite",
+  "version": "0.0.0",
+  "description": "Vite 8 plugin for agent-devtools — auto-spawn agent server + dev-only widget injection",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "vite",
+    "vite-plugin",
+    "claude",
+    "llm",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/vite#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "vite": ">=8.0.0"
+  },
+  "dependencies": {
+    "@agent-devtools/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsup": "^8.5.1",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/vite"
+  }
+}
