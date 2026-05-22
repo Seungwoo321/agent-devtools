@@ -8,3 +8,6 @@ pnpm-lock.yaml
 *.tsbuildinfo
 .playwright-mcp
 .pack-out
+.astro
+playwright-report
+test-results
