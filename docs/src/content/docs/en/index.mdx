@@ -18,18 +18,22 @@ hero:
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
-	<Card title="Edit from the UI" icon="pencil">
-		Type a prompt into the floating widget; your local Claude Code edits the source files directly.
-	</Card>
-	<Card title="Reuses your subscription" icon="seti:lock">
-		No Anthropic API key — the dev server reuses your `~/.claude` OAuth session. No extra billing.
-	</Card>
-	<Card title="Two providers" icon="laptop">
-		`acp` (default) runs Claude Code as a child process; `sdk` runs it in-process. Switch from the widget.
-	</Card>
-	<Card title="Page context, automatic" icon="setting">
-		Pick an element and the widget attaches its React fiber metadata (`componentName`, `sourceLocation`) to the prompt.
-	</Card>
+  <Card title="Edit from the UI" icon="pencil">
+    Type a prompt into the floating widget; your local Claude Code edits the
+    source files directly.
+  </Card>
+  <Card title="Reuses your subscription" icon="seti:lock">
+    No Anthropic API key — the dev server reuses your `~/.claude` OAuth session.
+    No extra billing.
+  </Card>
+  <Card title="Two providers" icon="laptop">
+    `acp` (default) runs Claude Code as a child process; `sdk` runs it
+    in-process. Switch from the widget.
+  </Card>
+  <Card title="Page context, automatic" icon="setting">
+    Pick an element and the widget attaches its React fiber metadata
+    (`componentName`, `sourceLocation`) to the prompt.
+  </Card>
 </CardGrid>
 
 ## Next steps
