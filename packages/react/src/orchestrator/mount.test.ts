@@ -577,12 +577,10 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
   });
 
   it('calls requestHandoff with the user/assistant turns from the message store', async () => {
-    const requestHandoff = vi
-      .fn()
-      .mockResolvedValue({
-        file: '/tmp/x.md',
-        command: 'claude --append-system-prompt-file /tmp/x.md',
-      });
+    const requestHandoff = vi.fn().mockResolvedValue({
+      file: '/tmp/x.md',
+      command: 'claude --append-system-prompt-file /tmp/x.md',
+    });
     const handle = mountAgentDevtools({ requestHandoff });
     handle.store.appendUserMessage('why red');
     handle.store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'because' });
