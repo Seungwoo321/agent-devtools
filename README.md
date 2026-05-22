@@ -8,31 +8,36 @@
   OSS in-page agent devtools for React/Vue/Next/Nuxt — bring your own LLM subscription.
 </p>
 
-브라우저에서 개발 중인 페이지에 떠 있는 floating 채팅창. 자연어로 UI/기능 수정을 요청하면, **그 채팅창 안에서 직접** 에이전트가 코드를 읽고 수정한다. 별도 IDE 가 필요 없다.
+<p align="center">
+  <strong>English</strong> · <a href="./README.ko.md">한국어</a>
+</p>
+
+A floating chat window pinned to the page you are developing. Ask in natural language to change UI or behavior, and the agent reads and edits the code **inside that same chat window**. No separate IDE required.
 
 ## Demo
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)
 
-위젯 안에서 자연어로 "Counter 제목 글씨 키우고 빨간색으로 바꿔줘" 라고 지시하면 에이전트가 `App.tsx` 와 `styles.css` 를 읽고 `Edit` 으로 수정한다. Vite HMR 이 변경된 CSS 를 즉시 반영해 같은 화면 안에서 결과까지 확인된다.
+Inside the widget, type something like "make the Counter title bigger and red" and the agent reads `App.tsx` and `styles.css` and applies an `Edit`. Vite HMR reflects the new CSS instantly so you confirm the result without leaving the page.
 
 ## Status
 
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) 종단 검증 단계. 아직 npm 에 배포되지 않았다.
+🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) end-to-end verification. Not yet published to npm.
 
-자세한 컨텍스트·결정 로그·스코프는 [`CONTEXT.md`](./CONTEXT.md) 참고.
+- User guide (ko / en): <https://agent-devtools.seungwoo321.dev>
+- Context, decision log, scope: [`CONTEXT.md`](./CONTEXT.md)
 
 ## What it is
 
-- **개발자도구 카테고리 OSS** — React DevTools / TanStack Query DevTools 와 동일 카테고리.
-- **로컬 LLM 에이전트 호출 + 코드 수정** — Claude Agent SDK 로 본인의 Claude Pro/Max 구독 (Agent SDK Credit) 재사용.
-- **BYO subscription** — 운영자가 API 키 비용을 떠안지 않는다.
+- **A devtools-category OSS** — same category as React DevTools / TanStack Query DevTools.
+- **Local LLM agent calls + code edits** — Claude Agent SDK reuses your own Claude Pro/Max subscription (Agent SDK Credit).
+- **BYO subscription** — the project never carries the API key bill for you.
 
 ## What it is NOT
 
-- ❌ AI IDE 종속 (Cursor / Windsurf / Claude Code 의 채팅 forward 도구가 아님)
-- ❌ production 사용 가능 (dev-only — 영구 OUT)
-- ❌ 호스팅 서비스 (CLI 가 사용자 PC 에서만 동작)
+- ❌ Not coupled to an AI IDE (not a chat forwarder for Cursor / Windsurf / Claude Code)
+- ❌ Not production-safe (dev-only — permanently OUT of scope)
+- ❌ Not a hosted service (the CLI runs only on the user's machine)
 
 ## Quick Start (React + Vite)
 
@@ -51,65 +56,65 @@ export default defineConfig({
 });
 ```
 
-`pnpm dev` 로 띄우면:
+When you run `pnpm dev`:
 
-1. Vite dev 서버와 함께 로컬 에이전트 서버가 `127.0.0.1` 의 free 포트에 자동 spawn 된다.
-2. 페어링 토큰이 메모리 안에서 발급되고 dev HTML 의 `window.__AGENT_DEVTOOLS_CONFIG__` 에 주입된다 (URL 에는 절대 노출되지 않는다).
-3. 페이지에 widget 의 launcher 버튼이 떠 있다. 클릭 → 채팅창 열림 → "Pick" 으로 컴포넌트 선택 → 자연어 요청.
-4. `vite build` 시 플러그인은 `apply: 'serve'` 라 자동 비활성화. production 번들에는 widget 코드가 0 바이트 들어가지 않는다 (자동화된 [번들 누출 가드](./packages/vite/src/build-integration.test.ts) 가 검증).
+1. The local agent server auto-spawns alongside the Vite dev server on a free port on `127.0.0.1`.
+2. A pairing token is minted in memory and injected into the dev HTML at `window.__AGENT_DEVTOOLS_CONFIG__` (never exposed in the URL).
+3. The widget launcher button appears on the page. Click it → chat opens → "Pick" a component → speak the request.
+4. On `vite build` the plugin disables itself via `apply: 'serve'`. Zero bytes of widget code reach the production bundle (the automated [bundle-leak guard](./packages/vite/src/build-integration.test.ts) enforces it).
 
-### 플러그인을 안 쓰고 직접 mount 할 때
+### Mounting manually without the plugin
 
 ```tsx
-// 권장 패턴 — production 번들에서 dynamic import 자체가 tree-shake 됨.
+// Preferred — the dynamic import itself tree-shakes out of production bundles.
 if (import.meta.env.DEV) {
   const { mountAgentDevtools, createDefaultTransport } =
     await import('@agent-devtools/react');
   mountAgentDevtools({
     transport: createDefaultTransport({
       baseUrl: 'http://127.0.0.1:4317',
-      pairingToken: '<프로비저닝 메커니즘으로 전달>',
+      pairingToken: '<delivered by your provisioning mechanism>',
     }),
   });
 }
 ```
 
-수동 import 경로는 `NODE_ENV === 'production'` 일 때 `mountAgentDevtools` 가 mount 를 거부한다 (강제 override 는 `{ force: true }`). 위 dynamic-import 가드는 그 1차 방어선이 잠시 무너져도 widget 코드 자체가 번들에 없도록 하는 2차 방어선이다.
+The manual import path refuses to mount when `NODE_ENV === 'production'` (force override: `{ force: true }`). The dynamic-import guard above is the second line of defense that keeps the widget code out of the bundle even if that first line is briefly bypassed.
 
-전체 통합 시나리오는 [`examples/react-vite`](./examples/react-vite) 와 [`examples/react-vite/SMOKE-TESTS.md`](./examples/react-vite/SMOKE-TESTS.md) 참고.
+For full integration scenarios see [`examples/react-vite`](./examples/react-vite) and [`examples/react-vite/SMOKE-TESTS.md`](./examples/react-vite/SMOKE-TESTS.md).
 
 ## Differentiation
 
-|           | Stagewise                   | agent-devtools                      |
-| --------- | --------------------------- | ----------------------------------- |
-| 필요 도구 | Cursor / Windsurf 등 AI IDE | 브라우저만                          |
-| 비용 부담 | Cursor 구독 또는 IDE 측 키  | 본인의 LLM 구독 (Claude Pro/Max 등) |
-| 응답 위치 | IDE 채팅창                  | 페이지 widget 안                    |
-| 시선 이동 | 브라우저 → IDE → 브라우저   | 브라우저에서 끝                     |
+|                | Stagewise                               | agent-devtools                             |
+| -------------- | --------------------------------------- | ------------------------------------------ |
+| Required tool  | An AI IDE such as Cursor / Windsurf     | Browser only                               |
+| Who pays       | Cursor subscription or the IDE-side key | Your own LLM subscription (Claude Pro/Max) |
+| Response lives | Inside the IDE chat panel               | Inside the page widget                     |
+| Eye movement   | Browser → IDE → browser                 | Stays in the browser                       |
 
 ## Packages
 
-| Package                                                   | Status         | Description                                               |
-| --------------------------------------------------------- | -------------- | --------------------------------------------------------- |
-| [`@agent-devtools/core`](./packages/core)                 | 🚧 scaffolding | 프레임워크-무관 코어 (server, agent engine, widget shell) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | 🚧 scaffolding | 도메인-무관 loop 전략 + LLM provider 추상화               |
-| [`@agent-devtools/react`](./packages/react)               | 🚧 scaffolding | React 19 fiber walker + DOM picker + auto context         |
-| [`@agent-devtools/vite`](./packages/vite)                 | 🚧 scaffolding | Vite 8 plugin — auto-inject widget + dev-only guard       |
-| `@agent-devtools/next` / `vue` / `nuxt`                   | planned        | 후속 milestone                                            |
+| Package                                                   | Status       | Description                                                  |
+| --------------------------------------------------------- | ------------ | ------------------------------------------------------------ |
+| [`@agent-devtools/core`](./packages/core)                 | 🚧 pre-alpha | Framework-agnostic core (server, agent engine, widget shell) |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | 🚧 pre-alpha | Domain-agnostic loop strategy + LLM provider abstraction     |
+| [`@agent-devtools/react`](./packages/react)               | 🚧 pre-alpha | React 19 fiber walker + DOM picker + auto context            |
+| [`@agent-devtools/vite`](./packages/vite)                 | 🚧 pre-alpha | Vite 8 plugin — auto-inject widget + dev-only guard          |
+| `@agent-devtools/next` / `vue` / `nuxt`                   | planned      | Follow-up milestone                                          |
 
 ## Security defaults
 
-- **dev-only** — `mountAgentDevtools()` 는 `NODE_ENV === 'production'` 에서 즉시 throw 한다 (override: `{ force: true }`). Vite 플러그인은 `apply: 'serve'` 라 build 단계 자체에 참여하지 않는다.
-- **production-leak guard** — `apply: 'serve'` 와 사용자측 `if (import.meta.env.DEV) { … }` dynamic import 두 layer 가 빌드 출력에서 widget 식별자를 모두 제거한다. [`packages/vite/src/build-integration.test.ts`](./packages/vite/src/build-integration.test.ts) 가 실제 production 빌드를 돌려 sentinel 부재를 강제한다.
-- **127.0.0.1 binding** — 로컬 에이전트 서버는 loopback only. 외부 네트워크 노출 없음. 점유 시 sequential fallback.
-- **페어링 토큰** — CLI 시작마다 회전, 메모리 only, 디스크 미저장, URL embed 금지. `Authorization: Bearer …` 헤더로만 전달.
-- **closed Shadow DOM** — 호스트 앱 CSS/DOM·상태 격리, React 19 별도 모듈 인스턴스로 dual-tree.
+- **dev-only** — `mountAgentDevtools()` throws immediately when `NODE_ENV === 'production'` (override: `{ force: true }`). The Vite plugin sets `apply: 'serve'` so it never participates in the build step.
+- **production-leak guard** — `apply: 'serve'` plus a user-side `if (import.meta.env.DEV) { … }` dynamic import together strip every widget identifier from the build output. [`packages/vite/src/build-integration.test.ts`](./packages/vite/src/build-integration.test.ts) runs a real production build and asserts the sentinel is absent.
+- **127.0.0.1 binding** — the local agent server binds loopback only. No external network exposure. If the port is taken, falls back sequentially.
+- **Pairing token** — rotated on every CLI start, memory only, never persisted to disk, never embedded in a URL. Delivered only via the `Authorization: Bearer …` header.
+- **Closed Shadow DOM** — isolates the widget from host app CSS / DOM / state, and a separate React 19 module instance gives a dual-tree boundary.
 
 ## Requirements
 
 - Node.js **≥24** (LTS Krypton)
 - pnpm **≥11**
-- (사용 시) 활성 Claude Pro/Max 구독 (Agent SDK Credit 포함, 2026-06-15 시행)
+- (To actually run) an active Claude Pro/Max subscription (includes Agent SDK Credit from 2026-06-15)
 
 ## Development
 
@@ -119,7 +124,7 @@ pnpm typecheck
 pnpm test
 ```
 
-자세한 개발 가이드는 [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full developer guide.
 
 ## License
 
