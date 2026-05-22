@@ -1,15 +1,17 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/vite
 
-> Vite 8 plugin for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) — auto-spawn local agent server, inject widget bootstrap into dev HTML, no-op on `vite build`.
+> Vite 8 plugin for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) — auto-spawns the local agent server, injects the widget bootstrap into dev HTML, and is a no-op during `vite build`.
 
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) 종단 검증 단계.
+**Status:** `0.1.0` — early alpha. The API may change before `1.0`.
 
 ## What it does
 
-- **`apply: 'serve'`** — production 빌드 단계엔 일절 참여하지 않는다 (production-leak 0).
-- **Local agent server spawn** — `127.0.0.1` 의 free 포트에 자동 spawn, 페어링 토큰을 메모리에서 발급.
-- **Dev HTML injection** — `transformIndexHtml(order: 'pre')` 로 `window.__AGENT_DEVTOOLS_CONFIG__` (baseUrl + pairingToken) 와 `mountAgentDevtools` 부트스트랩 모듈을 주입. URL 에는 토큰이 노출되지 않는다.
-- **Graceful shutdown** — Vite dev 서버 종료 시 spawn 한 agent 프로세스를 정리.
+- **`apply: 'serve'`** — the plugin is not registered during production builds at all. Zero bytes of widget code reach `dist/`.
+- **Local agent server spawn** — auto-spawns on a free `127.0.0.1` port; the pairing token is generated in memory.
+- **Dev HTML injection** — `transformIndexHtml(order: 'pre')` injects `window.__AGENT_DEVTOOLS_CONFIG__` (baseUrl + pairingToken) plus the `mountAgentDevtools` bootstrap module. Tokens are **not** written into URLs.
+- **Graceful shutdown** — the spawned agent process is terminated when Vite's dev server closes.
 
 ## Install
 
@@ -17,7 +19,7 @@
 pnpm add -D @agent-devtools/vite @agent-devtools/react @agent-devtools/core
 ```
 
-Peer dep: `vite ≥8`.
+Peer dependency: `vite >= 8`.
 
 ## Quick usage
 
@@ -32,11 +34,35 @@ export default defineConfig({
 });
 ```
 
-`pnpm dev` 로 띄우면 widget launcher 가 페이지 우하단에 떠 있다. `vite build` 출력에는 widget 코드가 0 바이트 들어가지 않는다 — 이 보장은 패키지 안의 [`build-integration.test.ts`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/vite/src/build-integration.test.ts) 가 실제 production 빌드를 돌려 sentinel 부재를 강제한다.
+Run `pnpm dev` and the launcher appears in the bottom-right corner of every page. Run `pnpm build` and grep the output:
 
-## Status & roadmap
+```bash
+grep -r "@agent-devtools" dist/ || echo "OK — no leak"
+```
 
-전체 컨텍스트는 모노레포 루트 [`README.md`](https://github.com/Seungwoo321/agent-devtools#readme) 참고.
+The production-leak guarantee is enforced by [`build-integration.test.ts`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/vite/src/build-integration.test.ts) which runs an actual production build inside the package's test suite.
+
+## Options
+
+| Option        | Type      | Default                 | Notes                                                                                         |
+| ------------- | --------- | ----------------------- | --------------------------------------------------------------------------------------------- |
+| `enabled`     | `boolean` | `true`                  | Disable at runtime without removing the plugin from config.                                   |
+| `importFrom`  | `string`  | `@agent-devtools/react` | Adapter module that exports `mountAgentDevtools` + `createDefaultTransport`.                  |
+| `spawnServer` | `boolean` | `true`                  | Set to `false` to manage the agent server externally.                                         |
+| `workspace`   | `string`  | Vite `config.root`      | Workspace root the agent may read/edit. Relative paths resolve against `config.root`.         |
+| `port`        | `number`  | (auto)                  | Preferred port for the spawned agent server.                                                  |
+| `shadowOpen`  | `boolean` | `false`                 | Use an open shadow root (E2E debugging only). `AGENT_DEVTOOLS_OPEN_SHADOW=1` also flips this. |
+
+## Requirements
+
+- Node.js `>= 24.0.0`
+- Vite `>= 8`
+
+## Links
+
+- Monorepo: <https://github.com/Seungwoo321/agent-devtools>
+- Core package: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
+- React adapter: [`@agent-devtools/react`](https://www.npmjs.com/package/@agent-devtools/react)
 
 ## License
 
