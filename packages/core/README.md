@@ -1,15 +1,17 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/core
 
-> Framework-agnostic core for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) — local agent server, pairing-token auth, widget shell.
+> Framework-agnostic core for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) — local agent server, pairing-token auth, CLI binary, and the shared widget shell consumed by every adapter.
 
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) 종단 검증 단계.
+**Status:** `0.1.0` — early alpha. The API may change before `1.0`. Phase 0 covers React + Vite + Claude Pro/Max.
 
 ## What's in here
 
-- **Local agent server** — loopback-only (`127.0.0.1`), sequential-port fallback, SSE streaming on `/v1/agent/stream`.
-- **Pairing token** — CLI 시작마다 회전, 메모리 only, 디스크 미저장, URL embed 금지. `Authorization: Bearer …` 헤더 강제.
-- **`agent-devtools` CLI** — `bin/agent-devtools.mjs`. Vite/Next 플러그인이 자동 spawn 하지만 단독 실행도 가능.
-- **Production guard** — `NODE_ENV === 'production'` 에서 mount 거부 (override: `{ force: true }`).
+- **Local agent server** — binds to `127.0.0.1` only (no LAN exposure), sequential-port fallback, SSE streaming on `/v1/agent/stream`.
+- **Pairing token** — generated in memory at every CLI start, never persisted, never embedded in URLs. Required on every request via `Authorization: Bearer <token>`.
+- **`agent-devtools` CLI** — `bin/agent-devtools.mjs`. Bundler plugins (e.g. `@agent-devtools/vite`) auto-spawn it; you can also run it manually.
+- **Production guard** — `mountAgentDevtools` throws when `NODE_ENV === 'production'` (override with `{ force: true }` for explicit research use only).
 
 ## Install
 
@@ -17,11 +19,19 @@
 pnpm add -D @agent-devtools/core
 ```
 
-대부분의 경우 직접 설치보다 어댑터 (`@agent-devtools/react`) + 빌드 통합 (`@agent-devtools/vite`) 을 통해 transitive 로 받게 된다.
+In most projects you do **not** install `core` directly — the framework adapter (`@agent-devtools/react`) and bundler integration (`@agent-devtools/vite`) pull it in transitively.
 
-## Status & roadmap
+## Requirements
 
-전체 컨텍스트·결정 로그·MVP 스코프는 모노레포 루트 [`CONTEXT.md`](https://github.com/Seungwoo321/agent-devtools/blob/main/CONTEXT.md) 와 [`README.md`](https://github.com/Seungwoo321/agent-devtools#readme) 를 참고.
+- Node.js `>= 24.0.0`
+- Claude Pro/Max session via the local `claude` CLI **or** `ANTHROPIC_API_KEY`
+
+## Links
+
+- Monorepo: <https://github.com/Seungwoo321/agent-devtools>
+- React adapter: [`@agent-devtools/react`](https://www.npmjs.com/package/@agent-devtools/react)
+- Vite plugin: [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite)
+- Issue tracker: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## License
 

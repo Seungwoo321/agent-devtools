@@ -1,15 +1,17 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/react
 
-> React 19 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) — fiber walker, DOM picker, composer widget, closed Shadow DOM mount.
+> React 19 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) — fiber walker, DOM picker, composer widget, and closed-shadow-DOM mount.
 
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) 종단 검증 단계.
+**Status:** `0.1.0` — early alpha. The API may change before `1.0`.
 
 ## What's in here
 
-- **`mountAgentDevtools`** — closed Shadow DOM 안에 launcher + composer 위젯 mount. `NODE_ENV === 'production'` 에서 throw (override: `{ force: true }`).
-- **`createDefaultTransport`** — `Authorization: Bearer …` 헤더 + SSE 스트림 reader.
-- **Fiber walker + DOM picker** — `Pick` 모드에서 hover 한 요소의 React 컴포넌트 이름 / props 일부 / 의미적 selector 추출.
-- **Auto context** — picked descriptor + route + recent console errors 등을 자동으로 prompt context 에 동봉.
+- **`mountAgentDevtools`** — mounts the launcher + composer widget inside a closed Shadow DOM so host styles, events, and React instance stay isolated. Throws on `NODE_ENV === 'production'` (override with `{ force: true }`).
+- **`createDefaultTransport`** — `Authorization: Bearer …` header + SSE reader, wired to the core agent server.
+- **Fiber walker + DOM picker** — in **Pick** mode, hovering an element resolves its React component name, a subset of props, and a stable semantic selector.
+- **Auto context** — picked descriptor, current route, and recent console errors are attached to each prompt automatically.
 
 ## Install
 
@@ -17,29 +19,36 @@
 pnpm add -D @agent-devtools/react @agent-devtools/core
 ```
 
-Peer deps: `react ≥19`, `react-dom ≥19`.
+Peer dependencies: `react >= 19`, `react-dom >= 19`.
 
 ## Quick usage
 
 ```tsx
-// 권장 패턴 — production 번들에서 dynamic import 자체가 tree-shake 됨.
+// Dynamic import keeps the widget bundle out of production builds.
 if (import.meta.env.DEV) {
   const { mountAgentDevtools, createDefaultTransport } =
     await import('@agent-devtools/react');
   mountAgentDevtools({
     transport: createDefaultTransport({
       baseUrl: 'http://127.0.0.1:4317',
-      pairingToken: '<프로비저닝 메커니즘으로 전달>',
+      pairingToken: '<provisioned at startup>',
     }),
   });
 }
 ```
 
-Vite 사용자는 [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite) 플러그인이 위 mount 호출까지 자동 처리해준다.
+Vite users do not need to write this by hand — [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite) injects an equivalent bootstrap during dev and skips production entirely.
 
-## Status & roadmap
+## Requirements
 
-전체 컨텍스트는 모노레포 루트 [`README.md`](https://github.com/Seungwoo321/agent-devtools#readme) 참고. Vue / Next / Nuxt 어댑터는 후속 milestone.
+- Node.js `>= 24.0.0`
+- React `>= 19` running in a dev build (the picker reads JSX source from the dev runtime)
+
+## Links
+
+- Monorepo: <https://github.com/Seungwoo321/agent-devtools>
+- Core package: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
+- Vite plugin: [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite)
 
 ## License
 
