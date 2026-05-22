@@ -31,6 +31,8 @@
 
 추가 모듈 (composer, launcher, settings 등) 은 widget UI 의 하위 부품이므로 widget/ 안에서 자유 구성.
 
+walker 의 프레임워크별 전략 + 공통 fallback path + closed shadow root 불변식은 별도 룰로 분리: `./picker-strategy.md`.
+
 ## 격리 (host app 안전)
 
 - widget UI 는 **반드시 closed shadow root** 안. (테스트용 open shadow 는 `AGENT_DEVTOOLS_OPEN_SHADOW=1` 환경변수로만 가능, 기본은 closed.)
