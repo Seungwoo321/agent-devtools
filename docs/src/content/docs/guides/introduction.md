@@ -35,8 +35,8 @@ agent-devtools 는 두 세계를 합친다.
   agent-devtools 는 새 API 결제를 요구하지 않는다. 로컬 Claude Code CLI 의
   `~/.claude` OAuth 세션을 그대로 재사용한다.
 - **Vite + React 로 개발 중인 프로덕트 팀.**
-  현재 시점 (Sprint 1) 의 공식 어댑터는 React + Vite 다. Vue / Next / Nuxt
-  어댑터는 다음 사이클 (U11) 에서 추가된다.
+  초기 릴리스 (Phase 0) 의 공식 어댑터는 React + Vite 다. Vue / Next / Nuxt
+  어댑터는 후속 릴리스에서 추가된다.
 - **로컬 개발 환경에서만 켜는 도구가 필요한 사람.**
   agent-devtools 는 프로덕션 빌드에 포함되지 않는다. `import.meta.env.DEV` 등으로
   개발 모드에서만 마운트하도록 설계되어 있다.

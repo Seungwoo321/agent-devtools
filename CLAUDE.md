@@ -44,6 +44,8 @@ pnpm --filter @agent-devtools/example-react-vite dev   # 예제 dev 서버
 세부 룰은 `.claude/rules/` 분리:
 
 - **`.claude/rules/adapter-discipline.md`** — `@agent-devtools/{프레임워크}` 패키지가 따라야 하는 구조 (peer/dep, exports, walker/picker/widget 분리, core 재사용 원칙).
+- **`.claude/rules/picker-strategy.md`** — DOM element → 컴포넌트 정체성 환원의 프레임워크별 walker 전략 + 공통 fallback path + closed shadow root 불변식. 신규 어댑터 picker 작성 시 1차 기준.
+- **`.claude/rules/picker-coverage.md`** — picker 가 모든 element 를 받는다는 결정 + 세 케이스별 PickedEvidence 채워짐 매트릭스 (named component / unnamed host fiber / pure host node). 어떤 element 도 reject 하지 않는 정책의 근거.
 - **`.claude/rules/dev-only-guard.md`** — production-leak 2-layer guard 계약 (build-time + runtime). 모든 어댑터·번들러 플러그인이 동일하게 준수.
 - **`.claude/rules/envelope-conventions.md`** — Clawket task envelope (intent/prompt_template/success_criteria/scenario_id) 작성 규칙. daemon entropy 오탐 회피.
 
