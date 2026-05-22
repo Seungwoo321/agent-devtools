@@ -185,6 +185,120 @@ describe('createComposer', () => {
     handle.destroy();
   });
 
+  it('renders the chip with an opaque background so the conversation stream cannot bleed through', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked: makePicked() });
+    const chip = handle.element.querySelector<HTMLElement>(
+      '[data-agent-devtools-composer-chip] > span',
+    )!;
+    const bg = chip.style.background;
+    // The chip MUST NOT use an alpha-channel background — rgba/hsla with
+    // alpha < 1 lets stream text show through. Solid hex / named colors are
+    // the contract.
+    expect(bg.toLowerCase()).not.toMatch(/rgba?\(.*0\.\d/);
+    expect(bg.toLowerCase()).not.toMatch(/hsla?\(.*0\.\d/);
+    expect(bg).not.toBe('transparent');
+    expect(bg).not.toBe('');
+    // And the chip should have a visible border so it still reads as a
+    // discrete affordance against a similarly-colored panel.
+    expect(chip.style.border).not.toBe('');
+    handle.destroy();
+  });
+
+  it('attaches a tooltip element to the chip with the source file:line, component name and chain', () => {
+    const picked = makePicked({
+      componentName: 'TodoItem',
+      tagName: 'LI',
+      selector: 'li.todo[data-id="42"]',
+      source: { fileName: 'src/components/TodoItem.tsx', lineNumber: 12, columnNumber: 4 },
+      componentChain: [
+        { componentName: 'TodoItem' },
+        { componentName: 'TodoList' },
+        { componentName: 'App' },
+      ],
+    });
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked });
+    const tooltip = handle.element.querySelector<HTMLElement>(
+      '[data-agent-devtools-composer-chip-tooltip]',
+    );
+    expect(tooltip).not.toBeNull();
+    expect(tooltip!.getAttribute('role')).toBe('tooltip');
+    const tt = tooltip!.textContent ?? '';
+    expect(tt).toContain('TodoItem');
+    expect(tt).toContain('<li>');
+    expect(tt).toContain('src/components/TodoItem.tsx:12');
+    // chain excludes the leaf itself
+    expect(tt).toContain('TodoList → App');
+    expect(tt).toContain('li.todo[data-id="42"]');
+    handle.destroy();
+  });
+
+  it('chip exposes a multi-line title attribute as an a11y fallback', () => {
+    const picked = makePicked({
+      componentName: 'Button',
+      tagName: 'BUTTON',
+      source: { fileName: 'src/Button.tsx', lineNumber: 7 },
+    });
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked });
+    const chip = handle.element.querySelector<HTMLElement>(
+      '[data-agent-devtools-composer-chip] > span',
+    );
+    const title = chip?.getAttribute('title') ?? '';
+    expect(title).toContain('Button <button>');
+    expect(title).toContain('source: src/Button.tsx:7');
+    handle.destroy();
+  });
+
+  it('chip tooltip starts hidden and becomes visible on pointerenter', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked: makePicked() });
+    const tooltip = handle.element.querySelector<HTMLElement>(
+      '[data-agent-devtools-composer-chip-tooltip]',
+    )!;
+    const chip = tooltip.parentElement!;
+    expect(tooltip.style.visibility).toBe('hidden');
+    chip.dispatchEvent(new Event('pointerenter', { bubbles: true }));
+    expect(tooltip.style.visibility).toBe('visible');
+    chip.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+    expect(tooltip.style.visibility).toBe('hidden');
+    handle.destroy();
+  });
+
+  it('chip tooltip surfaces on keyboard focus and hides on blur', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked: makePicked() });
+    const chipHost = getChipHost(handle.element);
+    const chip = chipHost.querySelector<HTMLElement>('[tabindex="0"]');
+    const tooltip = chipHost.querySelector<HTMLElement>(
+      '[data-agent-devtools-composer-chip-tooltip]',
+    );
+    expect(chip).not.toBeNull();
+    expect(tooltip).not.toBeNull();
+    expect(chip!.getAttribute('aria-describedby')).toBe(tooltip!.getAttribute('id'));
+    chip!.dispatchEvent(new FocusEvent('focus'));
+    expect(tooltip!.style.visibility).toBe('visible');
+    chip!.dispatchEvent(new FocusEvent('blur'));
+    expect(tooltip!.style.visibility).toBe('hidden');
+    handle.destroy();
+  });
+
+  it('chip tooltip omits absent fields gracefully (no source, no chain)', () => {
+    const picked = makePicked({
+      componentName: '',
+      tagName: 'DIV',
+      selector: 'div',
+      // no source
+      componentChain: [],
+    });
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked });
+    const tooltip = handle.element.querySelector<HTMLElement>(
+      '[data-agent-devtools-composer-chip-tooltip]',
+    )!;
+    const tt = tooltip.textContent ?? '';
+    expect(tt).toContain('div');
+    expect(tt).not.toContain('source:');
+    expect(tt).not.toContain('chain:');
+    expect(tt).not.toContain('selector:');
+    handle.destroy();
+  });
+
   it('setPicked(null) removes the chip', () => {
     const handle = createComposer({
       container,
@@ -194,6 +308,24 @@ describe('createComposer', () => {
     expect(getChipHost(handle.element).children.length).toBe(1);
     handle.setPicked(null);
     expect(getChipHost(handle.element).children.length).toBe(0);
+    handle.destroy();
+  });
+
+  it('textarea is pinned with flex 0 0 auto so the stream area scrolls instead of squeezing the input', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    const ta = getTextarea(handle.element);
+    expect(ta.style.flex).toBe('0 0 auto');
+    handle.destroy();
+  });
+
+  it('chip host collapses its padding in the empty state and restores it once a chip is added', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    const chipHost = getChipHost(handle.element);
+    expect(chipHost.style.padding).toBe('0px');
+    handle.setPicked(makePicked());
+    expect(chipHost.style.padding).toBe('10px 12px 0px');
+    handle.setPicked(null);
+    expect(chipHost.style.padding).toBe('0px');
     handle.destroy();
   });
 
@@ -566,6 +698,44 @@ describe('createComposer', () => {
     left.dispatchEvent(pointerEvent('pointermove', { pointerId: 7, clientX: 480, clientY: 300 }));
     left.dispatchEvent(pointerEvent('pointerup', { pointerId: 7, clientX: 480, clientY: 300 }));
     expect(handle.element.style.width).toBe('340px');
+    handle.destroy();
+  });
+
+  it('pointerenter on a resize handle paints a hover affordance; leave resets it', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), sizeStorage: null });
+    const left = getHandle(handle.element, 'left');
+    expect(left.style.background).toBe('transparent');
+    left.dispatchEvent(
+      pointerEvent('pointerenter' as 'pointerdown', { pointerId: 20, clientX: 0, clientY: 0 }),
+    );
+    // Any non-empty, non-transparent background — the exact rgba form is an
+    // implementation detail; the contract is "visible to the user".
+    expect(left.style.background).not.toBe('');
+    expect(left.style.background).not.toBe('transparent');
+    left.dispatchEvent(
+      pointerEvent('pointerleave' as 'pointerdown', { pointerId: 20, clientX: 0, clientY: 0 }),
+    );
+    expect(left.style.background).toBe('transparent');
+    handle.destroy();
+  });
+
+  it('keeps the hover affordance lit during an active drag even if the cursor leaves the handle', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1200 });
+    const handle = createComposer({ container, onSubmit: vi.fn(), sizeStorage: null });
+    const left = getHandle(handle.element, 'left');
+    left.dispatchEvent(pointerEvent('pointerdown', { pointerId: 21, clientX: 500, clientY: 300 }));
+    const litDuringDrag = left.style.background;
+    expect(litDuringDrag).not.toBe('transparent');
+    // Simulate the cursor leaving the 6px strip while pointer capture keeps
+    // the drag alive — the handle must stay lit so the user can still see
+    // what they're dragging.
+    left.dispatchEvent(
+      pointerEvent('pointerleave' as 'pointerdown', { pointerId: 21, clientX: 300, clientY: 300 }),
+    );
+    expect(left.style.background).toBe(litDuringDrag);
+    left.dispatchEvent(pointerEvent('pointerup', { pointerId: 21, clientX: 300, clientY: 300 }));
+    expect(left.style.background).toBe('transparent');
     handle.destroy();
   });
 

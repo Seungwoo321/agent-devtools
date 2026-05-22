@@ -78,6 +78,11 @@ const PANEL_MIN_WIDTH = 280;
 const PANEL_MIN_HEIGHT = 240;
 const PANEL_SIZE_STORAGE_KEY = 'agent-devtools:panelSize';
 
+// Reveal-on-hover tint for the otherwise-transparent resize handles. Matches
+// the toolbar icon hover convention so the affordance reads as "interactive
+// edge of the panel" rather than a stray UI element.
+const RESIZE_HANDLE_HOVER_BG = 'rgba(0, 0, 0, 0.08)';
+
 export interface ComposerSubmitPayload {
   readonly text: string;
   readonly picked: PickedEvidence | null;
@@ -196,6 +201,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   let sending = false;
   let visible = options.visible ?? false;
   let destroyed = false;
+  let chipTooltipSeq = 0;
 
   const panel = doc.createElement('div');
   panel.setAttribute(PANEL_ATTR, '');
@@ -280,7 +286,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   const chipHost = doc.createElement('div');
   chipHost.setAttribute(CHIP_ATTR, '');
-  applyChipHostStyles(chipHost);
+  applyChipHostStyles(chipHost, picked != null);
 
   const textarea = doc.createElement('textarea');
   textarea.setAttribute(TEXTAREA_ATTR, '');
@@ -309,12 +315,30 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   function renderChip(): void {
     chipHost.innerHTML = '';
+    applyChipHostStyles(chipHost, picked != null);
     if (!picked) return;
     const chip = doc!.createElement('span');
     applyChipStyles(chip);
+    // tabindex makes the chip focusable so keyboard users can land on it
+    // and surface the same tooltip the mouse path shows. aria-describedby
+    // wires the chip to the tooltip's text so screen readers announce the
+    // expanded info even when the visual tooltip is hidden.
+    chip.setAttribute('tabindex', '0');
+    chip.setAttribute('role', 'group');
+    const tooltipId = `agent-devtools-chip-tooltip-${++chipTooltipSeq}`;
+    chip.setAttribute('aria-describedby', tooltipId);
+    // `title` is the lowest-common-denominator a11y fallback — assistive
+    // tech that ignores aria-describedby still picks this up.
+    const summary = summarizePicked(picked);
+    chip.setAttribute('title', summary.titleText);
+
     const label = doc!.createElement('span');
     label.setAttribute('data-agent-devtools-composer-chip-label', '');
     label.textContent = picked.componentName || picked.tagName.toLowerCase();
+    label.style.overflow = 'hidden';
+    label.style.textOverflow = 'ellipsis';
+    label.style.whiteSpace = 'nowrap';
+    label.style.minWidth = '0';
     chip.appendChild(label);
     const remove = doc!.createElement('button');
     remove.type = 'button';
@@ -323,6 +347,28 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
     applyChipRemoveStyles(remove);
     remove.addEventListener('click', onClearPicked);
     chip.appendChild(remove);
+
+    const tooltip = doc!.createElement('div');
+    tooltip.setAttribute('data-agent-devtools-composer-chip-tooltip', '');
+    tooltip.setAttribute('id', tooltipId);
+    tooltip.setAttribute('role', 'tooltip');
+    applyChipTooltipStyles(tooltip);
+    populateChipTooltip(doc!, tooltip, summary);
+    chip.appendChild(tooltip);
+
+    function showTooltip(): void {
+      tooltip.style.opacity = '1';
+      tooltip.style.visibility = 'visible';
+    }
+    function hideTooltip(): void {
+      tooltip.style.opacity = '0';
+      tooltip.style.visibility = 'hidden';
+    }
+    chip.addEventListener('pointerenter', showTooltip);
+    chip.addEventListener('pointerleave', hideTooltip);
+    chip.addEventListener('focus', showTooltip);
+    chip.addEventListener('blur', hideTooltip);
+
     chipHost.appendChild(chip);
   }
 
@@ -419,6 +465,10 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
         startBottom: parseFloat(panel.style.bottom) || 0,
       };
       const handle = event.currentTarget as HTMLElement;
+      // Keep the affordance lit while the drag is in flight — pointer
+      // capture can suppress hover transitions once the cursor leaves the
+      // 6px strip, so we paint it explicitly.
+      handle.style.background = RESIZE_HANDLE_HOVER_BG;
       try {
         handle.setPointerCapture(event.pointerId);
       } catch {
@@ -492,10 +542,28 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
     } catch {
       /* ignore */
     }
+    // Drop the lit background — if the cursor is still over the handle the
+    // next pointerenter will repaint it; otherwise the affordance correctly
+    // disappears.
+    handle.style.background = 'transparent';
     activeDrag = null;
     const width = panel.offsetWidth || parseFloat(panel.style.width) || PANEL_DEFAULT_WIDTH;
     const height = panel.offsetHeight || parseFloat(panel.style.height) || PANEL_DEFAULT_HEIGHT;
     savePanelSize(sizeStorage, sizeStorageKey, width, height);
+  }
+
+  function onHandlePointerEnter(event: PointerEvent): void {
+    const handle = event.currentTarget as HTMLElement;
+    handle.style.background = RESIZE_HANDLE_HOVER_BG;
+  }
+
+  function onHandlePointerLeave(event: PointerEvent): void {
+    const handle = event.currentTarget as HTMLElement;
+    // Keep the lit state while the user is mid-drag from this handle — the
+    // cursor can wander far off the 6px strip while pointer capture keeps
+    // the drag alive.
+    if (activeDrag && activeDrag.pointerId === event.pointerId) return;
+    handle.style.background = 'transparent';
   }
 
   const handleListeners: Array<[HTMLElement, (event: PointerEvent) => void, () => void]> = [];
@@ -504,6 +572,8 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
     el.addEventListener('pointerdown', down as EventListener);
     el.addEventListener('pointermove', onHandlePointerMove as EventListener);
     el.addEventListener('pointerup', onHandlePointerUp as EventListener);
+    el.addEventListener('pointerenter', onHandlePointerEnter as EventListener);
+    el.addEventListener('pointerleave', onHandlePointerLeave as EventListener);
     handleListeners.push([
       el,
       down as (event: PointerEvent) => void,
@@ -511,6 +581,8 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
         el.removeEventListener('pointerdown', down as EventListener);
         el.removeEventListener('pointermove', onHandlePointerMove as EventListener);
         el.removeEventListener('pointerup', onHandlePointerUp as EventListener);
+        el.removeEventListener('pointerenter', onHandlePointerEnter as EventListener);
+        el.removeEventListener('pointerleave', onHandlePointerLeave as EventListener);
       },
     ]);
   }
@@ -855,9 +927,12 @@ function applyCloseButtonStyles(button: HTMLButtonElement): void {
   s.lineHeight = '1';
 }
 
-function applyChipHostStyles(host: HTMLElement): void {
+function applyChipHostStyles(host: HTMLElement, hasChip: boolean): void {
   const s = host.style;
-  s.padding = '10px 12px 0 12px';
+  // Collapse the slot when there is no chip so the textarea sits close to
+  // the header — otherwise the constant top padding stacks with the
+  // textarea's own margin and the empty state looks oversized.
+  s.padding = hasChip ? '10px 12px 0 12px' : '0';
   s.minHeight = '0';
 }
 
@@ -868,13 +943,136 @@ function applyChipStyles(chip: HTMLElement): void {
   s.gap = '6px';
   s.padding = '4px 8px';
   s.borderRadius = '999px';
-  s.background = 'rgba(0, 0, 0, 0.06)';
+  // Solid fill + subtle border so the chip never reads as transparent
+  // against the conversation stream rendered above it inside the panel.
+  // A previous 6% alpha tint visually disappeared once a few messages
+  // landed behind the chip host slot.
+  s.background = '#eef0f3';
+  s.border = '1px solid rgba(0, 0, 0, 0.08)';
   s.color = '#1a1a1a';
   s.fontSize = '12px';
   s.maxWidth = '100%';
-  s.overflow = 'hidden';
-  s.textOverflow = 'ellipsis';
+  // overflow is hidden on the LABEL (see populateChipTooltip / chip label
+  // construction); keep the chip itself visible so the absolutely-positioned
+  // tooltip can render outside the chip's content box.
   s.whiteSpace = 'nowrap';
+  // Anchor the absolutely-positioned tooltip and remove the focus outline in
+  // favor of a softer ring so the keyboard-focus state matches the widget's
+  // visual language.
+  s.position = 'relative';
+  s.outline = 'none';
+  s.cursor = 'help';
+}
+
+interface PickedSummary {
+  readonly componentName: string;
+  readonly tag: string;
+  readonly source: string | null;
+  readonly chain: string | null;
+  readonly selector: string | null;
+  readonly titleText: string;
+}
+
+function summarizePicked(picked: PickedEvidence): PickedSummary {
+  const componentName = picked.componentName || picked.tagName.toLowerCase();
+  const tag = `<${picked.tagName.toLowerCase()}>`;
+  const source = picked.source ? `${picked.source.fileName}:${picked.source.lineNumber}` : null;
+  const chainNames = picked.componentChain
+    .map((entry) => entry.componentName)
+    .filter((name) => name && name !== componentName);
+  const chain = chainNames.length > 0 ? chainNames.join(' → ') : null;
+  const selector =
+    picked.selector && picked.selector !== picked.tagName.toLowerCase() ? picked.selector : null;
+
+  // Plain-text summary for the `title` attribute (one detail per line keeps
+  // the OS tooltip readable in browsers that respect newlines).
+  const lines = [`${componentName} ${tag}`];
+  if (source) lines.push(`source: ${source}`);
+  if (chain) lines.push(`chain: ${chain}`);
+  if (selector) lines.push(`selector: ${selector}`);
+  return {
+    componentName,
+    tag,
+    source,
+    chain,
+    selector,
+    titleText: lines.join('\n'),
+  };
+}
+
+function applyChipTooltipStyles(tooltip: HTMLElement): void {
+  const s = tooltip.style;
+  s.position = 'absolute';
+  // Sit directly below the chip; left-align with the chip's left edge so
+  // the tooltip never clips off the right side of the panel.
+  s.top = 'calc(100% + 6px)';
+  s.left = '0';
+  s.zIndex = '3';
+  s.minWidth = '180px';
+  s.maxWidth = '320px';
+  s.padding = '8px 10px';
+  s.borderRadius = '8px';
+  s.background = '#1a1a1a';
+  s.color = '#ffffff';
+  s.fontSize = '11px';
+  s.lineHeight = '1.4';
+  s.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.22)';
+  s.opacity = '0';
+  s.visibility = 'hidden';
+  s.transition = 'opacity 120ms ease-out';
+  s.pointerEvents = 'none';
+  s.whiteSpace = 'normal';
+  s.wordBreak = 'break-all';
+}
+
+function populateChipTooltip(doc: Document, tooltip: HTMLElement, summary: PickedSummary): void {
+  tooltip.innerHTML = '';
+
+  const head = doc.createElement('div');
+  head.style.display = 'flex';
+  head.style.alignItems = 'baseline';
+  head.style.gap = '6px';
+  head.style.marginBottom = summary.source || summary.chain || summary.selector ? '6px' : '0';
+
+  const name = doc.createElement('span');
+  name.textContent = summary.componentName;
+  name.style.fontWeight = '600';
+  head.appendChild(name);
+
+  const tag = doc.createElement('span');
+  tag.textContent = summary.tag;
+  tag.style.fontFamily =
+    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+  tag.style.opacity = '0.72';
+  tag.style.fontSize = '10px';
+  head.appendChild(tag);
+  tooltip.appendChild(head);
+
+  function addRow(labelText: string, valueText: string, mono: boolean): void {
+    const row = doc.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '6px';
+    row.style.marginTop = '2px';
+    const label = doc.createElement('span');
+    label.textContent = labelText;
+    label.style.opacity = '0.6';
+    label.style.flex = '0 0 auto';
+    row.appendChild(label);
+    const value = doc.createElement('span');
+    value.textContent = valueText;
+    value.style.flex = '1 1 auto';
+    value.style.minWidth = '0';
+    if (mono) {
+      value.style.fontFamily =
+        'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+    }
+    row.appendChild(value);
+    tooltip.appendChild(row);
+  }
+
+  if (summary.source) addRow('source', summary.source, true);
+  if (summary.chain) addRow('chain', summary.chain, false);
+  if (summary.selector) addRow('selector', summary.selector, true);
 }
 
 function applyChipRemoveStyles(button: HTMLButtonElement): void {
@@ -904,6 +1102,9 @@ function applyTextareaStyles(textarea: HTMLTextAreaElement): void {
   s.background = '#ffffff';
   s.color = '#1a1a1a';
   s.outline = 'none';
+  // Lock the input to the rows=3 box so the stream area scrolls instead of
+  // squeezing the textarea once the conversation history fills the panel.
+  s.flex = '0 0 auto';
 }
 
 function applyFooterStyles(footer: HTMLElement): void {
