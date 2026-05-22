@@ -11,6 +11,8 @@ import starlight from '@astrojs/starlight';
 // 테마:
 //   - Starlight 의 light/dark 토글은 헤더에서 빌트인 제공된다 (별도 설정 불요)
 //   - 시스템 prefers-color-scheme 자동 추종 + 수동 토글
+//   - logo 는 light/dark 분리 자산으로 선언 — img tag 렌더 환경에서는
+//     currentColor 가 작동하지 않아 단일 자산이 한쪽 테마에서 깨진다.
 //
 // 사이드바:
 //   - autogenerate 를 쓰지 않고 명시적으로 선언 — ko/en 페이지 키가 같아야
@@ -22,7 +24,8 @@ export default defineConfig({
       title: 'agent-devtools',
       description: 'In-page agent devtools for React/Vue/Next/Nuxt — BYO Claude subscription.',
       logo: {
-        src: './src/assets/logo.svg',
+        light: './src/assets/logo-light.svg',
+        dark: './src/assets/logo-dark.svg',
       },
       favicon: '/favicon.svg',
       customCss: ['./src/styles/custom.css'],

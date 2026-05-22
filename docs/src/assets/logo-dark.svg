@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="agent-devtools (mono, dark theme)">
+  <title>agent-devtools — mono (dark theme)</title>
+  <g fill="none" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 88 V44 H88"/>
+    <path d="M168 44 H212 V88"/>
+    <path d="M212 168 V212 H168"/>
+    <path d="M88 212 H44 V168"/>
+  </g>
+  <path d="M104 92 L160 128 L104 164" fill="none" stroke="#f8fafc" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
