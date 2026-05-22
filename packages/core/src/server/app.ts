@@ -17,9 +17,10 @@ import { pumpToSse, startSse, type SseEvent } from './sse.js';
  * widget) lets users pick the runtime per chat:
  *
  *   - `'acp'` (default) — out-of-process Claude Code agent reached via the
- *     Agent Client Protocol (Zed's `@zed-industries/claude-code-acp`).
- *     Uses the local `~/.claude` OAuth credentials. Stable until the
- *     in-process SDK path is officially supported.
+ *     Agent Client Protocol (`@agentclientprotocol/claude-agent-acp`,
+ *     spawned under the host `node` from `acp-runtime.ts`). Uses the local
+ *     `~/.claude` OAuth credentials. Stable until the in-process SDK path
+ *     is officially supported.
  *   - `'sdk'` — in-process `@anthropic-ai/claude-agent-sdk`. Faster cold
  *     start; relies on the SDK's (currently unofficial but working)
  *     ~/.claude credentials reuse.

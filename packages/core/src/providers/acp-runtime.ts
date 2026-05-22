@@ -3,12 +3,13 @@
  * (one per workspace cwd) and reuses ACP sessions across HTTP turns so the
  * widget conversation has real history.
  *
- * Why a pool: each ACP child is heavyweight (spawns the Claude Code binary
- * + initializes the SDK). Spawning per HTTP turn meant ~1s startup per
- * message AND every turn was a fresh, amnesic session. The pool keeps the
- * child alive for the dev-server lifetime and maps every `clientSessionId`
- * (browser-tab identifier) to a stable ACP `sessionId`, so the second turn
- * remembers the first.
+ * Why a pool: each ACP child is heavyweight (we spawn the host `node`
+ * running the `@agentclientprotocol/claude-agent-acp` adapter script,
+ * which then initializes Claude Code internally). Spawning per HTTP turn
+ * meant ~1s startup per message AND every turn was a fresh, amnesic
+ * session. The pool keeps the child alive for the dev-server lifetime and
+ * maps every `clientSessionId` (browser-tab identifier) to a stable ACP
+ * `sessionId`, so the second turn remembers the first.
  *
  * Session ownership: one ACP child can host many sessions. We key one
  * child per workspace `cwd` (`{cwd → AcpChild}`) and one session per

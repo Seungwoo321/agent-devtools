@@ -7,10 +7,10 @@ agent-devtools ships two **providers** that bridge the widget to your local
 Claude. You can switch between them at any time from the widget's settings
 panel.
 
-| Provider            | Underlying implementation                                                                                    | How it works                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **`acp`** (default) | [@agentclientprotocol/claude-agent-acp](https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp) | The dev server **spawns the Claude Code binary as a child process** and talks to it over stdio JSON-RPC. |
-| **`sdk`**           | [@anthropic-ai/claude-agent-sdk](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk)               | The Claude Agent SDK is invoked directly **inside the dev server process**. No child process.            |
+| Provider            | Underlying implementation                                                                                    | How it works                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`acp`** (default) | [@agentclientprotocol/claude-agent-acp](https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp) | The dev server **spawns the host `node` executable with the ACP adapter script** (`@agentclientprotocol/claude-agent-acp/dist/index.js`) and talks to it over stdio JSON-RPC. The adapter then invokes Claude Code itself. |
+| **`sdk`**           | [@anthropic-ai/claude-agent-sdk](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk)               | The Claude Agent SDK `query()` runs **inside the dev server process**. No extra child process is spawned — it executes in-process.                                                                                         |
 
 ## TL;DR
 
@@ -19,7 +19,7 @@ panel.
   from day one of the widget.
 - **Consider switching to `sdk` once the SDK ships its official stable
   release (planned for 2026-06-15).** Today it is on the experimental track;
-  as of Sprint 1 we keep it around for comparison and validation.
+  as of the initial release we keep it around for comparison and validation.
 
 ## Both share the same OAuth session
 
@@ -44,13 +44,19 @@ Browser widget
    │  HTTP POST /v1/agent/stream  (SSE)
    ▼
 Vite dev server (agent-devtools plugin)
-   │  spawn("claude-code-acp")
+   │  spawn(process.execPath,
+   │        ['.../@agentclientprotocol/claude-agent-acp/dist/index.js'])
    ▼
-ACP child process (stdio JSON-RPC)
+ACP adapter child process (host node + stdio JSON-RPC)
    │  invokes Claude Code internally
    ▼
 Uses the ~/.claude OAuth session → Anthropic
 ```
+
+> Where this happens: `packages/core/src/providers/acp-runtime.ts:496` —
+> we `require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')`
+> for the adapter path and pass it as the argument to `process.execPath`
+> (the host `node`).
 
 ### Why it is the default
 
@@ -60,7 +66,8 @@ Uses the ~/.claude OAuth session → Anthropic
 2. **Official support channel.** It is the standard integration shape built
    by Zed and used by Anthropic. Updates land quickly.
 3. **Permission modes and the pairing token are both proven here.** The
-   Sprint 1 integration tests (ADT-46) use ACP as the baseline.
+   integration tests in `packages/e2e/specs/providers-live.spec.ts` run
+   against ACP as the baseline.
 
 ### Limitations
 
@@ -88,6 +95,9 @@ Vite dev server (agent-devtools plugin)
    │  Uses the ~/.claude OAuth session → Anthropic
 ```
 
+> Where this happens: `packages/core/src/providers/sdk.ts:47` —
+> the SDK's `query()` runs inside the dev server process itself.
+
 ### Upsides
 
 - **No child process.** No spawn cost, and no separate dependency on the
@@ -99,8 +109,9 @@ Vite dev server (agent-devtools plugin)
 
 - The SDK's official stable release is scheduled for **2026-06-15**. Until
   then, types and behavior may shift between minor releases.
-- The Sprint 1 integration test baseline is ACP. We keep the SDK code and
-  tests around but do not recommend it as the default for users yet.
+- The integration test baseline (`packages/e2e/specs/providers-live.spec.ts`)
+  is ACP. We keep the SDK code and tests around but do not recommend it as
+  the default for users yet.
 
 ## Switching providers
 
@@ -130,4 +141,4 @@ first request is slower under ACP because of the ~200 ms spawn cost.
 **Q. Do both providers work in Vue / Next / Nuxt?**
 A. The provider abstraction lives in the core package, so as soon as a
 framework adapter ships, both providers are supported automatically
-(adapters land in cycle U11).
+(Vue / Next / Nuxt adapters land in a follow-up release).
