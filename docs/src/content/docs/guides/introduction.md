@@ -34,9 +34,10 @@ agent-devtools 는 두 세계를 합친다.
 - **본인의 Claude Pro / Max 구독을 이미 쓰고 있는 개발자.**
   agent-devtools 는 새 API 결제를 요구하지 않는다. 로컬 Claude Code CLI 의
   `~/.claude` OAuth 세션을 그대로 재사용한다.
-- **Vite + React 로 개발 중인 프로덕트 팀.**
-  초기 릴리스 (Phase 0) 의 공식 어댑터는 React + Vite 다. Vue / Next / Nuxt
-  어댑터는 후속 릴리스에서 추가된다.
+- **React / Vue / Next / Nuxt 로 개발 중인 프로덕트 팀.**
+  공식 어댑터는 React + Vite, Vue 3 + Vite, Next.js 15 (App Router + Pages
+  Router), Nuxt 3 — 네 가지로 제공된다. 각 어댑터는 실제 빌드 산출물을
+  대상으로 한 CI 자동 production-leak 가드를 갖는다.
 - **로컬 개발 환경에서만 켜는 도구가 필요한 사람.**
   agent-devtools 는 프로덕션 빌드에 포함되지 않는다. `import.meta.env.DEV` 등으로
   개발 모드에서만 마운트하도록 설계되어 있다.
