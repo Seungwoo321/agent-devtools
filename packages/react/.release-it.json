@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/release-it/schema/release-it.json",
   "git": {
-    "commitMessage": "chore(react): release v${version}",
+    "commitMessage": "chore(react): release v${version} [skip ci]",
     "tagName": "react-v${version}",
     "tagAnnotation": "Release @agent-devtools/react v${version}",
     "push": true,
@@ -31,7 +31,10 @@
         ]
       },
       "infile": "CHANGELOG.md",
-      "path": "."
+      "path": ".",
+      "gitRawCommitsOpts": {
+        "path": "packages/react"
+      }
     }
   },
   "hooks": {
@@ -41,7 +44,7 @@
     ],
     "after:bump": [
       "pnpm --filter @agent-devtools/react run build",
-      "pnpm --filter @agent-devtools/react publish --access public --no-git-checks --provenance"
+      "pnpm --filter @agent-devtools/react publish --access public --no-git-checks --provenance --tag $NPM_DIST_TAG"
     ]
   }
 }
