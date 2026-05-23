@@ -1,0 +1,47 @@
+{
+  "$schema": "https://unpkg.com/release-it/schema/release-it.json",
+  "git": {
+    "commitMessage": "chore(core): release v${version}",
+    "tagName": "core-v${version}",
+    "tagAnnotation": "Release @agent-devtools/core v${version}",
+    "push": true,
+    "requireBranch": ["main", "develop"],
+    "requireCleanWorkingDir": false
+  },
+  "github": {
+    "release": true,
+    "releaseName": "@agent-devtools/core v${version}",
+    "autoGenerate": true
+  },
+  "npm": {
+    "publish": false,
+    "skipChecks": true
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "conventionalcommits",
+        "types": [
+          { "type": "feat", "section": "Features" },
+          { "type": "fix", "section": "Bug Fixes" },
+          { "type": "perf", "section": "Performance" },
+          { "type": "refactor", "section": "Refactoring" },
+          { "type": "docs", "section": "Documentation" },
+          { "type": "chore", "hidden": true }
+        ]
+      },
+      "infile": "CHANGELOG.md",
+      "path": "."
+    }
+  },
+  "hooks": {
+    "before:init": [
+      "pnpm --filter @agent-devtools/core run typecheck",
+      "pnpm --filter @agent-devtools/core run test"
+    ],
+    "after:bump": [
+      "pnpm --filter @agent-devtools/core run build",
+      "pnpm --filter @agent-devtools/core publish --access public --no-git-checks --provenance"
+    ]
+  }
+}

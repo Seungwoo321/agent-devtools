@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -53,7 +53,7 @@ jobs:
       - name: Pack (publish-readiness smoke)
         run: |
           mkdir -p .pack-out
-          for pkg in packages/core packages/react packages/vite; do
+          for pkg in packages/core packages/harness-core packages/react packages/vite; do
             (cd "$pkg" && pnpm pack --pack-destination "${GITHUB_WORKSPACE}/.pack-out")
           done
           ls -la .pack-out
