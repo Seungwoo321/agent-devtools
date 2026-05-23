@@ -78,13 +78,29 @@ export interface PumpOptions {
   signal?: AbortSignal;
   /** Map domain stream items to SSE events (default: `{ event: 'message', data: item }`). */
   toEvent?: (item: unknown) => SseEvent;
+  /**
+   * Milliseconds of iterable silence before a `: keepalive` SSE comment is
+   * emitted to defeat intermediate idle-timeout closers (proxies, tunnels,
+   * load balancers). Default `20_000`. Pass `0` to disable heartbeats —
+   * only useful in tests where the iterable is synchronous.
+   */
+  heartbeatMs?: number;
 }
+
+const DEFAULT_HEARTBEAT_MS = 20_000;
 
 /**
  * Pipe an async-iterable of domain events into the SSE writer.
  *
  * Cancels the iterable when the client disconnects (writer.closed) or when
  * `options.signal` aborts. Always closes the SSE stream at the end.
+ *
+ * While the iterable is silent, a `: keepalive` comment is written every
+ * `heartbeatMs` so the underlying TCP connection sees periodic traffic and
+ * any proxy in the middle does not close it as idle. The SSE parser on the
+ * client side ignores comment lines, so heartbeats are invisible to widget
+ * consumers — they exist purely to keep network plumbing awake during long
+ * model thinking phases.
  */
 export async function pumpToSse<T>(
   writer: SseWriter,
@@ -92,6 +108,7 @@ export async function pumpToSse<T>(
   options: PumpOptions = {},
 ): Promise<void> {
   const toEvent = options.toEvent ?? ((item) => ({ event: 'message', data: item }));
+  const heartbeatMs = options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
   const iterator = iterable[Symbol.asyncIterator]();
 
   const abort = (): void => {
@@ -99,11 +116,38 @@ export async function pumpToSse<T>(
   };
   options.signal?.addEventListener('abort', abort, { once: true });
 
+  // Keep the in-flight `iterator.next()` across heartbeat ticks so an event
+  // that arrives mid-tick is not lost when the timer races ahead of it.
+  let pendingNext: Promise<IteratorResult<T>> | null = null;
   try {
     while (!writer.closed) {
-      const { value, done } = await iterator.next();
-      if (done) break;
-      writer.write(toEvent(value));
+      if (!pendingNext) pendingNext = iterator.next();
+
+      if (heartbeatMs <= 0) {
+        const { value, done } = await pendingNext;
+        pendingNext = null;
+        if (done) break;
+        writer.write(toEvent(value));
+        continue;
+      }
+
+      let timerId: ReturnType<typeof setTimeout> | undefined;
+      const heartbeat = new Promise<'tick'>((resolve) => {
+        timerId = setTimeout(() => resolve('tick'), heartbeatMs);
+      });
+      const winner = await Promise.race([
+        pendingNext.then((r) => ({ kind: 'next' as const, r })),
+        heartbeat.then(() => ({ kind: 'tick' as const })),
+      ]);
+      if (timerId !== undefined) clearTimeout(timerId);
+
+      if (winner.kind === 'tick') {
+        if (!writer.closed) writer.comment('keepalive');
+        continue;
+      }
+      pendingNext = null;
+      if (winner.r.done) break;
+      writer.write(toEvent(winner.r.value));
     }
   } finally {
     options.signal?.removeEventListener('abort', abort);
