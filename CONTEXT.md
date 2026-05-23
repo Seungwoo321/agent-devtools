@@ -36,10 +36,16 @@ agent-devtools/
 │   ├── core/              → @agent-devtools/core           (server + widget shell + CLI bin, 프레임워크 무관)
 │   ├── harness-core/      → @agent-devtools/harness-core   (LLM provider 추상화 + loop 전략, 도메인 무관)
 │   ├── react/             → @agent-devtools/react          (React 19 fiber walker + DOM picker + widget UI)
-│   ├── vite/              → @agent-devtools/vite           (Vite 8 plugin — auto-inject + dev-only 게이트)
+│   ├── vue/               → @agent-devtools/vue            (Vue 3 component walker + DOM picker + widget UI)
+│   ├── vite/              → @agent-devtools/vite           (Vite 8 plugin — auto-inject + dev-only 게이트, 어댑터-aware)
+│   ├── next/              → @agent-devtools/next           (Next.js 15 config wrapper + App/Pages Router bootstrap shim)
+│   ├── nuxt/              → @agent-devtools/nuxt           (Nuxt 3 module, dev-only client plugin 등록)
 │   └── e2e/               → @agent-devtools/e2e            (Playwright E2E, private)
 ├── examples/
-│   └── react-vite/        → Phase 0 종단 검증 샘플
+│   ├── react-vite/        → React + Vite 종단 샘플
+│   ├── vue-vite/          → Vue 3 + Vite 종단 샘플
+│   ├── next/              → Next.js 15 종단 샘플 (App + Pages Router)
+│   └── nuxt/              → Nuxt 3 종단 샘플
 ├── docs/                  → 사용자 가이드 사이트 (Astro Starlight, ko/en)
 ├── assets/brand/          → 로고 / favicon SSoT
 ├── CONTEXT.md             ← this file
@@ -47,28 +53,37 @@ agent-devtools/
 └── package.json
 ```
 
-TanStack Query 가 동일 패턴 (`@tanstack/query-core` + `@tanstack/react-query` + `@tanstack/vue-query` ...) 으로 검증한 구조. **공통 코어 + 프레임워크 어댑터 N 개**. 페이지 컨텍스트 수집(fiber `_debugSource`, Vue `__vueParentComponent` 등) 은 프레임워크별로 API 가 달라 어댑터 분리가 강제되지만, 나머지 (widget shell / server / agent engine) 는 무관.
+TanStack Query 가 동일 패턴 (`@tanstack/query-core` + `@tanstack/react-query` + `@tanstack/vue-query` ...) 으로 검증한 구조. **공통 코어 + 프레임워크 어댑터 N 개**. 페이지 컨텍스트 수집 (React fiber `_debugSource` / `_debugStack`, Vue `ComponentInternalInstance.__file`) 은 프레임워크별로 API 가 달라 어댑터 분리가 강제되지만, 나머지 (widget shell / server / agent engine) 는 무관. Next 는 React 어댑터의 fiber walker 를 그대로 재사용하고, Nuxt 는 Vue 어댑터의 vnode walker 를 그대로 재사용 — 두 메타 어댑터는 widget chain 코드를 복제하지 않고 workspace dependency 로만 끌어다 쓴다.
 
-## MVP 범위 (Phase 0)
+## 지원 범위 (snapshot)
 
-**Phase 0 = "React + Vite + Claude Pro 구독" 으로 종단 검증**.
+**현재 지원 스택**:
 
-스코프 안:
+| 스택         | 어댑터 패키지                                                                | 번들러 통합                                               | Example               |
+| ------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------- |
+| React + Vite | `@agent-devtools/react`                                                      | `@agent-devtools/vite`                                    | `examples/react-vite` |
+| Vue 3 + Vite | `@agent-devtools/vue`                                                        | `@agent-devtools/vite`                                    | `examples/vue-vite`   |
+| Next.js 15   | `@agent-devtools/react` + `@agent-devtools/next` (App Router + Pages Router) | `@agent-devtools/next` `withAgentDevtools` config wrapper | `examples/next`       |
+| Nuxt 3       | `@agent-devtools/vue` + `@agent-devtools/nuxt`                               | `@agent-devtools/nuxt` Nuxt module                        | `examples/nuxt`       |
 
-- `packages/core` (server + widget shell)
-- `packages/harness-core` (provider 추상화 + loop)
-- `packages/react` (fiber walker + DOM picker)
-- `packages/vite` (auto-inject plugin)
-- Claude Agent SDK provider (사용자 본인의 Claude Pro/Max 구독 → Agent SDK Credit 으로 직접 호출, 2026-06-15 시행)
-- `examples/react-vite` (사용자 시나리오 검증)
-- 보안 게이트 (dev-only, 127.0.0.1, 페어링 토큰)
+**Provider (LLM 통신)**:
 
-스코프 밖 (후속 milestone):
+- Claude Agent SDK provider — 사용자 본인의 Claude Pro/Max 구독 → Agent SDK Credit 으로 직접 호출 (2026-06-15 시행).
+- ACP provider — 로컬 Claude Code CLI 와 stdio JSON-RPC 로 연결, 사용자의 `~/.claude` OAuth 세션 재사용. 두 provider 모두 네 어댑터에서 동일하게 동작 (provider 추상화는 `@agent-devtools/core` 안에 있고 어댑터는 widget UI / picker / walker 만 담당).
 
-- Vue / Next / Nuxt 어댑터
-- BYOK API 키 provider (Phase 1)
-- Ollama / LM Studio 등 로컬 LLM (Phase 1)
-- production 사용 시나리오 (영구 OUT)
+**보안 디폴트** (모든 스택 공통, 영구 고정):
+
+- dev-only — `vite build` / `next build --production` / `nuxt build` 산출물에 widget chain 코드가 들어가지 않도록 build-time + runtime 2-layer guard 가 강제 (`.claude/rules/dev-only-guard.md`).
+- `127.0.0.1` 루프백 bind — 외부 네트워크 노출 차단.
+- 페어링 토큰 — CLI 시작마다 회전, 메모리 only, URL embed 금지.
+- production 사용 시나리오 — 영구 OUT.
+
+**현재 스코프 밖 (후속 milestone)**:
+
+- BYOK API 키 provider.
+- Ollama / LM Studio 등 로컬 LLM provider.
+- 조직 차원의 인증 SaaS 경유 mode (post-MVP).
+- 추가 어댑터 (Vue 2 / Angular / Svelte+SvelteKit / Next.js Pages Router 의 별도 어댑터 / Nuxt 2 등) — 별도 plan 으로 트래킹.
 
 ## 자동 컨텍스트 수집 (이 도구의 가장 중요한 가치)
 
