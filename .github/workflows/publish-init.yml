@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
@@ -69,5 +68,4 @@ jobs:
             publish \
             --tag "${{ inputs.tag }}" \
             --access public \
-            --provenance \
             --no-git-checks
