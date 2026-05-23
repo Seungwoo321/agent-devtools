@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/react.svg)](https://www.npmjs.com/package/@agent-devtools/react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**Status:** `0.1.0` — early alpha. The API may change before `1.0`.
-
 ## Features
 
 - **`mountAgentDevtools`** — mounts the launcher, composer, and settings widget into a closed Shadow DOM so host styles, events, and the host React instance stay isolated.

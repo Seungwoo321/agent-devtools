@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vite.svg)](https://www.npmjs.com/package/@agent-devtools/vite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**Status:** `0.1.0` — early alpha. The API may change before `1.0`.
-
 ## Features
 
 - **`apply: 'serve'`** — the plugin is not registered during `vite build`. Zero bytes of widget code reach the production bundle.

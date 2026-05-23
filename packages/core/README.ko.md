@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/core.svg)](https://www.npmjs.com/package/@agent-devtools/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**상태:** `0.1.0` — 초기 알파. `1.0` 이전에 API 가 변경될 수 있습니다.
-
 ## 기능
 
 - **로컬 에이전트 서버** — `127.0.0.1` 에만 bind 되는 HTTP + SSE 서버. 포트 점유 시 `4317`, `4318` … 순차 fallback (최대 20 회 시도).

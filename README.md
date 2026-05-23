@@ -20,24 +20,8 @@ A floating chat window pinned to the page you are developing. Ask in natural lan
 
 Inside the widget, type something like "make the Counter title bigger and red" and the agent reads `App.tsx` and `styles.css` and applies an `Edit`. Vite HMR reflects the new CSS instantly so you confirm the result without leaving the page.
 
-## Status
-
-Early alpha (`0.1.0`). Phase 0 covers React + Vite + Claude Pro/Max end-to-end. Published on npm; the API may change before `1.0`.
-
 - User guide (en / ko): <https://agent-devtools.seungwoo321.dev>
-- Context, decision log, scope: [`CONTEXT.md`](./CONTEXT.md)
-
-## What it is
-
-- A devtools-category OSS — same category as React DevTools or TanStack Query DevTools.
-- Local LLM agent calls and code edits — the Claude Agent SDK reuses your own Claude Pro/Max subscription (Agent SDK Credit).
-- BYO subscription — the project never carries the API key bill for you.
-
-## What it is not
-
-- Not coupled to an AI IDE; it is not a chat forwarder for Cursor / Windsurf / Claude Code.
-- Not production-safe; dev-only and permanently out of scope for production.
-- Not a hosted service; the CLI runs only on the user's machine.
+- Context and scope: [`CONTEXT.md`](./CONTEXT.md)
 
 ## Quick Start (React + Vite)
 
@@ -83,15 +67,6 @@ The manual import path refuses to mount when `NODE_ENV === 'production'` (force 
 
 For full integration scenarios see [`examples/react-vite`](./examples/react-vite) and [`examples/react-vite/SMOKE-TESTS.md`](./examples/react-vite/SMOKE-TESTS.md).
 
-## Differentiation
-
-|                | Stagewise                               | agent-devtools                             |
-| -------------- | --------------------------------------- | ------------------------------------------ |
-| Required tool  | An AI IDE such as Cursor / Windsurf     | Browser only                               |
-| Who pays       | Cursor subscription or the IDE-side key | Your own LLM subscription (Claude Pro/Max) |
-| Response lives | Inside the IDE chat panel               | Inside the page widget                     |
-| Eye movement   | Browser → IDE → browser                 | Stays in the browser                       |
-
 ## Packages
 
 | Package                                                   | Version | Description                                                  |
@@ -100,7 +75,6 @@ For full integration scenarios see [`examples/react-vite`](./examples/react-vite
 | [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | Domain-agnostic loop strategy + LLM provider abstraction     |
 | [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context            |
 | [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard          |
-| `@agent-devtools/next` / `vue` / `nuxt`                   | planned | Follow-up milestone                                          |
 
 ## Security defaults
 

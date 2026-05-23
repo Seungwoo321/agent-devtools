@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vite.svg)](https://www.npmjs.com/package/@agent-devtools/vite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**상태:** `0.1.0` — 초기 알파. `1.0` 이전에 API 가 변경될 수 있습니다.
-
 ## 기능
 
 - **`apply: 'serve'`** — `vite build` 단계에서는 플러그인이 등록되지 않습니다. production 번들에 위젯 코드가 0 바이트 들어가지 않습니다.

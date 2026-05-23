@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/harness-core.svg)](https://www.npmjs.com/package/@agent-devtools/harness-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**상태:** `0.1.0` — 초기 알파. `1.0` 이전에 API 가 변경될 수 있습니다.
-
 ## 기능
 
 - **Loop 전략** — `orchestratorLoop`, `modelDrivenLoop`, `sdkSessionLoop`, 그리고 옵션으로 `langgraphLoop` runner. 도메인 코드를 재작성하지 않고 실행 형태를 교체할 수 있습니다.

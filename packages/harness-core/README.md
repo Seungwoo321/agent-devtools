@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/harness-core.svg)](https://www.npmjs.com/package/@agent-devtools/harness-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**Status:** `0.1.0` — early alpha. The API may change before `1.0`.
-
 ## Features
 
 - **Loop strategies** — `orchestratorLoop`, `modelDrivenLoop`, `sdkSessionLoop`, and an optional `langgraphLoop` runner so the execution shape can change without rewriting the domain.

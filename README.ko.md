@@ -20,24 +20,8 @@
 
 위젯 안에서 자연어로 "Counter 제목 글씨 키우고 빨간색으로 바꿔줘" 라고 지시하면 에이전트가 `App.tsx` 와 `styles.css` 를 읽고 `Edit` 으로 수정한다. Vite HMR 이 변경된 CSS 를 즉시 반영해 같은 화면 안에서 결과까지 확인된다.
 
-## Status
-
-Early alpha (`0.1.0`). Phase 0 는 React + Vite + Claude Pro/Max 종단 검증 범위. npm 에 배포되었고, `1.0` 이전에 API 가 변경될 수 있다.
-
 - 사용자 가이드 (en / ko): <https://agent-devtools.seungwoo321.dev>
 - 컨텍스트·결정 로그·스코프: [`CONTEXT.md`](./CONTEXT.md)
-
-## 무엇인가
-
-- 개발자도구 카테고리 OSS — React DevTools, TanStack Query DevTools 와 같은 카테고리.
-- 로컬 LLM 에이전트 호출과 코드 수정 — Claude Agent SDK 가 본인의 Claude Pro/Max 구독 (Agent SDK Credit) 을 재사용한다.
-- BYO subscription — 운영자가 API 키 비용을 떠안지 않는다.
-
-## 무엇이 아닌가
-
-- AI IDE 에 종속되지 않는다. Cursor / Windsurf / Claude Code 의 채팅 forward 도구가 아니다.
-- production 안전하지 않다. dev-only 이고 영구적으로 production 스코프 밖이다.
-- 호스팅 서비스가 아니다. CLI 는 사용자 PC 에서만 동작한다.
 
 ## Quick Start (React + Vite)
 
@@ -83,15 +67,6 @@ if (import.meta.env.DEV) {
 
 전체 통합 시나리오는 [`examples/react-vite`](./examples/react-vite) 와 [`examples/react-vite/SMOKE-TESTS.md`](./examples/react-vite/SMOKE-TESTS.md) 참고.
 
-## Differentiation
-
-|           | Stagewise                   | agent-devtools                      |
-| --------- | --------------------------- | ----------------------------------- |
-| 필요 도구 | Cursor / Windsurf 등 AI IDE | 브라우저만                          |
-| 비용 부담 | Cursor 구독 또는 IDE 측 키  | 본인의 LLM 구독 (Claude Pro/Max 등) |
-| 응답 위치 | IDE 채팅창                  | 페이지 widget 안                    |
-| 시선 이동 | 브라우저 → IDE → 브라우저   | 브라우저에서 끝                     |
-
 ## Packages
 
 | Package                                                   | Version | Description                                               |
@@ -100,7 +75,6 @@ if (import.meta.env.DEV) {
 | [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | 도메인-무관 loop 전략 + LLM provider 추상화               |
 | [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context         |
 | [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard       |
-| `@agent-devtools/next` / `vue` / `nuxt`                   | planned | 후속 milestone                                            |
 
 ## Security defaults
 

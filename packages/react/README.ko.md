@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/react.svg)](https://www.npmjs.com/package/@agent-devtools/react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**상태:** `0.1.0` — 초기 알파. `1.0` 이전에 API 가 변경될 수 있습니다.
-
 ## 기능
 
 - **`mountAgentDevtools`** — launcher, composer, settings 위젯을 closed Shadow DOM 안에 mount 합니다. 호스트 앱의 스타일·이벤트·React 인스턴스에서 격리됩니다.

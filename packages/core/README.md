@@ -7,8 +7,6 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/core.svg)](https://www.npmjs.com/package/@agent-devtools/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
-**Status:** `0.1.0` — early alpha. The API may change before `1.0`.
-
 ## Features
 
 - **Local agent server** — HTTP + SSE on `127.0.0.1` only, with sequential port fallback (`4317`, `4318`, … up to 20 attempts).
