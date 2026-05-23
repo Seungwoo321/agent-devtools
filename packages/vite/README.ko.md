@@ -68,14 +68,15 @@ agentDevtools({
 
 ## 옵션
 
-| 옵션          | 타입      | 기본값                  | 설명                                                                                           |
-| ------------- | --------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `enabled`     | `boolean` | `true`                  | `vite.config.ts` 에서 제거하지 않고 런타임에 끄기.                                             |
-| `importFrom`  | `string`  | `@agent-devtools/react` | `mountAgentDevtools` 와 `createDefaultTransport` 를 export 하는 모듈.                          |
-| `spawnServer` | `boolean` | `true`                  | 에이전트 서버를 외부에서 관리할 때 `false`.                                                    |
-| `workspace`   | `string`  | Vite `config.root`      | 에이전트가 read/edit 가능한 workspace 루트. 상대 경로는 `config.root` 기준으로 해석.           |
-| `port`        | `number`  | `4317` (auto-fallback)  | spawn 할 에이전트 서버의 선호 포트. 점유 시 `port + 19` 까지 순차 fallback.                    |
-| `shadowOpen`  | `boolean` | `false`                 | open shadow root 사용 (E2E 디버깅 전용). `AGENT_DEVTOOLS_OPEN_SHADOW=1` 환경 변수도 같은 효과. |
+| 옵션          | 타입                                             | 기본값                 | 설명                                                                                                                                                    |
+| ------------- | ------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`     | `boolean`                                        | `true`                 | `vite.config.ts` 에서 제거하지 않고 런타임에 끄기.                                                                                                      |
+| `framework`   | `'auto' \| 'react' \| 'vue' \| 'next' \| 'nuxt'` | `'auto'`               | mount 할 어댑터. `'auto'` 는 호스트 `package.json` 을 읽어 우선순위 (`nuxt` > `next` > `vue` > `react`) 로 결정하고, 매칭이 없으면 `react` 로 fallback. |
+| `importFrom`  | `string`                                         | `framework` 기반       | `mountAgentDevtools` 와 `createDefaultTransport` 를 export 하는 모듈. 명시되면 `framework` 기본값을 덮어씁니다.                                         |
+| `spawnServer` | `boolean`                                        | `true`                 | 에이전트 서버를 외부에서 관리할 때 `false`.                                                                                                             |
+| `workspace`   | `string`                                         | Vite `config.root`     | 에이전트가 read/edit 가능한 workspace 루트. 상대 경로는 `config.root` 기준으로 해석.                                                                    |
+| `port`        | `number`                                         | `4317` (auto-fallback) | spawn 할 에이전트 서버의 선호 포트. 점유 시 `port + 19` 까지 순차 fallback.                                                                             |
+| `shadowOpen`  | `boolean`                                        | `false`                | open shadow root 사용 (E2E 디버깅 전용). `AGENT_DEVTOOLS_OPEN_SHADOW=1` 환경 변수도 같은 효과.                                                          |
 
 ## 보안 기본값
 
@@ -94,7 +95,7 @@ agentDevtools({
 - 모노레포: <https://github.com/Seungwoo321/agent-devtools>
 - Core 패키지: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
 - React 어댑터: [`@agent-devtools/react`](https://www.npmjs.com/package/@agent-devtools/react)
-- 사용자 가이드: <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드: <https://agent-devtools-docs.vercel.app/>
 - 이슈 트래커: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## 라이선스
