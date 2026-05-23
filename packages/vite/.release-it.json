@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/release-it/schema/release-it.json",
   "git": {
-    "commitMessage": "chore(vite): release v${version}",
+    "commitMessage": "chore(vite): release v${version} [skip ci]",
     "tagName": "vite-v${version}",
     "tagAnnotation": "Release @agent-devtools/vite v${version}",
     "push": true,
@@ -31,7 +31,10 @@
         ]
       },
       "infile": "CHANGELOG.md",
-      "path": "."
+      "path": ".",
+      "gitRawCommitsOpts": {
+        "path": "packages/vite"
+      }
     }
   },
   "hooks": {
@@ -41,7 +44,7 @@
     ],
     "after:bump": [
       "pnpm --filter @agent-devtools/vite run build",
-      "pnpm --filter @agent-devtools/vite publish --access public --no-git-checks --provenance"
+      "pnpm --filter @agent-devtools/vite publish --access public --no-git-checks --provenance --tag $NPM_DIST_TAG"
     ]
   }
 }

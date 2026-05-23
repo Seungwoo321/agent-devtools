@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/release-it/schema/release-it.json",
   "git": {
-    "commitMessage": "chore(core): release v${version}",
+    "commitMessage": "chore(core): release v${version} [skip ci]",
     "tagName": "core-v${version}",
     "tagAnnotation": "Release @agent-devtools/core v${version}",
     "push": true,
@@ -31,7 +31,10 @@
         ]
       },
       "infile": "CHANGELOG.md",
-      "path": "."
+      "path": ".",
+      "gitRawCommitsOpts": {
+        "path": "packages/core"
+      }
     }
   },
   "hooks": {
@@ -41,7 +44,7 @@
     ],
     "after:bump": [
       "pnpm --filter @agent-devtools/core run build",
-      "pnpm --filter @agent-devtools/core publish --access public --no-git-checks --provenance"
+      "pnpm --filter @agent-devtools/core publish --access public --no-git-checks --provenance --tag $NPM_DIST_TAG"
     ]
   }
 }

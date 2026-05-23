@@ -20,24 +20,8 @@
 
 위젯 안에서 자연어로 "Counter 제목 글씨 키우고 빨간색으로 바꿔줘" 라고 지시하면 에이전트가 `App.tsx` 와 `styles.css` 를 읽고 `Edit` 으로 수정한다. Vite HMR 이 변경된 CSS 를 즉시 반영해 같은 화면 안에서 결과까지 확인된다.
 
-## Status
-
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) 종단 검증 단계. 아직 npm 에 배포되지 않았다.
-
-- 사용자 가이드 (ko / en): <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드 (en / ko): <https://agent-devtools.seungwoo321.dev>
 - 컨텍스트·결정 로그·스코프: [`CONTEXT.md`](./CONTEXT.md)
-
-## What it is
-
-- **개발자도구 카테고리 OSS** — React DevTools / TanStack Query DevTools 와 동일 카테고리.
-- **로컬 LLM 에이전트 호출 + 코드 수정** — Claude Agent SDK 로 본인의 Claude Pro/Max 구독 (Agent SDK Credit) 재사용.
-- **BYO subscription** — 운영자가 API 키 비용을 떠안지 않는다.
-
-## What it is NOT
-
-- ❌ AI IDE 종속 (Cursor / Windsurf / Claude Code 의 채팅 forward 도구가 아님)
-- ❌ production 사용 가능 (dev-only — 영구 OUT)
-- ❌ 호스팅 서비스 (CLI 가 사용자 PC 에서만 동작)
 
 ## Quick Start (React + Vite)
 
@@ -83,24 +67,14 @@ if (import.meta.env.DEV) {
 
 전체 통합 시나리오는 [`examples/react-vite`](./examples/react-vite) 와 [`examples/react-vite/SMOKE-TESTS.md`](./examples/react-vite/SMOKE-TESTS.md) 참고.
 
-## Differentiation
-
-|           | Stagewise                   | agent-devtools                      |
-| --------- | --------------------------- | ----------------------------------- |
-| 필요 도구 | Cursor / Windsurf 등 AI IDE | 브라우저만                          |
-| 비용 부담 | Cursor 구독 또는 IDE 측 키  | 본인의 LLM 구독 (Claude Pro/Max 등) |
-| 응답 위치 | IDE 채팅창                  | 페이지 widget 안                    |
-| 시선 이동 | 브라우저 → IDE → 브라우저   | 브라우저에서 끝                     |
-
 ## Packages
 
-| Package                                                   | Status       | Description                                               |
-| --------------------------------------------------------- | ------------ | --------------------------------------------------------- |
-| [`@agent-devtools/core`](./packages/core)                 | 🚧 pre-alpha | 프레임워크-무관 코어 (server, agent engine, widget shell) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | 🚧 pre-alpha | 도메인-무관 loop 전략 + LLM provider 추상화               |
-| [`@agent-devtools/react`](./packages/react)               | 🚧 pre-alpha | React 19 fiber walker + DOM picker + auto context         |
-| [`@agent-devtools/vite`](./packages/vite)                 | 🚧 pre-alpha | Vite 8 plugin — auto-inject widget + dev-only guard       |
-| `@agent-devtools/next` / `vue` / `nuxt`                   | planned      | 후속 milestone                                            |
+| Package                                                   | Version | Description                                               |
+| --------------------------------------------------------- | ------- | --------------------------------------------------------- |
+| [`@agent-devtools/core`](./packages/core)                 | `0.1.0` | 프레임워크-무관 코어 (server, agent engine, widget shell) |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | 도메인-무관 loop 전략 + LLM provider 추상화               |
+| [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context         |
+| [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard       |
 
 ## Security defaults
 
