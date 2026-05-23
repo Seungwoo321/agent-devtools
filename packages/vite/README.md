@@ -68,14 +68,15 @@ agentDevtools({
 
 ## Options
 
-| Option        | Type      | Default                 | Description                                                                                                         |
-| ------------- | --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `enabled`     | `boolean` | `true`                  | Disable the plugin at runtime without removing it from `vite.config.ts`.                                            |
-| `importFrom`  | `string`  | `@agent-devtools/react` | Module that exports `mountAgentDevtools` and `createDefaultTransport`.                                              |
-| `spawnServer` | `boolean` | `true`                  | Set to `false` to manage the agent server externally.                                                               |
-| `workspace`   | `string`  | Vite `config.root`      | Workspace root the agent may read and edit. Relative paths resolve against `config.root`.                           |
-| `port`        | `number`  | `4317` (auto-fallback)  | Preferred port for the spawned agent server. If taken, ports up to `port + 19` are tried in order.                  |
-| `shadowOpen`  | `boolean` | `false`                 | Use an open shadow root for the widget (E2E debugging only). The `AGENT_DEVTOOLS_OPEN_SHADOW=1` env flips this too. |
+| Option        | Type                                             | Default                  | Description                                                                                                                      |
+| ------------- | ------------------------------------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`     | `boolean`                                        | `true`                   | Disable the plugin at runtime without removing it from `vite.config.ts`.                                                         |
+| `framework`   | `'auto' \| 'react' \| 'vue' \| 'next' \| 'nuxt'` | `'auto'`                 | Adapter to mount. `'auto'` reads the host `package.json` (priority `nuxt` > `next` > `vue` > `react`) and falls back to `react`. |
+| `importFrom`  | `string`                                         | derived from `framework` | Module that exports `mountAgentDevtools` and `createDefaultTransport`. Overrides the `framework`-derived default when set.       |
+| `spawnServer` | `boolean`                                        | `true`                   | Set to `false` to manage the agent server externally.                                                                            |
+| `workspace`   | `string`                                         | Vite `config.root`       | Workspace root the agent may read and edit. Relative paths resolve against `config.root`.                                        |
+| `port`        | `number`                                         | `4317` (auto-fallback)   | Preferred port for the spawned agent server. If taken, ports up to `port + 19` are tried in order.                               |
+| `shadowOpen`  | `boolean`                                        | `false`                  | Use an open shadow root for the widget (E2E debugging only). The `AGENT_DEVTOOLS_OPEN_SHADOW=1` env flips this too.              |
 
 ## Security defaults
 
@@ -94,7 +95,7 @@ agentDevtools({
 - Monorepo: <https://github.com/Seungwoo321/agent-devtools>
 - Core package: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
 - React adapter: [`@agent-devtools/react`](https://www.npmjs.com/package/@agent-devtools/react)
-- User guide: <https://agent-devtools.seungwoo321.dev>
+- User guide: <https://agent-devtools-docs.vercel.app/>
 - Issue tracker: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## License

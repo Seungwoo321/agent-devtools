@@ -9,7 +9,7 @@
 
 ## 기능
 
-- **로컬 에이전트 서버** — `127.0.0.1` 에만 bind 되는 HTTP + SSE 서버. 포트 점유 시 `4317`, `4318` … 순차 fallback (최대 20 회 시도).
+- **로컬 에이전트 서버** — `127.0.0.1` 에만 bind 되는 HTTP + SSE 서버. 포트 점유 시 `4317`, `4318` … 순차 fallback (최대 20 회 시도). 모델이 침묵 중일 때 SSE pump 가 20초마다 `: keepalive` 코멘트 라인을 emit 해, 긴 thinking 동안 중간 프록시·터널이 idle 로 판단해 연결을 끊지 않습니다.
 - **Pairing token 인증** — 서버 시작 시 메모리에서 발급, 디스크 미저장, URL 미포함. 모든 요청에 `Authorization: Bearer <token>` 필수.
 - **`agent-devtools` CLI** — 패키지의 `bin` 으로 설치됩니다. 번들러 플러그인 (예: `@agent-devtools/vite`) 이 자동 spawn 하지만, 수동 실행도 가능합니다.
 - **ACP / SDK 프로바이더** — 에이전트 스트림 엔드포인트가 사용하는 두 가지 런타임 provider: Anthropic Agent Client Protocol 과 Claude Agent SDK.
@@ -84,7 +84,7 @@ await handle.close();
 - 모노레포: <https://github.com/Seungwoo321/agent-devtools>
 - React 어댑터: [`@agent-devtools/react`](https://www.npmjs.com/package/@agent-devtools/react)
 - Vite 플러그인: [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite)
-- 사용자 가이드: <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드: <https://agent-devtools-docs.vercel.app/>
 - 이슈 트래커: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## 라이선스
