@@ -1,16 +1,18 @@
-name: Publish @agent-devtools/react
+name: Publish packages
 
 on:
   push:
     branches: [main, develop]
     paths:
+      - "packages/core/**"
+      - "packages/harness-core/**"
       - "packages/react/**"
-      - "packages/react/.release-it.json"
-      - ".github/workflows/publish-react.yml"
+      - "packages/vite/**"
+      - ".github/workflows/publish.yml"
   workflow_dispatch:
 
 concurrency:
-  group: publish-react-${{ github.ref }}
+  group: publish-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -19,10 +21,38 @@ permissions:
   pull-requests: write
 
 jobs:
-  publish:
+  detect:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.changes.outputs.changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            core: 'packages/core/**'
+            harness-core: 'packages/harness-core/**'
+            react: 'packages/react/**'
+            vite: 'packages/vite/**'
+
+  publish:
+    needs: detect
+    if: ${{ needs.detect.outputs.packages != '[]' && needs.detect.outputs.packages != '' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
 
     steps:
       - name: Checkout
@@ -51,16 +81,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Sync with remote
+        run: |
+          git fetch origin "${GITHUB_REF_NAME}"
+          git reset --hard "origin/${GITHUB_REF_NAME}"
+
       - name: Publish Beta (develop branch)
         if: github.ref == 'refs/heads/develop'
         env:
+          NPM_DIST_TAG: beta
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: packages/react
-        run: pnpm exec release-it --preRelease=beta --ci --npm.tag=beta
+        working-directory: packages/${{ matrix.package }}
+        run: pnpm exec release-it --preRelease=beta --ci
 
       - name: Publish Release (main branch)
         if: github.ref == 'refs/heads/main'
         env:
+          NPM_DIST_TAG: latest
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: packages/react
+        working-directory: packages/${{ matrix.package }}
         run: pnpm exec release-it --ci
