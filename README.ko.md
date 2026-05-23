@@ -20,14 +20,21 @@
 
 위젯 안에서 자연어로 "Counter 제목 글씨 키우고 빨간색으로 바꿔줘" 라고 지시하면 에이전트가 `App.tsx` 와 `styles.css` 를 읽고 `Edit` 으로 수정한다. Vite HMR 이 변경된 CSS 를 즉시 반영해 같은 화면 안에서 결과까지 확인된다.
 
-- 사용자 가이드 (en / ko): <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드 (en / ko): <https://agent-devtools-docs.vercel.app/>
 - 컨텍스트·결정 로그·스코프: [`CONTEXT.md`](./CONTEXT.md)
 
-## Quick Start (React + Vite)
+## Quick Start
 
-```bash
-pnpm add -D @agent-devtools/vite @agent-devtools/react
-```
+자기 스택에 맞는 행을 고른다. 각 어댑터는 [`examples/`](./examples) 에 실행 가능한 예제와 `pnpm --filter <example> run smoke:no-leak` 로 돌릴 수 있는 production-leak 가드를 갖는다 — production 번들에 widget 코드가 0 바이트 들어가는 것을 검증한다.
+
+| Stack        | 설치                                                     | 예제                                           |
+| ------------ | -------------------------------------------------------- | ---------------------------------------------- |
+| React + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/react` | [`examples/react-vite`](./examples/react-vite) |
+| Vue 3 + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/vue`   | [`examples/vue-vite`](./examples/vue-vite)     |
+| Next.js 15   | `pnpm add -D @agent-devtools/next @agent-devtools/react` | [`examples/next`](./examples/next)             |
+| Nuxt 3       | `pnpm add -D @agent-devtools/nuxt @agent-devtools/vue`   | [`examples/nuxt`](./examples/nuxt)             |
+
+### React + Vite
 
 ```ts
 // vite.config.ts
@@ -40,32 +47,59 @@ export default defineConfig({
 });
 ```
 
-`pnpm dev` 로 띄우면:
+### Vue 3 + Vite
 
-1. Vite dev 서버와 함께 로컬 에이전트 서버가 `127.0.0.1` 의 free 포트에 자동 spawn 된다.
-2. 페어링 토큰이 메모리 안에서 발급되고 dev HTML 의 `window.__AGENT_DEVTOOLS_CONFIG__` 에 주입된다 (URL 에는 절대 노출되지 않는다).
-3. 페이지에 widget 의 launcher 버튼이 떠 있다. 클릭 → 채팅창 열림 → "Pick" 으로 컴포넌트 선택 → 자연어 요청.
-4. `vite build` 시 플러그인은 `apply: 'serve'` 라 자동 비활성화. production 번들에는 widget 코드가 0 바이트 들어가지 않는다 (자동화된 [번들 누출 가드](./packages/vite/src/build-integration.test.ts) 가 검증).
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { agentDevtools } from '@agent-devtools/vite';
 
-### 플러그인을 안 쓰고 직접 mount 할 때
+export default defineConfig({
+  plugins: [vue(), agentDevtools({ framework: 'vue' })],
+});
+```
+
+### Next.js 15 (App 또는 Pages Router)
+
+```ts
+// next.config.ts
+import type { NextConfig } from 'next';
+import { withAgentDevtools } from '@agent-devtools/next';
+
+const config: NextConfig = { reactStrictMode: true };
+export default withAgentDevtools(config);
+```
 
 ```tsx
-// 권장 패턴 — production 번들에서 dynamic import 자체가 tree-shake 됨.
-if (import.meta.env.DEV) {
-  const { mountAgentDevtools, createDefaultTransport } =
-    await import('@agent-devtools/react');
-  mountAgentDevtools({
-    transport: createDefaultTransport({
-      baseUrl: 'http://127.0.0.1:4317',
-      pairingToken: '<프로비저닝 메커니즘으로 전달>',
-    }),
-  });
+// app/agent-devtools.tsx (App Router) — 또는 _app.tsx 에서 호출 (Pages Router)
+'use client';
+import { useEffect } from 'react';
+import { bootstrapAgentDevtools } from '@agent-devtools/next/bootstrap';
+
+export function AgentDevtools(): null {
+  useEffect(() => {
+    bootstrapAgentDevtools();
+  }, []);
+  return null;
 }
 ```
 
-수동 import 경로는 `NODE_ENV === 'production'` 일 때 `mountAgentDevtools` 가 mount 를 거부한다 (강제 override 는 `{ force: true }`). 위 dynamic-import 가드는 그 1차 방어선이 잠시 무너져도 widget 코드 자체가 번들에 없도록 하는 2차 방어선이다.
+### Nuxt 3
 
-전체 통합 시나리오는 [`examples/react-vite`](./examples/react-vite) 와 [`examples/react-vite/SMOKE-TESTS.md`](./examples/react-vite/SMOKE-TESTS.md) 참고.
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@agent-devtools/nuxt'],
+});
+```
+
+어느 스택이든 `pnpm dev` 를 실행하면:
+
+1. 로컬 에이전트 서버가 `127.0.0.1` 의 free 포트에 자동 spawn 된다 (4317 이 점유면 순차 fallback).
+2. 페어링 토큰이 메모리 안에서 발급되고 dev HTML 의 `window.__AGENT_DEVTOOLS_CONFIG__` 에 주입된다 — URL 에는 절대 노출되지 않는다.
+3. 페이지에 widget 의 launcher 버튼이 떠 있다. 클릭 → 채팅창 열림 → "Pick" 으로 컴포넌트 선택 → 자연어 요청.
+4. `pnpm build` 시 어댑터는 종단간 비활성화. production 번들에는 widget 코드가 0 바이트 들어가지 않는다 ([Security defaults](#security-defaults) 참조).
 
 ## Packages
 
@@ -74,15 +108,18 @@ if (import.meta.env.DEV) {
 | [`@agent-devtools/core`](./packages/core)                 | `0.1.0` | 프레임워크-무관 코어 (server, agent engine, widget shell) |
 | [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | 도메인-무관 loop 전략 + LLM provider 추상화               |
 | [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context         |
+| [`@agent-devtools/vue`](./packages/vue)                   | `0.1.0` | Vue 3 vnode walker + DOM picker + closed shadow widget    |
+| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 wrapper — webpack alias + bootstrap shim       |
+| [`@agent-devtools/nuxt`](./packages/nuxt)                 | `0.1.0` | Nuxt 3 module — dev-only plugin 자동 주입                 |
 | [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard       |
 
 ## Security defaults
 
-- **dev-only** — `mountAgentDevtools()` 는 `NODE_ENV === 'production'` 에서 즉시 throw 한다 (override: `{ force: true }`). Vite 플러그인은 `apply: 'serve'` 라 build 단계 자체에 참여하지 않는다.
-- **production-leak guard** — `apply: 'serve'` 와 사용자측 `if (import.meta.env.DEV) { … }` dynamic import 두 layer 가 빌드 출력에서 widget 식별자를 모두 제거한다. [`packages/vite/src/build-integration.test.ts`](./packages/vite/src/build-integration.test.ts) 가 실제 production 빌드를 돌려 sentinel 부재를 강제한다.
+- **dev-only** — 모든 어댑터의 mount entry 는 `NODE_ENV === 'production'` 일 때 즉시 throw 한다 (Layer 2 런타임 가드). 빌드 시 통합 (Vite `apply: 'serve'`, Next webpack alias + DCE, Nuxt `nuxt.options.dev` 게이트) 은 widget 코드 경로가 production 그래프에 진입조차 못 하도록 차단한다 (Layer 1 빌드 가드).
+- **production-leak guard** — 각 예제는 `scripts/check-no-leak.mjs` 심볼 기반 스캐너를 갖는다. 실제 production 산출물 (`dist/`, `.next/`, `.output/`) 에서 widget-chain 식별자 (`mountAgentDevtools`, `createDefaultTransport`, `getFiberForElement`, `pumpToSse`, …) 가 한 번이라도 등장하면 build 가 실패한다. CI 가 매 푸시마다 이 매트릭스를 돌린다.
 - **127.0.0.1 binding** — 로컬 에이전트 서버는 loopback only. 외부 네트워크 노출 없음. 점유 시 sequential fallback.
 - **페어링 토큰** — CLI 시작마다 회전, 메모리 only, 디스크 미저장, URL embed 금지. `Authorization: Bearer …` 헤더로만 전달.
-- **closed Shadow DOM** — 호스트 앱 CSS/DOM·상태 격리, React 19 별도 모듈 인스턴스로 dual-tree.
+- **closed Shadow DOM** — 호스트 앱 CSS/DOM·상태 격리. React 19 (또는 Vue 3) 별도 모듈 인스턴스로 호스트와의 dual-tree 경계를 둔다.
 
 ## Requirements
 
@@ -96,6 +133,7 @@ if (import.meta.env.DEV) {
 pnpm install
 pnpm typecheck
 pnpm test
+pnpm build:examples  # 4 개 예제 모두 build + no-leak smoke 까지 돌린다
 ```
 
 자세한 개발 가이드는 [`CONTRIBUTING.md`](./CONTRIBUTING.md).
