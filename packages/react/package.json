@@ -48,7 +48,7 @@
     "react-dom": ">=19.0.0"
   },
   "dependencies": {
-    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/core": "workspace:^",
     "dompurify": "^3.2.7",
     "marked": "^16.4.0"
   },
