@@ -103,7 +103,7 @@ for await (const event of orchestratorLoop(
 
 - 모노레포: <https://github.com/Seungwoo321/agent-devtools>
 - Core 패키지: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
-- 사용자 가이드: <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드: <https://agent-devtools-docs.vercel.app/>
 - 이슈 트래커: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## 라이선스

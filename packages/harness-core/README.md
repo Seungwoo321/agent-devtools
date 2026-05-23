@@ -103,7 +103,7 @@ Each provider exposes a curated list of supported model identifiers (`FREE_MODEL
 
 - Monorepo: <https://github.com/Seungwoo321/agent-devtools>
 - Core package: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
-- User guide: <https://agent-devtools.seungwoo321.dev>
+- User guide: <https://agent-devtools-docs.vercel.app/>
 - Issue tracker: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## License

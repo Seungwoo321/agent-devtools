@@ -129,5 +129,7 @@ A. 정상 응답 streaming 속도는 거의 같다. 첫 요청만 ACP 가 spawn 
 (~200ms) 만큼 느리다.
 
 **Q. Vue / Next / Nuxt 에서도 두 provider 다 되나?**
-A. provider 추상화는 코어에 있어서, 어댑터가 추가되면 두 provider 다 자동으로
-지원된다 (Vue / Next / Nuxt 어댑터는 후속 릴리스에서 합류).
+A. 네 가지 어댑터 (React + Vite, Vue 3 + Vite, Next.js 15, Nuxt 3) 전부에서 두
+provider 다 동일하게 동작한다. provider 추상화는 `@agent-devtools/core` 안에
+있고, 어댑터는 widget UI / picker / walker 만 담당하므로 provider 동작에는
+관여하지 않는다.
