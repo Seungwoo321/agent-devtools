@@ -22,22 +22,22 @@ Inside the widget, type something like "make the Counter title bigger and red" a
 
 ## Status
 
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) end-to-end verification. Not yet published to npm.
+Early alpha (`0.1.0`). Phase 0 covers React + Vite + Claude Pro/Max end-to-end. Published on npm; the API may change before `1.0`.
 
-- User guide (ko / en): <https://agent-devtools.seungwoo321.dev>
+- User guide (en / ko): <https://agent-devtools.seungwoo321.dev>
 - Context, decision log, scope: [`CONTEXT.md`](./CONTEXT.md)
 
 ## What it is
 
-- **A devtools-category OSS** — same category as React DevTools / TanStack Query DevTools.
-- **Local LLM agent calls + code edits** — Claude Agent SDK reuses your own Claude Pro/Max subscription (Agent SDK Credit).
-- **BYO subscription** — the project never carries the API key bill for you.
+- A devtools-category OSS — same category as React DevTools or TanStack Query DevTools.
+- Local LLM agent calls and code edits — the Claude Agent SDK reuses your own Claude Pro/Max subscription (Agent SDK Credit).
+- BYO subscription — the project never carries the API key bill for you.
 
-## What it is NOT
+## What it is not
 
-- ❌ Not coupled to an AI IDE (not a chat forwarder for Cursor / Windsurf / Claude Code)
-- ❌ Not production-safe (dev-only — permanently OUT of scope)
-- ❌ Not a hosted service (the CLI runs only on the user's machine)
+- Not coupled to an AI IDE; it is not a chat forwarder for Cursor / Windsurf / Claude Code.
+- Not production-safe; dev-only and permanently out of scope for production.
+- Not a hosted service; the CLI runs only on the user's machine.
 
 ## Quick Start (React + Vite)
 
@@ -94,13 +94,13 @@ For full integration scenarios see [`examples/react-vite`](./examples/react-vite
 
 ## Packages
 
-| Package                                                   | Status       | Description                                                  |
-| --------------------------------------------------------- | ------------ | ------------------------------------------------------------ |
-| [`@agent-devtools/core`](./packages/core)                 | 🚧 pre-alpha | Framework-agnostic core (server, agent engine, widget shell) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | 🚧 pre-alpha | Domain-agnostic loop strategy + LLM provider abstraction     |
-| [`@agent-devtools/react`](./packages/react)               | 🚧 pre-alpha | React 19 fiber walker + DOM picker + auto context            |
-| [`@agent-devtools/vite`](./packages/vite)                 | 🚧 pre-alpha | Vite 8 plugin — auto-inject widget + dev-only guard          |
-| `@agent-devtools/next` / `vue` / `nuxt`                   | planned      | Follow-up milestone                                          |
+| Package                                                   | Version | Description                                                  |
+| --------------------------------------------------------- | ------- | ------------------------------------------------------------ |
+| [`@agent-devtools/core`](./packages/core)                 | `0.1.0` | Framework-agnostic core (server, agent engine, widget shell) |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | Domain-agnostic loop strategy + LLM provider abstraction     |
+| [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context            |
+| [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard          |
+| `@agent-devtools/next` / `vue` / `nuxt`                   | planned | Follow-up milestone                                          |
 
 ## Security defaults
 

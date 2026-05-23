@@ -22,22 +22,22 @@
 
 ## Status
 
-🚧 **Pre-alpha** — Phase 0 (React + Vite + Claude Pro) 종단 검증 단계. 아직 npm 에 배포되지 않았다.
+Early alpha (`0.1.0`). Phase 0 는 React + Vite + Claude Pro/Max 종단 검증 범위. npm 에 배포되었고, `1.0` 이전에 API 가 변경될 수 있다.
 
-- 사용자 가이드 (ko / en): <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드 (en / ko): <https://agent-devtools.seungwoo321.dev>
 - 컨텍스트·결정 로그·스코프: [`CONTEXT.md`](./CONTEXT.md)
 
-## What it is
+## 무엇인가
 
-- **개발자도구 카테고리 OSS** — React DevTools / TanStack Query DevTools 와 동일 카테고리.
-- **로컬 LLM 에이전트 호출 + 코드 수정** — Claude Agent SDK 로 본인의 Claude Pro/Max 구독 (Agent SDK Credit) 재사용.
-- **BYO subscription** — 운영자가 API 키 비용을 떠안지 않는다.
+- 개발자도구 카테고리 OSS — React DevTools, TanStack Query DevTools 와 같은 카테고리.
+- 로컬 LLM 에이전트 호출과 코드 수정 — Claude Agent SDK 가 본인의 Claude Pro/Max 구독 (Agent SDK Credit) 을 재사용한다.
+- BYO subscription — 운영자가 API 키 비용을 떠안지 않는다.
 
-## What it is NOT
+## 무엇이 아닌가
 
-- ❌ AI IDE 종속 (Cursor / Windsurf / Claude Code 의 채팅 forward 도구가 아님)
-- ❌ production 사용 가능 (dev-only — 영구 OUT)
-- ❌ 호스팅 서비스 (CLI 가 사용자 PC 에서만 동작)
+- AI IDE 에 종속되지 않는다. Cursor / Windsurf / Claude Code 의 채팅 forward 도구가 아니다.
+- production 안전하지 않다. dev-only 이고 영구적으로 production 스코프 밖이다.
+- 호스팅 서비스가 아니다. CLI 는 사용자 PC 에서만 동작한다.
 
 ## Quick Start (React + Vite)
 
@@ -94,13 +94,13 @@ if (import.meta.env.DEV) {
 
 ## Packages
 
-| Package                                                   | Status       | Description                                               |
-| --------------------------------------------------------- | ------------ | --------------------------------------------------------- |
-| [`@agent-devtools/core`](./packages/core)                 | 🚧 pre-alpha | 프레임워크-무관 코어 (server, agent engine, widget shell) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | 🚧 pre-alpha | 도메인-무관 loop 전략 + LLM provider 추상화               |
-| [`@agent-devtools/react`](./packages/react)               | 🚧 pre-alpha | React 19 fiber walker + DOM picker + auto context         |
-| [`@agent-devtools/vite`](./packages/vite)                 | 🚧 pre-alpha | Vite 8 plugin — auto-inject widget + dev-only guard       |
-| `@agent-devtools/next` / `vue` / `nuxt`                   | planned      | 후속 milestone                                            |
+| Package                                                   | Version | Description                                               |
+| --------------------------------------------------------- | ------- | --------------------------------------------------------- |
+| [`@agent-devtools/core`](./packages/core)                 | `0.1.0` | 프레임워크-무관 코어 (server, agent engine, widget shell) |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | 도메인-무관 loop 전략 + LLM provider 추상화               |
+| [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context         |
+| [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard       |
+| `@agent-devtools/next` / `vue` / `nuxt`                   | planned | 후속 milestone                                            |
 
 ## Security defaults
 
