@@ -3,5 +3,6 @@ packages:
   - "examples/*"
   - "docs"
 allowBuilds:
+  "@parcel/watcher": true
   esbuild: true
   sharp: true

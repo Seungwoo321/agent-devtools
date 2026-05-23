@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:check": "vite build && node scripts/check-no-leak.mjs",
+    "smoke:no-leak": "node scripts/check-no-leak.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
