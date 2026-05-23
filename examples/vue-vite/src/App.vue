@@ -10,9 +10,8 @@ const greeting = ref('agent-devtools Vue smoke');
     <h1>{{ greeting }}</h1>
     <p>
       Vite + Vue 3 host app that loads the floating widget through
-      <code>@agent-devtools/vue</code>. Open the launcher in the bottom-right
-      corner, pick the counter button, and the picker should resolve to the
-      <code>Counter.vue</code> component.
+      <code>@agent-devtools/vue</code>. Open the launcher in the bottom-right corner, pick the
+      counter button, and the picker should resolve to the <code>Counter.vue</code> component.
     </p>
     <Counter />
   </main>
@@ -20,7 +19,11 @@ const greeting = ref('agent-devtools Vue smoke');
 
 <style scoped>
 .page {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   max-width: 36rem;
   margin: 3rem auto;
   padding: 0 1.25rem;

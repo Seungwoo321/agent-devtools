@@ -9,8 +9,7 @@
     "build:check": "nuxt build && node scripts/check-no-leak.mjs",
     "smoke:no-leak": "node scripts/check-no-leak.mjs",
     "preview": "nuxt preview --port 3300",
-    "typecheck": "nuxt prepare && vue-tsc --noEmit",
-    "postinstall": "nuxt prepare"
+    "typecheck": "nuxt prepare && vue-tsc --noEmit"
   },
   "devDependencies": {
     "@agent-devtools/nuxt": "workspace:*",

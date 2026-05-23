@@ -9,5 +9,8 @@ pnpm-lock.yaml
 .playwright-mcp
 .pack-out
 .astro
+.next
+.nuxt
+.output
 playwright-report
 test-results
