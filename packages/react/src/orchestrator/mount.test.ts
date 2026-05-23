@@ -183,6 +183,37 @@ describe('mountAgentDevtools', () => {
     handle.destroy();
   });
 
+  it('uses an injected describePicked resolver instead of the default fiber walker', () => {
+    const customPicked = vi.fn((element: Element) => ({
+      componentName: 'CustomComponent',
+      tagName: element.tagName,
+      selector: '#custom',
+      outerHTML: element.outerHTML,
+      attributes: {},
+      componentChain: [],
+    }));
+    const handle = mountAgentDevtools({ describePicked: customPicked });
+    const target = document.createElement('section');
+    target.id = 'target';
+    document.body.appendChild(target);
+
+    const pickButton = queryShadow<HTMLButtonElement>(
+      handle.widget.shadowRoot,
+      '[data-agent-devtools-composer-pick]',
+    );
+    pickButton.click();
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(target);
+    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(customPicked).toHaveBeenCalledWith(target);
+    const label = handle.composer.element.querySelector(
+      '[data-agent-devtools-composer-chip-label]',
+    );
+    expect(label?.textContent).toBe('CustomComponent');
+    vi.restoreAllMocks();
+    handle.destroy();
+  });
+
   it('hides the composer when the user closes it', () => {
     const handle = mountAgentDevtools();
     handle.composer.setVisible(true);
