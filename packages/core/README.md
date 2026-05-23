@@ -9,7 +9,7 @@
 
 ## Features
 
-- **Local agent server** — HTTP + SSE on `127.0.0.1` only, with sequential port fallback (`4317`, `4318`, … up to 20 attempts).
+- **Local agent server** — HTTP + SSE on `127.0.0.1` only, with sequential port fallback (`4317`, `4318`, … up to 20 attempts). The SSE pump emits a `: keepalive` comment line every 20s while the model is silent so intermediate proxies and tunnels do not close the connection during long thinking phases.
 - **Pairing-token auth** — minted in memory at every server start, never persisted to disk, never embedded in URLs. All requests must carry `Authorization: Bearer <token>`.
 - **`agent-devtools` CLI** — installed as a `bin`; bundler plugins (e.g. `@agent-devtools/vite`) auto-spawn it, but it can also be run manually.
 - **ACP and SDK providers** — two interchangeable runtime providers for the agent stream endpoint: the Anthropic Agent Client Protocol provider and the Claude Agent SDK provider.
@@ -84,7 +84,7 @@ All endpoints require `Authorization: Bearer <pairing-token>`. Requests are acce
 - Monorepo: <https://github.com/Seungwoo321/agent-devtools>
 - React adapter: [`@agent-devtools/react`](https://www.npmjs.com/package/@agent-devtools/react)
 - Vite plugin: [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite)
-- User guide: <https://agent-devtools.seungwoo321.dev>
+- User guide: <https://agent-devtools-docs.vercel.app/>
 - Issue tracker: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## License
