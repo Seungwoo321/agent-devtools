@@ -50,10 +50,18 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Example smoke matrix — builds each example with its bundler and asserts
+      # zero widget-chain symbols leaked into the production output. Failure
+      # here represents a Layer 1 dev-only guard regression and blocks release.
+      # See .claude/rules/dev-only-guard.md and each example's
+      # scripts/check-no-leak.mjs for the exact symbol list and scan scope.
+      - name: Build + no-leak smoke (examples)
+        run: pnpm build:examples
+
       - name: Pack (publish-readiness smoke)
         run: |
           mkdir -p .pack-out
-          for pkg in packages/core packages/harness-core packages/react packages/vite; do
+          for pkg in packages/core packages/harness-core packages/react packages/vue packages/next packages/nuxt packages/vite; do
             (cd "$pkg" && pnpm pack --pack-destination "${GITHUB_WORKSPACE}/.pack-out")
           done
           ls -la .pack-out
