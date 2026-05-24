@@ -33,6 +33,13 @@ export interface StreamRendererHandle {
   readonly element: HTMLElement;
   /** Force a re-render. Rarely needed — the store-subscribe wiring is enough. */
   refresh(): void;
+  /**
+   * Snap the list to the most recent message. Used by the orchestrator
+   * when re-opening the composer panel — while the panel is `display:
+   * none` the scroll position is not retained reliably, so we re-anchor
+   * after it becomes visible so the user lands on the latest turn.
+   */
+  scrollToBottom(): void;
   destroy(): void;
 }
 
@@ -112,6 +119,10 @@ export function createStreamRenderer(options: CreateStreamRendererOptions): Stre
   return {
     element: root,
     refresh: render,
+    scrollToBottom(): void {
+      if (destroyed) return;
+      root.scrollTop = root.scrollHeight;
+    },
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
