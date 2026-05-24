@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/react",
-  "version": "0.2.0-beta.2",
+  "version": "0.2.0",
   "description": "React 19 adapter for agent-devtools — fiber walker + DOM picker + closed Shadow DOM widget",
   "keywords": [
     "agent-devtools",
