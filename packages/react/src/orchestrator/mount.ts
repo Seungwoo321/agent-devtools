@@ -252,6 +252,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       composer.setPicked(resolvePicked(element));
       composer.setPickerActive(false);
       composer.setVisible(true);
+      streamRenderer.scrollToBottom();
       composer.focus();
     },
     onCancel(): void {
@@ -265,7 +266,14 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     onClick(): void {
       const willOpen = composer.element.style.display === 'none';
       composer.setVisible(willOpen);
-      if (willOpen) composer.focus();
+      if (willOpen) {
+        // The list does not retain scrollTop while `display: none` because
+        // the browser does not lay it out. Re-anchor to the latest turn
+        // after the panel becomes visible so the user lands on the most
+        // recent message instead of the first.
+        streamRenderer.scrollToBottom();
+        composer.focus();
+      }
     },
     onPositionChange(position): void {
       // Keep the chat panel glued to the launcher: same right-edge, sitting
