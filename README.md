@@ -27,12 +27,18 @@ Inside the widget, type something like "make the Counter title bigger and red" a
 
 Pick the row that matches your stack. Each adapter ships with a runnable example under [`examples/`](./examples) and a production-leak smoke (`pnpm --filter <example> run smoke:no-leak`) that asserts zero widget code reaches the production bundle.
 
-| Stack        | Install                                                  | Example                                        |
-| ------------ | -------------------------------------------------------- | ---------------------------------------------- |
-| React + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/react` | [`examples/react-vite`](./examples/react-vite) |
-| Vue 3 + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/vue`   | [`examples/vue-vite`](./examples/vue-vite)     |
-| Next.js 15   | `pnpm add -D @agent-devtools/next @agent-devtools/react` | [`examples/next`](./examples/next)             |
-| Nuxt 3       | `pnpm add -D @agent-devtools/nuxt @agent-devtools/vue`   | [`examples/nuxt`](./examples/nuxt)             |
+| Stack            | Install                                                        | Example                                            |
+| ---------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| React + Vite     | `pnpm add -D @agent-devtools/vite @agent-devtools/react`       | [`examples/react-vite`](./examples/react-vite)     |
+| Vue 3 + Vite     | `pnpm add -D @agent-devtools/vite @agent-devtools/vue`         | [`examples/vue-vite`](./examples/vue-vite)         |
+| Vue 2 + Vite     | `pnpm add -D @agent-devtools/vite @agent-devtools/vue2`        | [`examples/vue2-vite`](./examples/vue2-vite)       |
+| Angular + Vite   | `pnpm add -D @agent-devtools/vite @agent-devtools/angular`     | [`examples/angular-vite`](./examples/angular-vite) |
+| Svelte + Vite    | `pnpm add -D @agent-devtools/vite @agent-devtools/svelte`      | [`examples/svelte-vite`](./examples/svelte-vite)   |
+| SvelteKit        | `pnpm add -D @agent-devtools/vite @agent-devtools/sveltekit`   | [`examples/sveltekit`](./examples/sveltekit)       |
+| Next.js 15 (App) | `pnpm add -D @agent-devtools/next @agent-devtools/react`       | [`examples/next`](./examples/next)                 |
+| Next.js (Pages)  | `pnpm add -D @agent-devtools/next-pages @agent-devtools/react` | [`examples/next-pages`](./examples/next-pages)     |
+| Nuxt 3           | `pnpm add -D @agent-devtools/nuxt @agent-devtools/vue`         | [`examples/nuxt`](./examples/nuxt)                 |
+| Nuxt 2           | `pnpm add -D @agent-devtools/nuxt2 @agent-devtools/vue2`       | [`examples/nuxt2`](./examples/nuxt2)               |
 
 ### React + Vite
 
@@ -94,6 +100,110 @@ export default defineNuxtConfig({
 });
 ```
 
+### Vue 2 + Vite
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import vue2 from '@vitejs/plugin-vue2';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [vue2(), agentDevtools({ framework: 'vue2' })],
+});
+```
+
+### Nuxt 2
+
+```js
+// nuxt.config.js
+export default {
+  modules: ['@agent-devtools/nuxt2'],
+  build: {
+    // Nuxt 2 ships webpack 4 + babel-loader and excludes node_modules from
+    // transpilation by default. The widget chain pulls in marked which uses
+    // syntax webpack 4 cannot parse natively, so list it explicitly.
+    transpile: [
+      '@agent-devtools/nuxt2',
+      '@agent-devtools/vue2',
+      '@agent-devtools/react',
+      '@agent-devtools/core',
+      'marked',
+    ],
+  },
+};
+```
+
+### Angular + Vite
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import angular from '@analogjs/vite-plugin-angular';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [angular(), agentDevtools({ framework: 'angular' })],
+});
+```
+
+### Svelte + Vite
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [svelte(), agentDevtools({ framework: 'svelte' })],
+});
+```
+
+### SvelteKit
+
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script lang="ts">
+  import { onMount } from 'svelte';
+
+  let { children } = $props();
+
+  onMount(async () => {
+    if (import.meta.env.PROD) return;
+    const { mountAgentDevtoolsSvelteKit } = await import('@agent-devtools/sveltekit');
+    mountAgentDevtoolsSvelteKit();
+  });
+</script>
+
+{@render children()}
+```
+
+`import.meta.env.PROD` is Vite's compile-time replacement, so Rollup statically removes the `if`/`await import()` branch on `vite build`.
+
+### Next.js (Pages Router)
+
+```ts
+// next.config.ts
+import { withAgentDevtools } from '@agent-devtools/next-pages';
+
+export default withAgentDevtools({ reactStrictMode: true });
+```
+
+```tsx
+// pages/_app.tsx
+import { useEffect } from 'react';
+import { bootstrapAgentDevtools } from '@agent-devtools/next-pages/bootstrap';
+import type { AppProps } from 'next/app';
+
+export default function App({ Component, pageProps }: AppProps) {
+  useEffect(() => {
+    bootstrapAgentDevtools();
+  }, []);
+  return <Component {...pageProps} />;
+}
+```
+
 In every case, running `pnpm dev`:
 
 1. Spawns a local agent server on `127.0.0.1` on a free port (sequential fallback if 4317 is taken).
@@ -109,8 +219,14 @@ In every case, running `pnpm dev`:
 | [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | Domain-agnostic loop strategy + LLM provider abstraction     |
 | [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context            |
 | [`@agent-devtools/vue`](./packages/vue)                   | `0.1.0` | Vue 3 vnode walker + DOM picker + closed shadow widget       |
-| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 wrapper — webpack alias + bootstrap shim          |
+| [`@agent-devtools/vue2`](./packages/vue2)                 | `0.1.0` | Vue 2.7 component-tree walker + picker + widget              |
+| [`@agent-devtools/angular`](./packages/angular)           | `0.1.0` | Angular Ivy walker + picker + widget                         |
+| [`@agent-devtools/svelte`](./packages/svelte)             | `0.1.0` | Svelte 4/5 `__svelte_meta` resolver + picker + widget        |
+| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | `0.1.0` | SvelteKit layout mount + server `handle` binding             |
+| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 App Router wrapper — webpack alias + bootstrap    |
+| [`@agent-devtools/next-pages`](./packages/next-pages)     | `0.1.0` | Next.js Pages Router wrapper — same wrapper for `>= 12`      |
 | [`@agent-devtools/nuxt`](./packages/nuxt)                 | `0.1.0` | Nuxt 3 module — dev-only plugin auto-injection               |
+| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | `0.1.0` | Nuxt 2 module — dev-only client plugin auto-injection        |
 | [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard          |
 
 ## Security defaults
