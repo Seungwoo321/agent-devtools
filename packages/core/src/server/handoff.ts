@@ -239,7 +239,15 @@ export async function writeHandoffArtifact(
   // main help but is documented in `claude --bare`'s description and
   // accepted by the CLI's flag parser. The shell-quoting of the path
   // is JSON-safe because we control the directory and filename.
-  const command = `claude --append-system-prompt-file ${shellQuote(file)}`;
+  // Prefix `cd <workspace>` when the server was started with a workspace so
+  // the pasted command runs against the project the widget was acting on,
+  // not whichever directory the user's terminal happened to be in. The
+  // command remains a bare `claude …` invocation when no workspace is
+  // configured (e.g. running against the raw CWD).
+  const baseCommand = `claude --append-system-prompt-file ${shellQuote(file)}`;
+  const command = options.workspaceRoot
+    ? `cd ${shellQuote(options.workspaceRoot)} && ${baseCommand}`
+    : baseCommand;
   return { file, command };
 }
 
