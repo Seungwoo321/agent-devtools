@@ -15,3 +15,15 @@
  */
 export { mountAgentDevtoolsNext, type MountAgentDevtoolsNextOptions } from './mount.js';
 export { withAgentDevtools, type WithAgentDevtoolsOptions } from './config.js';
+// Framework-uniform aliases. The vite plugin's injected bootstrap imports
+// these names verbatim from whichever adapter package the host project
+// resolves to, so every adapter must surface the same symbols. Next's
+// `mountAgentDevtools` is just the React `mountAgentDevtools` re-exposed,
+// because Next client components render through the same React fiber tree.
+export { mountAgentDevtoolsNext as mountAgentDevtools } from './mount.js';
+export {
+  createDefaultTransport,
+  createAgentInfoFetcher,
+  createHandoffRequester,
+  createSettingsStore,
+} from '@agent-devtools/react';
