@@ -8,8 +8,14 @@ on:
       - "packages/harness-core/**"
       - "packages/react/**"
       - "packages/vue/**"
+      - "packages/vue2/**"
       - "packages/next/**"
+      - "packages/next-pages/**"
       - "packages/nuxt/**"
+      - "packages/nuxt2/**"
+      - "packages/angular/**"
+      - "packages/svelte/**"
+      - "packages/sveltekit/**"
       - "packages/vite/**"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
@@ -45,8 +51,14 @@ jobs:
             harness-core: 'packages/harness-core/**'
             react: 'packages/react/**'
             vue: 'packages/vue/**'
+            vue2: 'packages/vue2/**'
             next: 'packages/next/**'
+            next-pages: 'packages/next-pages/**'
             nuxt: 'packages/nuxt/**'
+            nuxt2: 'packages/nuxt2/**'
+            angular: 'packages/angular/**'
+            svelte: 'packages/svelte/**'
+            sveltekit: 'packages/sveltekit/**'
             vite: 'packages/vite/**'
 
   publish:
