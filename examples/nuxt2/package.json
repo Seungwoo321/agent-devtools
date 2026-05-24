@@ -1,0 +1,25 @@
+{
+  "name": "@agent-devtools/example-nuxt2",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "build:check": "nuxt build && node scripts/check-no-leak.mjs",
+    "smoke:no-leak": "node scripts/check-no-leak.mjs",
+    "generate": "nuxt generate",
+    "start": "nuxt start"
+  },
+  "dependencies": {
+    "nuxt": "^2.18.1",
+    "vue": "^2.7.16",
+    "vue-router": "^3.6.5",
+    "vue-server-renderer": "^2.7.16",
+    "vue-template-compiler": "^2.7.16",
+    "vuex": "^3.6.2"
+  },
+  "devDependencies": {
+    "@agent-devtools/nuxt2": "workspace:*",
+    "@agent-devtools/vue2": "workspace:*"
+  }
+}
