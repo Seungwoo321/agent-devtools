@@ -50,6 +50,16 @@
     "@agent-devtools/core": "workspace:^"
   },
   "devDependencies": {
+    "@agent-devtools/angular": "workspace:*",
+    "@agent-devtools/next": "workspace:*",
+    "@agent-devtools/next-pages": "workspace:*",
+    "@agent-devtools/nuxt": "workspace:*",
+    "@agent-devtools/nuxt2": "workspace:*",
+    "@agent-devtools/react": "workspace:*",
+    "@agent-devtools/svelte": "workspace:*",
+    "@agent-devtools/sveltekit": "workspace:*",
+    "@agent-devtools/vue": "workspace:*",
+    "@agent-devtools/vue2": "workspace:*",
     "@types/node": "^25.7.0",
     "tsup": "^8.5.1",
     "vite": "^8.0.12",
