@@ -63,3 +63,15 @@ const nuxtModule = defineNuxtModule<AgentDevtoolsModuleOptions>({
 export default nuxtModule;
 
 export type { MountAgentDevtoolsVueOptions } from '@agent-devtools/vue';
+// Framework-uniform aliases. The vite plugin's injected bootstrap imports
+// these names verbatim from whichever adapter package the host project
+// resolves to, so every adapter must surface the same symbols. Nuxt
+// reuses the Vue mount wrapper unchanged — there is no Nuxt-specific
+// `describePicked`; the Vue walker handles Nuxt-rendered components.
+export { mountAgentDevtoolsVue as mountAgentDevtools } from '@agent-devtools/vue';
+export {
+  createDefaultTransport,
+  createAgentInfoFetcher,
+  createHandoffRequester,
+  createSettingsStore,
+} from '@agent-devtools/react';
