@@ -1,0 +1,50 @@
+{
+  "$schema": "https://unpkg.com/release-it/schema/release-it.json",
+  "git": {
+    "commitMessage": "chore(next-pages): release v${version} [skip ci]",
+    "tagName": "next-pages-v${version}",
+    "tagAnnotation": "Release @agent-devtools/next-pages v${version}",
+    "push": true,
+    "requireBranch": ["main", "develop"],
+    "requireCleanWorkingDir": false
+  },
+  "github": {
+    "release": true,
+    "releaseName": "@agent-devtools/next-pages v${version}",
+    "autoGenerate": true
+  },
+  "npm": {
+    "publish": false,
+    "skipChecks": true
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "conventionalcommits",
+        "types": [
+          { "type": "feat", "section": "Features" },
+          { "type": "fix", "section": "Bug Fixes" },
+          { "type": "perf", "section": "Performance" },
+          { "type": "refactor", "section": "Refactoring" },
+          { "type": "docs", "section": "Documentation" },
+          { "type": "chore", "hidden": true }
+        ]
+      },
+      "infile": "CHANGELOG.md",
+      "path": ".",
+      "gitRawCommitsOpts": {
+        "path": "packages/next-pages"
+      }
+    }
+  },
+  "hooks": {
+    "before:init": [
+      "pnpm --filter @agent-devtools/next-pages run typecheck",
+      "pnpm --filter @agent-devtools/next-pages run test"
+    ],
+    "after:bump": [
+      "pnpm --filter @agent-devtools/next-pages run build",
+      "pnpm --filter @agent-devtools/next-pages publish --access public --no-git-checks --provenance --tag $NPM_DIST_TAG"
+    ]
+  }
+}

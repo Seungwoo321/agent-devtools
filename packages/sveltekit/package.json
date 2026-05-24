@@ -1,0 +1,71 @@
+{
+  "name": "@agent-devtools/sveltekit",
+  "version": "0.1.0",
+  "description": "SvelteKit adapter for agent-devtools — dev-only handle hook + Svelte adapter mount",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "sveltekit",
+    "svelte",
+    "claude",
+    "llm",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/sveltekit#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@sveltejs/kit": "^2.0.0",
+    "svelte": "^4.0.0 || ^5.0.0"
+  },
+  "dependencies": {
+    "@agent-devtools/core": "workspace:^",
+    "@agent-devtools/svelte": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "happy-dom": "^20.9.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/sveltekit"
+  }
+}
