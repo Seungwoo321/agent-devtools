@@ -80,17 +80,26 @@ if (import.meta.env.DEV) {
 
 ### `createDefaultTransport(options)`
 
-| Option                | Type                                  | Default              | Description                                                                        |
-| --------------------- | ------------------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| `baseUrl`             | `string`                              | (required)           | Agent server origin, e.g. `http://127.0.0.1:4317`.                                 |
-| `pairingToken`        | `string`                              | (required)           | Bearer token minted by the agent server at startup.                                |
-| `fetch`               | `typeof fetch`                        | `globalThis.fetch`   | Custom fetch implementation (testing, SSR shim).                                   |
-| `getSettings`         | `() => SettingsSnapshot \| undefined` | (none)               | Reads the current `provider`, `model`, and `permissionMode` from a settings store. |
-| `sessionIdStorage`    | `Storage \| 'memory'`                 | `sessionStorage`     | Where the per-tab ACP session id is persisted.                                     |
-| `sessionIdStorageKey` | `string`                              | `agent-devtools:sid` | Storage key for the ACP session id.                                                |
-| `generateSessionId`   | `() => string`                        | `crypto.randomUUID`  | Custom session id minter.                                                          |
+| Option                      | Type                                  | Default              | Description                                                                                                                          |
+| --------------------------- | ------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`                   | `string`                              | (required)           | Agent server origin, e.g. `http://127.0.0.1:4317`.                                                                                   |
+| `pairingToken`              | `string`                              | (required)           | Bearer token minted by the agent server at startup.                                                                                  |
+| `fetch`                     | `typeof fetch`                        | `globalThis.fetch`   | Custom fetch implementation (testing, SSR shim).                                                                                     |
+| `getSettings`               | `() => SettingsSnapshot \| undefined` | (none)               | Reads the current `provider`, `model`, and `permissionMode` from a settings store.                                                   |
+| `sessionIdStorage`          | `Storage \| 'memory'`                 | `sessionStorage`     | Where the per-tab ACP session id is persisted.                                                                                       |
+| `sessionIdStorageKey`       | `string`                              | `agent-devtools:sid` | Storage key for the ACP session id.                                                                                                  |
+| `generateSessionId`         | `() => string`                        | `crypto.randomUUID`  | Custom session id minter.                                                                                                            |
+| `streamSilentMs`            | `number`                              | `60_000`             | Reader silence past this many ms aborts the stream and rejects with `StreamSilentError`. Pass `0` to disable.                        |
+| `preResponseRetries`        | `number`                              | `1`                  | Extra fetch attempts when the initial request rejects with a network error before any Response. Never retries aborts or HTTP errors. |
+| `preResponseRetryBackoffMs` | `number`                              | `300`                | Delay between the failed initial fetch and the retry attempt.                                                                        |
 
 The transport keeps one ACP session per browser tab and resumes it after a reload. A second tab gets a fresh id because `sessionStorage` is tab-scoped.
+
+The agent server emits a `: keepalive` SSE comment every 20s while the model is silent so intermediate proxies and tunnels do not close the connection as idle. The watchdog above resets on every received chunk (including comments), so genuine long thinking phases survive while a truly dead stream surfaces as `StreamSilentError` instead of a stuck "thinking…" state.
+
+### `StreamSilentError`
+
+Thrown by the transport when the reader receives no chunk for longer than `streamSilentMs`. `error.name === 'StreamSilentError'`; surface it as a "stream went dead, try again" message in your UI.
 
 ## Security defaults
 
@@ -108,7 +117,7 @@ The transport keeps one ACP session per browser tab and resumes it after a reloa
 - Monorepo: <https://github.com/Seungwoo321/agent-devtools>
 - Core package: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
 - Vite plugin: [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite)
-- User guide: <https://agent-devtools.seungwoo321.dev>
+- User guide: <https://agent-devtools-docs.vercel.app/>
 - Issue tracker: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## License

@@ -68,6 +68,47 @@ export interface CreateDefaultTransportOptions {
    * server falls back to its own defaults.
    */
   readonly getSettings?: () => Settings;
+  /**
+   * Milliseconds of complete reader silence before the transport aborts
+   * the stream and rejects with a `StreamSilentError`. The server emits a
+   * `: keepalive` SSE comment every 20s while the iterable is silent, so a
+   * watchdog of 60s is generous: any silence past that point means the
+   * stream is genuinely dead (network drop, server crash, half-open
+   * connection) rather than just slow model thinking. Default `60_000`.
+   * Pass `0` to disable the watchdog (useful in scripted contexts that
+   * legitimately wait minutes for a single event).
+   */
+  readonly streamSilentMs?: number;
+  /**
+   * Pre-response fetch retry count. When `fetch()` itself rejects (network
+   * error before any Response is returned), the transport retries this
+   * many additional times with a small backoff. Once a Response arrives
+   * the prompt has reached the server and no retry happens — duplicating
+   * the prompt would re-run the LLM. AbortErrors never retry. Default `1`
+   * (one retry, i.e. two total attempts). Pass `0` to disable.
+   */
+  readonly preResponseRetries?: number;
+  /**
+   * Milliseconds to wait between the failed initial fetch and the retry
+   * attempt. Default `300`. Only used when `preResponseRetries > 0`.
+   */
+  readonly preResponseRetryBackoffMs?: number;
+}
+
+const DEFAULT_STREAM_SILENT_MS = 60_000;
+const DEFAULT_PRE_RESPONSE_RETRIES = 1;
+const DEFAULT_PRE_RESPONSE_RETRY_BACKOFF_MS = 300;
+
+/**
+ * Thrown by `pumpStream` when no chunk has arrived for longer than the
+ * configured `streamSilentMs`. Surfaces a clear "stream went dead" error
+ * to the composer instead of hanging forever on a half-open connection.
+ */
+export class StreamSilentError extends Error {
+  constructor(silenceMs: number) {
+    super(`agent stream went silent for ${String(silenceMs)}ms`);
+    this.name = 'StreamSilentError';
+  }
 }
 
 const STREAM_PATH = '/v1/agent/stream';
@@ -81,6 +122,10 @@ export function createDefaultTransport(
   const generate = options.generateSessionId ?? defaultGenerateSessionId;
   const sessionStorage = resolveSessionIdStorage(options.sessionIdStorage);
   const sessionStorageKey = options.sessionIdStorageKey ?? SESSION_ID_STORAGE_KEY;
+  const streamSilentMs = options.streamSilentMs ?? DEFAULT_STREAM_SILENT_MS;
+  const preResponseRetries = options.preResponseRetries ?? DEFAULT_PRE_RESPONSE_RETRIES;
+  const preResponseRetryBackoffMs =
+    options.preResponseRetryBackoffMs ?? DEFAULT_PRE_RESPONSE_RETRY_BACKOFF_MS;
   // One session per browser tab. Persisted to sessionStorage so a full
   // reload reconnects to the same server-side ACP session (the server
   // keeps a `clientSessionId → ACP sessionId` map for the dev-server
@@ -93,7 +138,7 @@ export function createDefaultTransport(
   return {
     async send(payload: TransportPayload): Promise<void> {
       const settings = options.getSettings?.();
-      const response = await fetchImpl(`${baseUrl}${STREAM_PATH}`, {
+      const requestInit: RequestInit = {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -113,7 +158,15 @@ export function createDefaultTransport(
           }),
         }),
         signal: payload.signal,
-      });
+      };
+      const response = await fetchWithPreResponseRetry(
+        fetchImpl,
+        `${baseUrl}${STREAM_PATH}`,
+        requestInit,
+        payload.signal,
+        preResponseRetries,
+        preResponseRetryBackoffMs,
+      );
 
       if (!response.ok) {
         const detail = await safeReadErrorBody(response);
@@ -125,7 +178,7 @@ export function createDefaultTransport(
         throw new Error('agent server returned an empty body');
       }
 
-      await pumpStream(response.body, payload.store, payload.signal);
+      await pumpStream(response.body, payload.store, payload.signal, streamSilentMs);
     },
     resetSession(): void {
       // Mint a new id and overwrite the persisted slot in place so the
@@ -294,6 +347,7 @@ async function pumpStream(
   body: ReadableStream<Uint8Array>,
   store: MessageStore,
   signal: AbortSignal,
+  streamSilentMs: number,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -309,9 +363,11 @@ async function pumpStream(
   try {
     while (true) {
       if (signal.aborted) return;
-      const { value, done } = await reader.read();
+      const { value, done } = await readWithWatchdog(reader, streamSilentMs);
       // Re-check after the await: a chunk that was already in flight when
-      // abort fired must not be folded into the store.
+      // abort fired must not be folded into the store. Caller-driven abort
+      // wins over the watchdog timeout — only throw `StreamSilentError`
+      // when the silence was not caused by an external abort.
       if (signal.aborted) return;
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
@@ -338,6 +394,92 @@ async function pumpStream(
       /* nothing to release if the reader was already closed */
     }
   }
+}
+
+/**
+ * Wrap `reader.read()` with a silence watchdog. If no chunk arrives within
+ * `streamSilentMs` the reader is cancelled and a `StreamSilentError` is
+ * thrown. `streamSilentMs <= 0` disables the watchdog (pass-through). The
+ * server's `: keepalive` heartbeats arrive as chunks here even though they
+ * decode to zero parsed events, so the watchdog resets on heartbeats as
+ * well as real data — exactly what we want.
+ */
+async function readWithWatchdog(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  streamSilentMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (streamSilentMs <= 0) return reader.read();
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timerId = setTimeout(() => {
+      reject(new StreamSilentError(streamSilentMs));
+    }, streamSilentMs);
+  });
+  try {
+    return await Promise.race([reader.read(), timeout]);
+  } catch (error) {
+    if (error instanceof StreamSilentError) {
+      await reader.cancel().catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (timerId !== undefined) clearTimeout(timerId);
+  }
+}
+
+/**
+ * Retry the initial fetch when it rejects with a network error before any
+ * Response arrives — that means the request never reached the server, so
+ * a retry is idempotent. Once a Response is received the prompt has hit
+ * the server and the LLM has likely started; retrying then would
+ * duplicate work. Abort errors are never retried.
+ */
+async function fetchWithPreResponseRetry(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit,
+  signal: AbortSignal,
+  retries: number,
+  backoffMs: number,
+): Promise<Response> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fetchImpl(url, init);
+    } catch (error) {
+      if (isAbortError(error) || signal.aborted) throw error;
+      if (attempt >= retries) throw error;
+      attempt += 1;
+      if (backoffMs > 0) {
+        await waitOrAbort(backoffMs, signal);
+        if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+      }
+    }
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return true;
+  if (error instanceof Error && error.name === 'AbortError') return true;
+  return false;
+}
+
+function waitOrAbort(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 async function safeReadErrorBody(response: Response): Promise<string> {

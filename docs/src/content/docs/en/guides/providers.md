@@ -139,6 +139,7 @@ A. Once a stream is up, throughput is essentially identical. Only the very
 first request is slower under ACP because of the ~200 ms spawn cost.
 
 **Q. Do both providers work in Vue / Next / Nuxt?**
-A. The provider abstraction lives in the core package, so as soon as a
-framework adapter ships, both providers are supported automatically
-(Vue / Next / Nuxt adapters land in a follow-up release).
+A. Yes — all four adapters (React + Vite, Vue 3 + Vite, Next.js 15, Nuxt 3)
+support both providers identically. The provider abstraction lives in
+`@agent-devtools/core`, and adapters only own the widget UI / picker / walker,
+so they do not participate in provider behavior at all.

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultTransport, createHandoffRequester } from './sse-transport.js';
+import {
+  createDefaultTransport,
+  createHandoffRequester,
+  StreamSilentError,
+} from './sse-transport.js';
 import { createMessageStore, type MessageStore } from '../stream/index.js';
 import type { TransportPayload } from '../orchestrator/index.js';
 import { PAGE_CONTEXT_SCHEMA_VERSION } from '../context/types.js';
@@ -591,6 +595,215 @@ describe('createDefaultTransport', () => {
     const items = store.getItems();
     const text = items[0]?.kind === 'assistant-text' ? items[0].text : '';
     expect(text).toBe('first');
+  });
+});
+
+describe('createDefaultTransport — dead-stream watchdog', () => {
+  it('rejects with StreamSilentError when no chunk arrives before streamSilentMs', async () => {
+    // A stream that never emits and never closes — simulates a half-open
+    // connection where the server side has gone silent without an RST.
+    const body = new ReadableStream<Uint8Array>({
+      start(): void {
+        /* hold forever */
+      },
+    });
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      streamSilentMs: 30,
+    });
+
+    await expect(transport.send(basePayload())).rejects.toBeInstanceOf(StreamSilentError);
+  });
+
+  it('completes normally when chunks arrive faster than streamSilentMs', async () => {
+    const store = createMessageStore();
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller): Promise<void> {
+        const encoder = new TextEncoder();
+        for (let i = 0; i < 3; i += 1) {
+          await new Promise((r) => setTimeout(r, 20));
+          controller.enqueue(
+            encoder.encode(`event: text-delta\ndata: {"blockId":"b1","text":"x${String(i)}"}\n\n`),
+          );
+        }
+        controller.close();
+      },
+    });
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      streamSilentMs: 200,
+    });
+
+    await transport.send(basePayload({ store }));
+    const items = store.getItems();
+    const text = items[0]?.kind === 'assistant-text' ? items[0].text : '';
+    expect(text).toBe('x0x1x2');
+  });
+
+  it('treats `:keepalive` comment chunks as activity that resets the watchdog', async () => {
+    const store = createMessageStore();
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller): Promise<void> {
+        const encoder = new TextEncoder();
+        // Three heartbeat-only chunks at ~25ms each — total 75ms which is
+        // longer than the 40ms watchdog interval. The watchdog must reset
+        // on each chunk (even comment-only ones) so the stream survives.
+        for (let i = 0; i < 3; i += 1) {
+          await new Promise((r) => setTimeout(r, 25));
+          controller.enqueue(encoder.encode(': keepalive\n\n'));
+        }
+        await new Promise((r) => setTimeout(r, 25));
+        controller.enqueue(
+          encoder.encode('event: text-delta\ndata: {"blockId":"b1","text":"ok"}\n\n'),
+        );
+        controller.close();
+      },
+    });
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      streamSilentMs: 40,
+    });
+
+    await transport.send(basePayload({ store }));
+    const items = store.getItems();
+    const text = items[0]?.kind === 'assistant-text' ? items[0].text : '';
+    expect(text).toBe('ok');
+  });
+
+  it('caller abort propagates an AbortError, not StreamSilentError', async () => {
+    const controller = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(): void {
+        /* hold forever */
+      },
+    });
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      streamSilentMs: 200,
+    });
+
+    const sendPromise = transport.send(basePayload({ signal: controller.signal }));
+    await new Promise((r) => setTimeout(r, 10));
+    controller.abort();
+    // Caller abort makes pumpStream return cleanly, not throw — preserves
+    // the existing contract that aborts resolve quietly.
+    await expect(sendPromise).resolves.toBeUndefined();
+  });
+
+  it('streamSilentMs:0 disables the watchdog (legacy unbounded wait)', async () => {
+    const store = createMessageStore();
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller): Promise<void> {
+        // No chunk for 80ms — would trigger any reasonable watchdog — then
+        // one chunk and close. With streamSilentMs:0 the pump waits.
+        await new Promise((r) => setTimeout(r, 80));
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode('event: text-delta\ndata: {"blockId":"b1","text":"late"}\n\n'),
+        );
+        controller.close();
+      },
+    });
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      streamSilentMs: 0,
+    });
+
+    await transport.send(basePayload({ store }));
+    const items = store.getItems();
+    const text = items[0]?.kind === 'assistant-text' ? items[0].text : '';
+    expect(text).toBe('late');
+  });
+});
+
+describe('createDefaultTransport — pre-response fetch retry', () => {
+  it('retries exactly once when the first fetch rejects with a network error', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError('network error');
+      return new Response(streamFrom(['']), { status: 200 });
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 1,
+      preResponseRetryBackoffMs: 10,
+    });
+
+    await transport.send(basePayload());
+    expect(calls).toBe(2);
+  });
+
+  it('does not retry when the first attempt is aborted', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      throw new DOMException('aborted', 'AbortError');
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 3,
+    });
+
+    controller.abort();
+    await expect(transport.send(basePayload({ signal: controller.signal }))).rejects.toThrow(
+      /aborted/,
+    );
+    expect(calls).toBe(1);
+  });
+
+  it('does not retry HTTP error responses — the server already received the prompt', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      return new Response('{"error":"server boom"}', { status: 500 });
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 3,
+    });
+
+    await expect(transport.send(basePayload())).rejects.toThrow(/500/);
+    expect(calls).toBe(1);
+  });
+
+  it('preResponseRetries:0 disables retry', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      throw new TypeError('network error');
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 0,
+    });
+
+    await expect(transport.send(basePayload())).rejects.toThrow(/network error/);
+    expect(calls).toBe(1);
   });
 });
 

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://unpkg.com/release-it/schema/release-it.json",
+  "git": {
+    "commitMessage": "chore(nuxt): release v${version} [skip ci]",
+    "tagName": "nuxt-v${version}",
+    "tagAnnotation": "Release @agent-devtools/nuxt v${version}",
+    "push": true,
+    "requireBranch": ["main", "develop"],
+    "requireCleanWorkingDir": false
+  },
+  "github": {
+    "release": true,
+    "releaseName": "@agent-devtools/nuxt v${version}",
+    "autoGenerate": true
+  },
+  "npm": {
+    "publish": false,
+    "skipChecks": true
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "conventionalcommits",
+        "types": [
+          { "type": "feat", "section": "Features" },
+          { "type": "fix", "section": "Bug Fixes" },
+          { "type": "perf", "section": "Performance" },
+          { "type": "refactor", "section": "Refactoring" },
+          { "type": "docs", "section": "Documentation" },
+          { "type": "chore", "hidden": true }
+        ]
+      },
+      "infile": "CHANGELOG.md",
+      "path": ".",
+      "gitRawCommitsOpts": {
+        "path": "packages/nuxt"
+      }
+    }
+  },
+  "hooks": {
+    "before:init": [
+      "pnpm --filter @agent-devtools/nuxt run typecheck",
+      "pnpm --filter @agent-devtools/nuxt run test"
+    ],
+    "after:bump": [
+      "pnpm --filter @agent-devtools/nuxt run build",
+      "pnpm --filter @agent-devtools/nuxt publish --access public --no-git-checks --provenance --tag $NPM_DIST_TAG"
+    ]
+  }
+}

@@ -152,6 +152,82 @@ describe('pumpToSse (end-to-end)', () => {
     expect(text).toMatch(/event: complete\ndata: \{"v":2\}/);
   });
 
+  it('emits a `: keepalive` comment when the iterable stays silent past the heartbeat interval', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const app = await startServerWith(async (writer) => {
+      async function* source(): AsyncGenerator<{ k: string }, void, void> {
+        await gate;
+        yield { k: 'after-heartbeat' };
+      }
+      // Use a small heartbeat so the test runs fast without timer mocking
+      // (real timers keep this end-to-end and exercise the race accurately).
+      await pumpToSse(writer, source(), { heartbeatMs: 20 });
+    });
+    const { response } = get(app.url);
+    const res = await response;
+    // Read until we see at least one keepalive AND the post-heartbeat event.
+    const chunks: Buffer[] = [];
+    let sawKeepalive = false;
+    let sawEvent = false;
+    let released = false;
+    for await (const chunk of res) {
+      chunks.push(chunk as Buffer);
+      const text = Buffer.concat(chunks).toString('utf8');
+      if (!sawKeepalive && text.includes(': keepalive\n\n')) {
+        sawKeepalive = true;
+        if (!released) {
+          released = true;
+          release();
+        }
+      }
+      if (text.includes('"k":"after-heartbeat"')) {
+        sawEvent = true;
+        break;
+      }
+    }
+    expect(sawKeepalive).toBe(true);
+    expect(sawEvent).toBe(true);
+  });
+
+  it('does not lose events that arrive concurrently with a heartbeat tick', async () => {
+    const app = await startServerWith(async (writer) => {
+      async function* source(): AsyncGenerator<number, void, void> {
+        // Three values spaced just under the heartbeat interval so a tick
+        // races with each `iterator.next()` resolution. With the pending
+        // promise preserved across ticks, all three values must appear.
+        for (let i = 1; i <= 3; i += 1) {
+          await new Promise((r) => setTimeout(r, 15));
+          yield i;
+        }
+      }
+      await pumpToSse(writer, source(), { heartbeatMs: 10 });
+    });
+    const { response } = get(app.url);
+    const res = await response;
+    const text = await readAll(res);
+    expect(text).toMatch(/event: message\ndata: 1\n\n/);
+    expect(text).toMatch(/event: message\ndata: 2\n\n/);
+    expect(text).toMatch(/event: message\ndata: 3\n\n/);
+  });
+
+  it('disables heartbeats when heartbeatMs is 0', async () => {
+    const app = await startServerWith(async (writer) => {
+      async function* source(): AsyncGenerator<string, void, void> {
+        await new Promise((r) => setTimeout(r, 30));
+        yield 'late';
+      }
+      await pumpToSse(writer, source(), { heartbeatMs: 0 });
+    });
+    const { response } = get(app.url);
+    const res = await response;
+    const text = await readAll(res);
+    expect(text).not.toContain(': keepalive\n\n');
+    expect(text).toContain('data: late\n\n');
+  });
+
   it('cancels iteration via finally when the client disconnects', async () => {
     let cancelled = false;
     const cancelObserved = new Promise<void>((resolve) => {

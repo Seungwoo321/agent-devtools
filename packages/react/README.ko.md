@@ -80,17 +80,26 @@ if (import.meta.env.DEV) {
 
 ### `createDefaultTransport(options)`
 
-| 옵션                  | 타입                                  | 기본값               | 설명                                                                |
-| --------------------- | ------------------------------------- | -------------------- | ------------------------------------------------------------------- |
-| `baseUrl`             | `string`                              | (필수)               | 에이전트 서버 origin. 예: `http://127.0.0.1:4317`.                  |
-| `pairingToken`        | `string`                              | (필수)               | 에이전트 서버가 시작 시 발급한 Bearer 토큰.                         |
-| `fetch`               | `typeof fetch`                        | `globalThis.fetch`   | 커스텀 fetch 구현 (테스트, SSR shim 등).                            |
-| `getSettings`         | `() => SettingsSnapshot \| undefined` | (없음)               | 설정 store 에서 `provider`, `model`, `permissionMode` 를 읽는 함수. |
-| `sessionIdStorage`    | `Storage \| 'memory'`                 | `sessionStorage`     | ACP 세션 ID 가 저장될 스토리지.                                     |
-| `sessionIdStorageKey` | `string`                              | `agent-devtools:sid` | ACP 세션 ID 의 스토리지 키.                                         |
-| `generateSessionId`   | `() => string`                        | `crypto.randomUUID`  | 세션 ID 생성 함수.                                                  |
+| 옵션                        | 타입                                  | 기본값               | 설명                                                                                                              |
+| --------------------------- | ------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`                   | `string`                              | (필수)               | 에이전트 서버 origin. 예: `http://127.0.0.1:4317`.                                                                |
+| `pairingToken`              | `string`                              | (필수)               | 에이전트 서버가 시작 시 발급한 Bearer 토큰.                                                                       |
+| `fetch`                     | `typeof fetch`                        | `globalThis.fetch`   | 커스텀 fetch 구현 (테스트, SSR shim 등).                                                                          |
+| `getSettings`               | `() => SettingsSnapshot \| undefined` | (없음)               | 설정 store 에서 `provider`, `model`, `permissionMode` 를 읽는 함수.                                               |
+| `sessionIdStorage`          | `Storage \| 'memory'`                 | `sessionStorage`     | ACP 세션 ID 가 저장될 스토리지.                                                                                   |
+| `sessionIdStorageKey`       | `string`                              | `agent-devtools:sid` | ACP 세션 ID 의 스토리지 키.                                                                                       |
+| `generateSessionId`         | `() => string`                        | `crypto.randomUUID`  | 세션 ID 생성 함수.                                                                                                |
+| `streamSilentMs`            | `number`                              | `60_000`             | 리더가 이 시간 이상 침묵하면 스트림을 abort 하고 `StreamSilentError` 로 reject. `0` 이면 비활성화.                |
+| `preResponseRetries`        | `number`                              | `1`                  | 첫 fetch 가 Response 도착 전 네트워크 에러로 reject 될 때 추가 시도 횟수. AbortError 와 HTTP 에러는 재시도 안 함. |
+| `preResponseRetryBackoffMs` | `number`                              | `300`                | 실패한 첫 fetch 와 재시도 사이 대기 시간.                                                                         |
 
 트랜스포트는 브라우저 탭마다 하나의 ACP 세션을 유지하고, 새로고침 후에도 이어집니다. `sessionStorage` 가 탭 스코프라 다른 탭에서는 새 세션 ID 를 발급합니다.
+
+에이전트 서버는 모델이 침묵 중일 때 20초마다 `: keepalive` SSE 코멘트를 보냅니다. 중간의 프록시·터널이 idle 로 판단해 연결을 끊지 않게 하기 위함입니다. 위 watchdog 는 코멘트 포함 모든 수신 chunk 에서 reset 되므로 긴 thinking 은 살아남고, 진짜로 죽은 스트림만 "thinking…" 무한 대기 대신 `StreamSilentError` 로 surface 됩니다.
+
+### `StreamSilentError`
+
+리더가 `streamSilentMs` 보다 오래 chunk 를 받지 못했을 때 트랜스포트가 throw 하는 에러. `error.name === 'StreamSilentError'`. UI 에서는 "스트림이 끊겼습니다. 다시 시도해 주세요" 같은 메시지로 surface 하세요.
 
 ## 보안 기본값
 
@@ -108,7 +117,7 @@ if (import.meta.env.DEV) {
 - 모노레포: <https://github.com/Seungwoo321/agent-devtools>
 - Core 패키지: [`@agent-devtools/core`](https://www.npmjs.com/package/@agent-devtools/core)
 - Vite 플러그인: [`@agent-devtools/vite`](https://www.npmjs.com/package/@agent-devtools/vite)
-- 사용자 가이드: <https://agent-devtools.seungwoo321.dev>
+- 사용자 가이드: <https://agent-devtools-docs.vercel.app/>
 - 이슈 트래커: <https://github.com/Seungwoo321/agent-devtools/issues>
 
 ## 라이선스

@@ -1,11 +1,11 @@
 ---
 title: Installation
-description: Wire agent-devtools into a Vite + React app in five minutes.
+description: Wire agent-devtools into a React, Vue, Next, or Nuxt app in five minutes.
 ---
 
-This page assumes you **already have a Vite + React project**. If you don't,
-run `pnpm create vite@latest my-app --template react-ts` and come back when
-you're done.
+agent-devtools ships an adapter for each of the four frameworks below. Pick
+the section that matches your stack — the rest of the docs apply to all
+adapters equally.
 
 ## 0. Prerequisites
 
@@ -25,60 +25,36 @@ You need the following two things ready before continuing.
 > agent-devtools never asks for an Anthropic API key. It reuses the OAuth
 > session that the CLI already maintains.
 
-## 1. Install the packages
+## 1. Pick your stack
 
-```bash
-pnpm add -D @agent-devtools/vite @agent-devtools/react
-# or
-npm install -D @agent-devtools/vite @agent-devtools/react
-```
+Each adapter ships a runnable example under
+[`examples/`](https://github.com/Seungwoo321/agent-devtools/tree/main/examples)
+and a `smoke:no-leak` script that verifies zero widget code reaches the
+production bundle.
 
-The two packages have the following roles.
+| Stack        | Install                                                  |
+| ------------ | -------------------------------------------------------- |
+| React + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/react` |
+| Vue 3 + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/vue`   |
+| Next.js 15   | `pnpm add -D @agent-devtools/next @agent-devtools/react` |
+| Nuxt 3       | `pnpm add -D @agent-devtools/nuxt @agent-devtools/vue`   |
 
-| Package                 | Role                                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `@agent-devtools/vite`  | Mounts the widget backend (HTTP + SSE) on the dev server. Bridges to the local Claude Code over stdio JSON-RPC. |
-| `@agent-devtools/react` | Mounts the floating widget UI in the browser.                                                                   |
-
-## 2. Register the Vite plugin
-
-Add the plugin to `vite.config.ts`.
+### React + Vite
 
 ```ts
+// vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { agentDevtools } from '@agent-devtools/vite';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    // Only activates on the dev server. Never included in build output.
-    agentDevtools(),
-  ],
+  plugins: [react(), agentDevtools()],
 });
 ```
 
-Every plugin option is covered in the [configuration reference](/en/guides/configuration/).
-The defaults are enough to get started.
-
-## 3. Mount the widget
-
-In your app's entry point (`src/main.tsx` or equivalent), mount the widget
-**only when running in dev mode**.
-
 ```tsx
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
-
+// src/main.tsx — mount the widget in dev only
 if (import.meta.env.DEV) {
-  // Splitting via dynamic import guarantees this never reaches a production bundle.
   const { mountAgentDevtools, createDefaultTransport } =
     await import('@agent-devtools/react');
   mountAgentDevtools({
@@ -90,11 +66,85 @@ if (import.meta.env.DEV) {
 }
 ```
 
-> The `import.meta.env.DEV` guard is required. `mountAgentDevtools()` itself
-> is also dev-only by construction, but applying dynamic import on top is the
-> recommended pattern for bundle size and security.
+### Vue 3 + Vite
 
-## 4. Run the dev server
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [vue(), agentDevtools({ framework: 'vue' })],
+});
+```
+
+The Vite plugin auto-mounts the Vue widget on the dev server — no manual
+`mountAgentDevtoolsVue()` call needed from your app entry.
+
+### Next.js 15 (App or Pages Router)
+
+```ts
+// next.config.ts
+import type { NextConfig } from 'next';
+import { withAgentDevtools } from '@agent-devtools/next';
+
+const config: NextConfig = { reactStrictMode: true };
+export default withAgentDevtools(config);
+```
+
+```tsx
+// app/agent-devtools.tsx (App Router) — or use from _app.tsx (Pages Router)
+'use client';
+import { useEffect } from 'react';
+import { bootstrapAgentDevtools } from '@agent-devtools/next/bootstrap';
+
+export function AgentDevtools(): null {
+  useEffect(() => {
+    bootstrapAgentDevtools();
+  }, []);
+  return null;
+}
+```
+
+```tsx
+// app/layout.tsx
+import { AgentDevtools } from './agent-devtools';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html>
+      <body>
+        {children}
+        <AgentDevtools />
+      </body>
+    </html>
+  );
+}
+```
+
+`withAgentDevtools` installs a webpack alias for the widget chain on
+production builds; the bootstrap shim early-returns when
+`NODE_ENV === 'production'` so DCE strips the call site to a no-op.
+
+### Nuxt 3
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@agent-devtools/nuxt'],
+});
+```
+
+The module reads `nuxt.options.dev`. On `nuxt build` / `nuxt generate`,
+`setup` returns before `addPlugin` is called and the widget chain never
+enters the bundle graph.
+
+## 2. Run the dev server
 
 ```bash
 pnpm dev
@@ -111,7 +161,7 @@ console emits logs similar to the following.
 [agent-devtools] provider: acp (default) — connecting to local Claude Code
 ```
 
-## 5. Next steps
+## 3. Next steps
 
 - [First run](/en/guides/first-run/) — send the first prompt to the widget and
   confirm code edits actually land

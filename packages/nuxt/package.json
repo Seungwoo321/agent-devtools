@@ -1,0 +1,79 @@
+{
+  "name": "@agent-devtools/nuxt",
+  "version": "0.1.0",
+  "description": "Nuxt 3 module for agent-devtools — re-exports the Vue widget + adds dev-only injection through defineNuxtModule",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "nuxt",
+    "nuxt3",
+    "vue",
+    "claude",
+    "llm",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/nuxt#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./runtime/plugin": {
+      "types": "./dist/runtime/plugin.d.ts",
+      "import": "./dist/runtime/plugin.js",
+      "default": "./dist/runtime/plugin.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.ko.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "nuxt": ">=3.0.0",
+    "vue": ">=3.4.0"
+  },
+  "dependencies": {
+    "@agent-devtools/core": "workspace:^",
+    "@agent-devtools/react": "workspace:^",
+    "@agent-devtools/vue": "workspace:^",
+    "@nuxt/kit": "^3.13.0"
+  },
+  "devDependencies": {
+    "@nuxt/schema": "^3.13.0",
+    "@types/node": "^25.7.0",
+    "happy-dom": "^20.9.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6",
+    "vue": "^3.5.13"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/nuxt"
+  }
+}

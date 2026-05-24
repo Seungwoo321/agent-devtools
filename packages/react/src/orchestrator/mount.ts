@@ -129,6 +129,13 @@ export interface MountAgentDevtoolsOptions {
    * silent.
    */
   requestHandoff?: HandoffRequester;
+  /**
+   * Framework-specific element → PickedEvidence resolver. When omitted,
+   * the default React fiber-walker implementation is used. Vue/Next/Nuxt
+   * adapters inject their own walker so the picker resolves to the
+   * correct component identity for the host framework.
+   */
+  describePicked?: (element: Element) => PickedEvidence;
 }
 
 const PRODUCTION_REFUSAL_MESSAGE =
@@ -159,6 +166,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
   }
   const doc = options.document ?? globalThis.document;
   if (!doc) throw new Error('mountAgentDevtools: no document available');
+  const resolvePicked = options.describePicked ?? describePicked;
 
   const widget = createShadowWidgetRoot({
     document: doc,
@@ -241,7 +249,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     document: doc,
     onPick(element): void {
       pickedElement = element;
-      composer.setPicked(describePicked(element));
+      composer.setPicked(resolvePicked(element));
       composer.setPickerActive(false);
       composer.setVisible(true);
       composer.focus();
@@ -376,7 +384,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     options
       .requestHandoff({
         conversation,
-        picked: pickedElement ? describePicked(pickedElement) : null,
+        picked: pickedElement ? resolvePicked(pickedElement) : null,
         pageContext,
         permissionMode: settingsStore.get().permissionMode,
         signal: controller.signal,

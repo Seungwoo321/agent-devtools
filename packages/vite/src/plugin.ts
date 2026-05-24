@@ -38,8 +38,8 @@ import {
   type AgentDevtoolsServerHandle,
   type StartAgentDevtoolsServerOptions,
 } from '@agent-devtools/core/server';
+import { resolveImportFrom, type Framework } from './framework.js';
 
-const DEFAULT_IMPORT_FROM = '@agent-devtools/react';
 const DEFAULT_PLUGIN_NAME = 'agent-devtools';
 const CONFIG_GLOBAL = '__AGENT_DEVTOOLS_CONFIG__';
 const PROXY_PATH = '/__agent_devtools';
@@ -53,9 +53,22 @@ export interface AgentDevtoolsPluginOptions {
    */
   enabled?: boolean;
   /**
-   * Module specifier the injected bootstrap imports from. Defaults to
-   * `@agent-devtools/react`. Must export `mountAgentDevtools` and
-   * `createDefaultTransport`.
+   * Framework adapter the injected bootstrap should mount. Defaults to
+   * `'auto'`, which reads the host project's `package.json` and picks the
+   * first match in priority order: `nuxt` > `next` > `vue` > `react`. Falls
+   * back to `react` when nothing matches.
+   *
+   * Set this explicitly (e.g. `framework: 'vue'`) to skip detection and
+   * force one adapter — useful in monorepos where `package.json` does not
+   * carry the framework as a direct dependency.
+   *
+   * If `importFrom` is also provided, it wins.
+   */
+  framework?: Framework | 'auto';
+  /**
+   * Module specifier the injected bootstrap imports from. When unset, it
+   * is derived from `framework` (defaults to `@agent-devtools/react`).
+   * Must export `mountAgentDevtools` and `createDefaultTransport`.
    */
   importFrom?: string;
   /**
@@ -97,18 +110,23 @@ export interface AgentDevtoolsPluginOptions {
 
 export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin {
   const enabled = options.enabled ?? true;
-  const importFrom = options.importFrom ?? DEFAULT_IMPORT_FROM;
   const spawnServer = options.spawnServer ?? true;
   const startServer = options.startServer ?? startAgentDevtoolsServer;
   const shadowOpen = options.shadowOpen ?? readEnv('AGENT_DEVTOOLS_OPEN_SHADOW') === '1';
 
   let handle: AgentDevtoolsServerHandle | null = null;
+  // Resolved at configureServer time (when we have access to the Vite
+  // project root). Until then — including transformIndexHtml calls that
+  // somehow precede configureServer — fall back to the react default so
+  // the bootstrap is always emittable.
+  let resolvedImportFrom = resolveImportFrom(options, process.cwd());
 
   return {
     name: DEFAULT_PLUGIN_NAME,
     apply: 'serve',
     async configureServer(server: ViteDevServer): Promise<void> {
       if (!enabled) return;
+      resolvedImportFrom = resolveImportFrom(options, server.config.root);
       // Install the proxy middleware unconditionally (even before the agent
       // server is spawned) so that the first browser request after Vite is
       // ready doesn't race the spawn — it gets a 503 from us instead of an
@@ -155,7 +173,7 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
           tag: 'script',
           attrs: { type: 'module' },
           injectTo: 'head',
-          children: buildBootstrap(importFrom, handle !== null, shadowOpen),
+          children: buildBootstrap(resolvedImportFrom, handle !== null, shadowOpen),
         });
         return { html: '', tags };
       },

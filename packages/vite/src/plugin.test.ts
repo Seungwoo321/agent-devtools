@@ -194,6 +194,31 @@ describe('agentDevtools()', () => {
     expect(code).toContain('"@my-org/devtools"');
   });
 
+  it('selects the matching adapter when framework is set explicitly (no detection)', async () => {
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, framework: 'vue' });
+    const { viteServer } = makeFakeViteServer({ workspace: '/host/app' });
+    await runConfigureServer(plugin, viteServer);
+    const result = runTransform(plugin);
+    const boot = result!.tags[1]!.children!;
+    expect(boot).toContain('"@agent-devtools/vue"');
+  });
+
+  it('explicit importFrom wins over framework', async () => {
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({
+      startServer: start,
+      framework: 'vue',
+      importFrom: '@override/pkg',
+    });
+    const { viteServer } = makeFakeViteServer({ workspace: '/host/app' });
+    await runConfigureServer(plugin, viteServer);
+    const result = runTransform(plugin);
+    const boot = result!.tags[1]!.children!;
+    expect(boot).toContain('"@override/pkg"');
+    expect(boot).not.toContain('"@agent-devtools/vue"');
+  });
+
   it('escapes the import specifier safely (JSON-stringified)', () => {
     const result = runTransform(buildPlugin({ spawnServer: false, importFrom: 'a"b' }));
     const code = result!.tags[0]!.children!;

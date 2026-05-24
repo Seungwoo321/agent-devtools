@@ -13,6 +13,9 @@ on:
           - next
           - latest
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -48,11 +51,21 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Publish (recursive across packages/*)
+      # Initial publish is restricted to the three adapters that have never
+      # appeared on npm: @agent-devtools/vue, /next, /nuxt. The existing
+      # /core, /harness-core, /react, /vite are already published and their
+      # incremental releases go through .github/workflows/publish.yml via
+      # release-it. Re-running this workflow against already-published
+      # packages would fail with EPUBLISHCONFLICT, so we explicitly filter.
+      - name: Publish new adapters (vue / next / nuxt)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm -r --filter "./packages/*" publish \
+          pnpm -r \
+            --filter "@agent-devtools/vue" \
+            --filter "@agent-devtools/next" \
+            --filter "@agent-devtools/nuxt" \
+            publish \
             --tag "${{ inputs.tag }}" \
             --access public \
             --no-git-checks
