@@ -12,5 +12,6 @@ pnpm-lock.yaml
 .next
 .nuxt
 .output
+.svelte-kit
 playwright-report
 test-results
