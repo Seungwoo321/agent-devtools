@@ -204,6 +204,16 @@ describe('agentDevtools()', () => {
     expect(boot).toContain('"@agent-devtools/vue"');
   });
 
+  it('selects @agent-devtools/vue2 when framework: "vue2"', async () => {
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, framework: 'vue2' });
+    const { viteServer } = makeFakeViteServer({ workspace: '/host/app' });
+    await runConfigureServer(plugin, viteServer);
+    const result = runTransform(plugin);
+    const boot = result!.tags[1]!.children!;
+    expect(boot).toContain('"@agent-devtools/vue2"');
+  });
+
   it('explicit importFrom wins over framework', async () => {
     const { start } = makeStartServerStub();
     const plugin = buildPlugin({

@@ -27,12 +27,18 @@
 
 자기 스택에 맞는 행을 고른다. 각 어댑터는 [`examples/`](./examples) 에 실행 가능한 예제와 `pnpm --filter <example> run smoke:no-leak` 로 돌릴 수 있는 production-leak 가드를 갖는다 — production 번들에 widget 코드가 0 바이트 들어가는 것을 검증한다.
 
-| Stack        | 설치                                                     | 예제                                           |
-| ------------ | -------------------------------------------------------- | ---------------------------------------------- |
-| React + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/react` | [`examples/react-vite`](./examples/react-vite) |
-| Vue 3 + Vite | `pnpm add -D @agent-devtools/vite @agent-devtools/vue`   | [`examples/vue-vite`](./examples/vue-vite)     |
-| Next.js 15   | `pnpm add -D @agent-devtools/next @agent-devtools/react` | [`examples/next`](./examples/next)             |
-| Nuxt 3       | `pnpm add -D @agent-devtools/nuxt @agent-devtools/vue`   | [`examples/nuxt`](./examples/nuxt)             |
+| Stack            | 설치                                                           | 예제                                               |
+| ---------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| React + Vite     | `pnpm add -D @agent-devtools/vite @agent-devtools/react`       | [`examples/react-vite`](./examples/react-vite)     |
+| Vue 3 + Vite     | `pnpm add -D @agent-devtools/vite @agent-devtools/vue`         | [`examples/vue-vite`](./examples/vue-vite)         |
+| Vue 2 + Vite     | `pnpm add -D @agent-devtools/vite @agent-devtools/vue2`        | [`examples/vue2-vite`](./examples/vue2-vite)       |
+| Angular + Vite   | `pnpm add -D @agent-devtools/vite @agent-devtools/angular`     | [`examples/angular-vite`](./examples/angular-vite) |
+| Svelte + Vite    | `pnpm add -D @agent-devtools/vite @agent-devtools/svelte`      | [`examples/svelte-vite`](./examples/svelte-vite)   |
+| SvelteKit        | `pnpm add -D @agent-devtools/vite @agent-devtools/sveltekit`   | [`examples/sveltekit`](./examples/sveltekit)       |
+| Next.js 15 (App) | `pnpm add -D @agent-devtools/next @agent-devtools/react`       | [`examples/next`](./examples/next)                 |
+| Next.js (Pages)  | `pnpm add -D @agent-devtools/next-pages @agent-devtools/react` | [`examples/next-pages`](./examples/next-pages)     |
+| Nuxt 3           | `pnpm add -D @agent-devtools/nuxt @agent-devtools/vue`         | [`examples/nuxt`](./examples/nuxt)                 |
+| Nuxt 2           | `pnpm add -D @agent-devtools/nuxt2 @agent-devtools/vue2`       | [`examples/nuxt2`](./examples/nuxt2)               |
 
 ### React + Vite
 
@@ -94,6 +100,110 @@ export default defineNuxtConfig({
 });
 ```
 
+### Vue 2 + Vite
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import vue2 from '@vitejs/plugin-vue2';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [vue2(), agentDevtools({ framework: 'vue2' })],
+});
+```
+
+### Nuxt 2
+
+```js
+// nuxt.config.js
+export default {
+  modules: ['@agent-devtools/nuxt2'],
+  build: {
+    // Nuxt 2 는 webpack 4 + babel-loader 를 사용하고 node_modules 는 기본적으로
+    // transpile 대상에서 제외된다. widget chain 이 끌어오는 marked 가 webpack 4
+    // 가 파싱 못 하는 최신 문법을 포함하므로 transpile 에 명시한다.
+    transpile: [
+      '@agent-devtools/nuxt2',
+      '@agent-devtools/vue2',
+      '@agent-devtools/react',
+      '@agent-devtools/core',
+      'marked',
+    ],
+  },
+};
+```
+
+### Angular + Vite
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import angular from '@analogjs/vite-plugin-angular';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [angular(), agentDevtools({ framework: 'angular' })],
+});
+```
+
+### Svelte + Vite
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { agentDevtools } from '@agent-devtools/vite';
+
+export default defineConfig({
+  plugins: [svelte(), agentDevtools({ framework: 'svelte' })],
+});
+```
+
+### SvelteKit
+
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script lang="ts">
+  import { onMount } from 'svelte';
+
+  let { children } = $props();
+
+  onMount(async () => {
+    if (import.meta.env.PROD) return;
+    const { mountAgentDevtoolsSvelteKit } = await import('@agent-devtools/sveltekit');
+    mountAgentDevtoolsSvelteKit();
+  });
+</script>
+
+{@render children()}
+```
+
+`import.meta.env.PROD` 는 Vite 의 compile-time 치환이므로 `vite build` 시 Rollup 이 `if` / `await import()` 분기를 통째로 제거한다.
+
+### Next.js (Pages Router)
+
+```ts
+// next.config.ts
+import { withAgentDevtools } from '@agent-devtools/next-pages';
+
+export default withAgentDevtools({ reactStrictMode: true });
+```
+
+```tsx
+// pages/_app.tsx
+import { useEffect } from 'react';
+import { bootstrapAgentDevtools } from '@agent-devtools/next-pages/bootstrap';
+import type { AppProps } from 'next/app';
+
+export default function App({ Component, pageProps }: AppProps) {
+  useEffect(() => {
+    bootstrapAgentDevtools();
+  }, []);
+  return <Component {...pageProps} />;
+}
+```
+
 어느 스택이든 `pnpm dev` 를 실행하면:
 
 1. 로컬 에이전트 서버가 `127.0.0.1` 의 free 포트에 자동 spawn 된다 (4317 이 점유면 순차 fallback).
@@ -109,8 +219,14 @@ export default defineNuxtConfig({
 | [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | 도메인-무관 loop 전략 + LLM provider 추상화               |
 | [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context         |
 | [`@agent-devtools/vue`](./packages/vue)                   | `0.1.0` | Vue 3 vnode walker + DOM picker + closed shadow widget    |
-| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 wrapper — webpack alias + bootstrap shim       |
+| [`@agent-devtools/vue2`](./packages/vue2)                 | `0.1.0` | Vue 2.7 컴포넌트 트리 walker + picker + widget            |
+| [`@agent-devtools/angular`](./packages/angular)           | `0.1.0` | Angular Ivy walker + picker + widget                      |
+| [`@agent-devtools/svelte`](./packages/svelte)             | `0.1.0` | Svelte 4/5 `__svelte_meta` resolver + picker + widget     |
+| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | `0.1.0` | SvelteKit layout mount + server `handle` 바인딩           |
+| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 App Router wrapper — webpack alias + bootstrap |
+| [`@agent-devtools/next-pages`](./packages/next-pages)     | `0.1.0` | Next.js Pages Router wrapper — `>= 12` 호환 동일 패턴     |
 | [`@agent-devtools/nuxt`](./packages/nuxt)                 | `0.1.0` | Nuxt 3 module — dev-only plugin 자동 주입                 |
+| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | `0.1.0` | Nuxt 2 module — dev-only client plugin 자동 주입          |
 | [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard       |
 
 ## Security defaults

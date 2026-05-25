@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Minimal React + Vite example wiring the agent-devtools widget for end-to-end smoke verification.",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5173 --strictPort",
     "build": "vite build",
     "build:check": "vite build && node scripts/check-no-leak.mjs",
     "smoke:no-leak": "node scripts/check-no-leak.mjs",

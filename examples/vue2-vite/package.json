@@ -1,0 +1,26 @@
+{
+  "name": "@agent-devtools/example-vue2-vite",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3201",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:check": "vue-tsc --noEmit && vite build && node scripts/check-no-leak.mjs",
+    "smoke:no-leak": "node scripts/check-no-leak.mjs",
+    "preview": "vite preview --port 3201",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^2.7.16"
+  },
+  "devDependencies": {
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/vite": "workspace:*",
+    "@agent-devtools/vue2": "workspace:*",
+    "@vitejs/plugin-vue2": "^2.3.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.0",
+    "vue-tsc": "^2.2.0"
+  }
+}

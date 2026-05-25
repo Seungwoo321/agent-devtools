@@ -17,6 +17,7 @@ export default tseslint.config(
       '**/.next/**',
       '**/.output/**',
       '**/.nuxt/**',
+      '**/.svelte-kit/**',
       '**/coverage/**',
       '**/*.tsbuildinfo',
       '**/next-env.d.ts',

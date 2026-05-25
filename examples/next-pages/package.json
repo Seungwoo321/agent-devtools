@@ -1,0 +1,28 @@
+{
+  "name": "@agent-devtools/example-next-pages",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal Next.js Pages Router example wiring the agent-devtools widget for end-to-end smoke verification.",
+  "scripts": {
+    "dev": "next dev --port 3101",
+    "build": "next build",
+    "build:check": "next build && node scripts/check-no-leak.mjs",
+    "smoke:no-leak": "node scripts/check-no-leak.mjs",
+    "start": "next start --port 3101",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/next-pages": "workspace:*",
+    "@agent-devtools/react": "workspace:*",
+    "@types/node": "^25.7.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^6.0.3"
+  }
+}

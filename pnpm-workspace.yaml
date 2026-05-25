@@ -4,5 +4,23 @@ packages:
   - "docs"
 allowBuilds:
   "@parcel/watcher": true
+  core-js: false
   esbuild: true
+  fsevents: false
+  lmdb: false
+  msgpackr-extract: false
+  nuxt: false
   sharp: true
+# Nuxt 2 ships `vue-server-renderer@2` without `vue` as a runtime dep — at
+# install time the package only lists vue as a devDependency. In a pnpm
+# monorepo where vue@3 is also present (used by `examples/vue-vite`,
+# `examples/nuxt`, etc.), pnpm hoists vue@3 into `.pnpm/node_modules/vue`
+# and `vue-server-renderer@2`'s `require('vue')` resolves to it, tripping
+# the renderer's own version-mismatch guard at boot. Re-declaring vue as a
+# peer of vue-server-renderer@2 forces pnpm to link vue@2 directly under
+# the renderer's isolated node_modules dir, fixing resolution for the
+# nuxt2 example without affecting the Vue 3 graph.
+packageExtensions:
+  "vue-server-renderer":
+    peerDependencies:
+      vue: "2"

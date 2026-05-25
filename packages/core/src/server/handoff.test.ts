@@ -134,4 +134,47 @@ describe('writeHandoffArtifact', () => {
     );
     expect(result.command).toContain("'/var/tmp/it'\\''s weird/agent-devtools-handoff-x.md'");
   });
+
+  it('prefixes the command with cd to the workspace root when one is configured', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+        workspaceRoot: '/Users/dev/project',
+      },
+    );
+    expect(result.command).toBe(
+      "cd '/Users/dev/project' && claude --append-system-prompt-file '/var/tmp/test/agent-devtools-handoff-fixed-id.md'",
+    );
+  });
+
+  it('omits the cd prefix when no workspace root is configured', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+      },
+    );
+    expect(result.command.startsWith('cd ')).toBe(false);
+    expect(result.command).toBe(
+      "claude --append-system-prompt-file '/var/tmp/test/agent-devtools-handoff-fixed-id.md'",
+    );
+  });
+
+  it('POSIX-escapes embedded apostrophes in the workspace root', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+        workspaceRoot: "/Users/dev/it's project",
+      },
+    );
+    expect(result.command).toContain("cd '/Users/dev/it'\\''s project' && ");
+  });
 });

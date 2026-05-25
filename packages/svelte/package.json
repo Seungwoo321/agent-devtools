@@ -1,0 +1,65 @@
+{
+  "name": "@agent-devtools/svelte",
+  "version": "0.1.0",
+  "description": "Svelte adapter for agent-devtools — Svelte 4/5 component walker + DOM picker + closed Shadow DOM widget",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "svelte",
+    "claude",
+    "llm",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/svelte#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "svelte": "^4.0.0 || ^5.0.0"
+  },
+  "dependencies": {
+    "@agent-devtools/core": "workspace:^",
+    "@agent-devtools/react": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "happy-dom": "^20.9.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/svelte"
+  }
+}

@@ -307,4 +307,20 @@ describe('createStreamRenderer', () => {
     expect(b).not.toBe(firstA);
     handle.destroy();
   });
+
+  it('scrollToBottom re-anchors the list to the latest item', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('a');
+    store.appendUserMessage('b');
+    // Simulate the user (or a hidden-then-visible panel) scrolling away.
+    handle.element.scrollTop = 0;
+    Object.defineProperty(handle.element, 'scrollHeight', {
+      configurable: true,
+      value: 999,
+    });
+    handle.scrollToBottom();
+    expect(handle.element.scrollTop).toBe(999);
+    handle.destroy();
+  });
 });

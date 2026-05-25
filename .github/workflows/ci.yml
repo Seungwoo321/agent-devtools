@@ -58,10 +58,40 @@ jobs:
       - name: Build + no-leak smoke (examples)
         run: pnpm build:examples
 
+      # Dev-injection smoke — boots every adapter example's dev server in
+      # parallel batches, asserts the served bytes contain the dev-injected
+      # bootstrap reference, then tears the server down. Paired with the
+      # build step above to cover both halves of the dev-only guard
+      # contract (Layer 1 OFF in production, Layer 1 ON in development) for
+      # all ten adapter+example pairs in the same CI job. Fail-fast on the
+      # first regression with the pair name in the log.
+      - name: Integration smoke (dev injection across ten pairs)
+        run: pnpm smoke:integration
+        timeout-minutes: 10
+
+      # The full publishable adapter set. Every published package is packed
+      # here so a missing `files` entry, broken `exports` map, or unbuilt
+      # `dist/` surfaces in CI rather than at release time. Keep this list
+      # in lockstep with .github/workflows/publish.yml — if a package is
+      # added here it must also be added to the publish job, and vice
+      # versa.
       - name: Pack (publish-readiness smoke)
         run: |
           mkdir -p .pack-out
-          for pkg in packages/core packages/harness-core packages/react packages/vue packages/next packages/nuxt packages/vite; do
+          for pkg in \
+            packages/core \
+            packages/harness-core \
+            packages/react \
+            packages/vue \
+            packages/vue2 \
+            packages/next \
+            packages/next-pages \
+            packages/nuxt \
+            packages/nuxt2 \
+            packages/angular \
+            packages/svelte \
+            packages/sveltekit \
+            packages/vite; do
             (cd "$pkg" && pnpm pack --pack-destination "${GITHUB_WORKSPACE}/.pack-out")
           done
           ls -la .pack-out
