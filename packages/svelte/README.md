@@ -35,4 +35,4 @@ For SvelteKit hosts, use `@agent-devtools/sveltekit` which registers a dev-only 
 
 ## Status
 
-Phase 2 adapter expansion. Walker, picker, widget and bundler integration land incrementally. See the plan tree in Clawket (`PLAN-01KSBW8EMVP50W21DQKVB3G0NG`).
+Published as part of the fixed-mode `@agent-devtools/*` release line. Walker, picker, widget and Vite-plugin integration are in place — see `packages/svelte/src/**/*.test.ts` for the verified surface.

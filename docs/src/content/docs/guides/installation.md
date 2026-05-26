@@ -272,6 +272,16 @@ pnpm dev
 [agent-devtools] provider: acp (default) — connecting to local Claude Code
 ```
 
+## 보안 주의
+
+`workspace` 옵션은 스폰되는 Claude Code 자식 프로세스의 canonical `cwd` 이자,
+picker preamble 의 source-slice 읽기에 적용되는 경계다 — **OS 레벨 샌드박스는
+아니다**. SDK 가 자체 호출하는 도구는 호스트 사용자의 파일 시스템 권한을
+그대로 상속한다. 그 디렉토리에서 터미널로 `claude` 를 실행한 것과 동일한 권한
+표면이다. 정직한 전체 범위는
+[보안 모델](/guides/security/#workspace-boundary--%EC%8B%A4%EC%A0%9C%EB%A1%9C-%EA%B0%95%EC%A0%9C%EB%90%98%EB%8A%94-%EB%B2%94%EC%9C%84)
+참조.
+
 ## 3. 다음 단계
 
 - [첫 실행](/guides/first-run/) — 위젯에 첫 프롬프트 보내고 실제 코드 수정이

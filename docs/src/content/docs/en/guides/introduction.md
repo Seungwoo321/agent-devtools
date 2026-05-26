@@ -58,6 +58,12 @@ This tool is explicitly **not**:
   requires explicit approval.
 - **Not a new billing model.** It uses your existing Claude subscription. No
   additional payment is involved.
+- **Not an OS-level sandbox.** The `workspace` option scopes the picker
+  preamble's source-slice reads, but the SDK's own tool calls run with the host
+  user's file-system permissions — exactly like running `claude` from a
+  terminal in that directory. See
+  [Security](/en/guides/security/#workspace-boundary--what-it-does-and-does-not-enforce)
+  for the honest scope.
 
 ## What to read next
 

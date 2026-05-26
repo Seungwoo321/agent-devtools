@@ -56,4 +56,4 @@ The hook is a passthrough today; it exists as the binding point for future agent
 
 ## Status
 
-Phase 2 adapter expansion. Walker / picker / widget reused from `@agent-devtools/svelte`; SvelteKit-specific scaffolding is the layout mount + server handle. See the plan tree in Clawket (`PLAN-01KSBW8EMVP50W21DQKVB3G0NG`).
+Published as part of the fixed-mode `@agent-devtools/*` release line. Walker / picker / widget are reused from `@agent-devtools/svelte`; SvelteKit-specific scaffolding is the layout mount + server handle — see `packages/sveltekit/src/**/*.test.ts` for the verified surface.

@@ -55,6 +55,12 @@ agent-devtools 는 두 세계를 합친다.
   승인을 요구한다.
 - **새 결제 모델이 아니다.** 본인 Claude 구독을 그대로 쓴다. 별도 결제가 끼지
   않는다.
+- **OS 레벨 샌드박스가 아니다.** `workspace` 옵션은 picker preamble 의
+  source-slice 읽기 경계만 강제하고, SDK 가 자체 호출하는 도구는 호스트
+  사용자의 파일 시스템 권한을 그대로 상속한다 — 그 디렉토리에서 터미널로
+  `claude` 를 실행한 것과 동일한 권한 표면이다. 정직한 전체 범위는
+  [보안 모델](/guides/security/#workspace-boundary--%EC%8B%A4%EC%A0%9C%EB%A1%9C-%EA%B0%95%EC%A0%9C%EB%90%98%EB%8A%94-%EB%B2%94%EC%9C%84)
+  참조.
 
 ## 다음으로 읽을 것
 
