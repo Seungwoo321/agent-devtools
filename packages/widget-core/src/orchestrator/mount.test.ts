@@ -47,7 +47,10 @@ describe('mountAgentDevtools', () => {
   });
 
   it('throws if no document is available', () => {
-    expect(() => mountAgentDevtools({ document: undefined as unknown as Document })).not.toThrow(); // falls back to globalThis.document
+    // Falls back to globalThis.document — the handle survives, so destroy it
+    // so its document-level keydown listener doesn't leak across tests.
+    const handle = mountAgentDevtools({ document: undefined as unknown as Document });
+    handle.destroy();
   });
 
   it('appends an error message when no transport is configured and the user submits', () => {
@@ -337,10 +340,11 @@ describe('mountAgentDevtools — new conversation handler', () => {
     const resetSession = vi.fn();
     const send = vi.fn().mockResolvedValue(undefined);
     const handle = mountAgentDevtools({ transport: { send, resetSession } });
-    // Seed: one user message + some composer text.
+    // Seed: one user message (carries an inert pending placeholder behind
+    // it from the typing indicator) + some composer text.
     handle.composer.setText('half-typed prompt');
     handle.store.appendUserMessage('previous turn');
-    expect(handle.store.getItems()).toHaveLength(1);
+    expect(handle.store.getItems()).toHaveLength(2);
 
     getNewSessionButton(handle).click();
 
@@ -768,6 +772,64 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     expect(requestHandoff.mock.calls[0]![0].permissionMode).toBe('bypassPermissions');
     handle.destroy();
   });
+
+  it('forwards the transport.getClientSessionId() value into requestHandoff', async () => {
+    const requestHandoff = vi.fn().mockResolvedValue({ file: '/tmp/x.md', command: 'cmd' });
+    const transport: AgentDevtoolsTransport = {
+      send: vi.fn().mockResolvedValue(undefined),
+      getClientSessionId: () => 'cs-tab-7',
+    };
+    const handle = mountAgentDevtools({ transport, requestHandoff });
+    clickHandoff(handle);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(requestHandoff.mock.calls[0]![0].clientSessionId).toBe('cs-tab-7');
+    handle.destroy();
+  });
+
+  it('omits clientSessionId from requestHandoff when the transport lacks the getter', async () => {
+    const requestHandoff = vi.fn().mockResolvedValue({ file: '/tmp/x.md', command: 'cmd' });
+    const transport: AgentDevtoolsTransport = {
+      send: vi.fn().mockResolvedValue(undefined),
+    };
+    const handle = mountAgentDevtools({ transport, requestHandoff });
+    clickHandoff(handle);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(requestHandoff.mock.calls[0]![0].clientSessionId).toBeUndefined();
+    handle.destroy();
+  });
+
+  it('omits clientSessionId from requestHandoff when the getter returns undefined', async () => {
+    const requestHandoff = vi.fn().mockResolvedValue({ file: '/tmp/x.md', command: 'cmd' });
+    const transport: AgentDevtoolsTransport = {
+      send: vi.fn().mockResolvedValue(undefined),
+      getClientSessionId: () => undefined,
+    };
+    const handle = mountAgentDevtools({ transport, requestHandoff });
+    clickHandoff(handle);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(requestHandoff.mock.calls[0]![0].clientSessionId).toBeUndefined();
+    handle.destroy();
+  });
+
+  it('surfaces resumeCommand from requestHandoff into the modal ready state', async () => {
+    const requestHandoff = vi.fn().mockResolvedValue({
+      file: '/tmp/x.md',
+      command: "claude --append-system-prompt-file '/tmp/x.md'",
+      resumeCommand: "cd '/Users/dev/project' && claude --resume 'acp-XYZ'",
+    });
+    const handle = mountAgentDevtools({ requestHandoff });
+    clickHandoff(handle);
+    await Promise.resolve();
+    await Promise.resolve();
+    const resumeBox = handle.handoffModal.element.querySelector(
+      'pre[data-agent-devtools-handoff-resume-command]',
+    );
+    expect(resumeBox?.textContent ?? '').toContain("claude --resume 'acp-XYZ'");
+    handle.destroy();
+  });
 });
 
 describe('mountAgentDevtools — enrichPageContext wiring', () => {
@@ -835,5 +897,152 @@ describe('mountAgentDevtools — enrichPageContext wiring', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  describe('widget visibility + toggle hotkey', () => {
+    function pressToggleHotkey(target: Document | Element = document): void {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          ctrlKey: true,
+          shiftKey: true,
+          code: 'Semicolon',
+          key: ';',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
+
+    it('defaultVisible: false hides launcher and composer on mount', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      expect(handle.launcher.isVisible()).toBe(false);
+      expect(handle.launcher.element.style.display).toBe('none');
+      expect(handle.composer.element.style.display).toBe('none');
+      handle.destroy();
+    });
+
+    it('defaults to visible when defaultVisible is unset', () => {
+      const handle = mountAgentDevtools();
+      expect(handle.launcher.isVisible()).toBe(true);
+      expect(handle.launcher.element.style.display).toBe('flex');
+      handle.destroy();
+    });
+
+    it('Ctrl+Shift+; toggles launcher visibility', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      expect(handle.launcher.isVisible()).toBe(false);
+      pressToggleHotkey();
+      expect(handle.launcher.isVisible()).toBe(true);
+      expect(handle.launcher.element.style.display).toBe('flex');
+      pressToggleHotkey();
+      expect(handle.launcher.isVisible()).toBe(false);
+      expect(handle.launcher.element.style.display).toBe('none');
+      handle.destroy();
+    });
+
+    it('Meta+Shift+; toggles launcher visibility (mac)', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          metaKey: true,
+          shiftKey: true,
+          code: 'Semicolon',
+          key: ';',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(handle.launcher.isVisible()).toBe(true);
+      handle.destroy();
+    });
+
+    it('accepts the IME-shifted `:` key as the toggle trigger', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          ctrlKey: true,
+          shiftKey: true,
+          // code missing — some browsers omit it on synthesized events; the
+          // listener should fall back to `event.key`.
+          key: ':',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(handle.launcher.isVisible()).toBe(true);
+      handle.destroy();
+    });
+
+    it('ignores the hotkey without modifiers', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          code: 'Semicolon',
+          key: ';',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(handle.launcher.isVisible()).toBe(false);
+      handle.destroy();
+    });
+
+    it('ignores the hotkey when shift is absent', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          ctrlKey: true,
+          code: 'Semicolon',
+          key: ';',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(handle.launcher.isVisible()).toBe(false);
+      handle.destroy();
+    });
+
+    it('defers to the host when the keydown is already defaultPrevented', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      const host = (event: KeyboardEvent): void => event.preventDefault();
+      document.addEventListener('keydown', host, true);
+      pressToggleHotkey();
+      document.removeEventListener('keydown', host, true);
+      // The capture-phase host handler called preventDefault, so the
+      // orchestrator's listener (non-capture) should bail out.
+      expect(handle.launcher.isVisible()).toBe(false);
+      handle.destroy();
+    });
+
+    it('hides the composer and cancels the picker when toggled off', () => {
+      const handle = mountAgentDevtools();
+      // happy-dom does not synthesize the full pointer flow from a click
+      // MouseEvent, so reach the composer through its public API.
+      handle.composer.setVisible(true);
+      expect(handle.composer.element.style.display).toBe('flex');
+      pressToggleHotkey();
+      expect(handle.launcher.isVisible()).toBe(false);
+      expect(handle.composer.element.style.display).toBe('none');
+      handle.destroy();
+    });
+
+    it('disableToggleHotkey: true skips listener registration', () => {
+      const handle = mountAgentDevtools({
+        defaultVisible: false,
+        disableToggleHotkey: true,
+      });
+      pressToggleHotkey();
+      expect(handle.launcher.isVisible()).toBe(false);
+      handle.destroy();
+    });
+
+    it('destroy removes the keydown listener', () => {
+      const handle = mountAgentDevtools({ defaultVisible: false });
+      const setVisibleSpy = vi.spyOn(handle.launcher, 'setVisible');
+      handle.destroy();
+      pressToggleHotkey();
+      expect(setVisibleSpy).not.toHaveBeenCalled();
+      setVisibleSpy.mockRestore();
+    });
   });
 });
