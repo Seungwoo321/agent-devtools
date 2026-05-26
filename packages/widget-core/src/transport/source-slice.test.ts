@@ -154,7 +154,7 @@ describe('createSourceSliceFetcher', () => {
     }
   });
 
-  it('forwards an AbortSignal when provided', async () => {
+  it('forwards a derived AbortSignal so the internal timeout can interrupt the fetch', async () => {
     const { fetch, captured } = makeFetch({
       json: { code: 'x', startLine: 1, endLine: 1 },
     });
@@ -163,8 +163,59 @@ describe('createSourceSliceFetcher', () => {
       pairingToken: 'tok',
       fetch,
     });
-    const controller = new AbortController();
-    await fetcher('src/X.tsx', 1, controller.signal);
-    expect(captured[0]?.init.signal).toBe(controller.signal);
+    const callerController = new AbortController();
+    await fetcher('src/X.tsx', 1, callerController.signal);
+    const derived = captured[0]?.init.signal as AbortSignal | undefined;
+    expect(derived).toBeInstanceOf(AbortSignal);
+    expect(derived).not.toBe(callerController.signal);
+  });
+
+  it('returns null when the internal timeout fires before the dev server responds', async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) return;
+        if (signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'));
+          return;
+        }
+        signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
+          once: true,
+        });
+      });
+    }) as unknown as typeof fetch;
+
+    const fetcher = createSourceSliceFetcher({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      timeoutMs: 10,
+    });
+    const out = await fetcher('src/Picked.tsx', 4);
+    expect(out).toBeNull();
+  });
+
+  it('aborts the in-flight fetch when the caller signal fires', async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('aborted', 'AbortError')),
+          { once: true },
+        );
+      });
+    }) as unknown as typeof fetch;
+
+    const fetcher = createSourceSliceFetcher({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      timeoutMs: 0,
+    });
+    const caller = new AbortController();
+    const pending = fetcher('src/X.tsx', 1, caller.signal);
+    caller.abort();
+    const out = await pending;
+    expect(out).toBeNull();
   });
 });
