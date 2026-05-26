@@ -20,7 +20,7 @@
     "url": "https://github.com/Seungwoo321/agent-devtools/issues"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "type": "module",
   "main": "./dist/index.js",
