@@ -23,6 +23,9 @@ export { withAgentDevtools, type WithAgentDevtoolsOptions } from './config.js';
 export { mountAgentDevtoolsNext as mountAgentDevtools } from './mount.js';
 export {
   createDefaultTransport,
+  createRelatedImportsFetcher,
+  createSourceSliceFetcher,
+  createPageContextEnricher,
   createAgentInfoFetcher,
   createHandoffRequester,
   createSettingsStore,
