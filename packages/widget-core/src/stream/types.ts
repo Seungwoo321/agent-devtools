@@ -10,14 +10,22 @@
  * order as their own items, linked by `toolUseId`.
  */
 
+import type { PickedEvidence } from '../context/types.js';
+
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface UserMessageItem {
   readonly kind: 'user';
   readonly id: string;
   readonly text: string;
-  /** Short human label of the picked element, if any. */
-  readonly pickedSummary?: string;
+  /**
+   * Full evidence payload that was attached to this turn — same shape the
+   * server received. Carried on the user item so the rendered bubble can
+   * surface the structured detail (component chain, attributes, outer HTML,
+   * source slice, ...) behind an expand affordance, letting a developer
+   * audit exactly what reached the agent for that turn.
+   */
+  readonly pickedEvidence?: PickedEvidence;
 }
 
 export interface AssistantTextItem {
@@ -26,6 +34,19 @@ export interface AssistantTextItem {
   readonly id: string;
   readonly text: string;
   readonly streaming: boolean;
+}
+
+/**
+ * Transient placeholder rendered between the moment the user submits a turn
+ * and the moment the first concrete assistant event arrives (text delta,
+ * tool use start, error, or done). Lets the renderer paint the conventional
+ * three dot typing indicator so the surface never looks frozen while the
+ * model is warming up. Never persisted — a re-hydrated conversation has no
+ * in-flight turn to wait on.
+ */
+export interface AssistantPendingItem {
+  readonly kind: 'assistant-pending';
+  readonly id: string;
 }
 
 export interface ToolUseItem {
@@ -54,6 +75,7 @@ export interface ErrorItem {
 export type MessageItem =
   | UserMessageItem
   | AssistantTextItem
+  | AssistantPendingItem
   | ToolUseItem
   | ToolResultItem
   | ErrorItem;

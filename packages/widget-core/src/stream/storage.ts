@@ -10,6 +10,7 @@
  * conversation; a dropped write loses the most recent turn. The widget is
  * dev-only and the user can re-send a prompt.
  */
+import type { PickedEvidence } from '../context/types.js';
 import type { MessageItem } from './types.js';
 
 export const DEFAULT_CONVERSATION_STORAGE_KEY = 'agent-devtools:conversation';
@@ -65,13 +66,18 @@ export function saveMessages(
   try {
     // Drop transient `streaming` markers — a re-hydrated conversation never
     // resumes mid-stream; any half-streamed assistant text should look final
-    // after a reload (cursor gone, item present).
-    const serializable = items.map((item) => {
+    // after a reload (cursor gone, item present). Pending placeholders are
+    // also stripped because there is no in-flight turn to wait on after a
+    // reload — the conventional three dot indicator would lie about state.
+    const serializable: unknown[] = [];
+    for (const item of items) {
+      if (item.kind === 'assistant-pending') continue;
       if (item.kind === 'assistant-text' || item.kind === 'tool-use') {
-        return { ...item, streaming: false };
+        serializable.push({ ...item, streaming: false });
+        continue;
       }
-      return item;
-    });
+      serializable.push(item);
+    }
     storage.setItem(key, JSON.stringify(serializable));
     return true;
   } catch {
@@ -99,14 +105,16 @@ function sanitizeItem(value: unknown): MessageItem | null {
   const v = value as Record<string, unknown>;
   if (!isNonEmptyString(v.id)) return null;
   switch (v.kind) {
-    case 'user':
+    case 'user': {
       if (typeof v.text !== 'string') return null;
+      const evidence = sanitizePickedEvidence(v.pickedEvidence);
       return {
         kind: 'user',
         id: v.id,
         text: v.text,
-        ...(typeof v.pickedSummary === 'string' && { pickedSummary: v.pickedSummary }),
+        ...(evidence !== null && { pickedEvidence: evidence }),
       };
+    }
     case 'assistant-text':
       if (typeof v.text !== 'string') return null;
       return {
@@ -139,4 +147,85 @@ function sanitizeItem(value: unknown): MessageItem | null {
     default:
       return null;
   }
+}
+
+function sanitizePickedEvidence(value: unknown): PickedEvidence | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.componentName !== 'string' || typeof v.tagName !== 'string') return null;
+  if (typeof v.selector !== 'string' || typeof v.outerHTML !== 'string') return null;
+  const attributes =
+    typeof v.attributes === 'object' && v.attributes !== null
+      ? Object.fromEntries(
+          Object.entries(v.attributes as Record<string, unknown>).filter(
+            ([, val]) => typeof val === 'string',
+          ) as Array<[string, string]>,
+        )
+      : {};
+  const chain = Array.isArray(v.componentChain)
+    ? v.componentChain
+        .map((entry) => sanitizeChainEntry(entry))
+        .filter((entry): entry is PickedEvidence['componentChain'][number] => entry !== null)
+    : [];
+  const result: Record<string, unknown> = {
+    componentName: v.componentName,
+    tagName: v.tagName,
+    selector: v.selector,
+    outerHTML: v.outerHTML,
+    attributes,
+    componentChain: chain,
+  };
+  const source = sanitizeSourceLocation(v.source);
+  if (source) result.source = source;
+  const boundingRect = sanitizeBoundingRect(v.boundingRect);
+  if (boundingRect) result.boundingRect = boundingRect;
+  if (typeof v.text === 'string') result.text = v.text;
+  if (typeof v.id === 'string') result.id = v.id;
+  if (typeof v.className === 'string') result.className = v.className;
+  if (typeof v.propsSnapshot === 'string') result.propsSnapshot = v.propsSnapshot;
+  if (Array.isArray(v.relatedImports)) {
+    const imports = v.relatedImports.filter((entry): entry is string => typeof entry === 'string');
+    if (imports.length > 0) result.relatedImports = imports;
+  }
+  const slice = sanitizeSourceSlice(v.sourceSlice);
+  if (slice) result.sourceSlice = slice;
+  return result as unknown as PickedEvidence;
+}
+
+function sanitizeChainEntry(value: unknown): PickedEvidence['componentChain'][number] | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.componentName !== 'string') return null;
+  const source = sanitizeSourceLocation(v.source);
+  return source ? { componentName: v.componentName, source } : { componentName: v.componentName };
+}
+
+function sanitizeSourceLocation(value: unknown): NonNullable<PickedEvidence['source']> | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.fileName !== 'string' || typeof v.lineNumber !== 'number') return null;
+  return typeof v.columnNumber === 'number'
+    ? { fileName: v.fileName, lineNumber: v.lineNumber, columnNumber: v.columnNumber }
+    : { fileName: v.fileName, lineNumber: v.lineNumber };
+}
+
+function sanitizeBoundingRect(value: unknown): NonNullable<PickedEvidence['boundingRect']> | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const keys = ['x', 'y', 'width', 'height'] as const;
+  for (const k of keys) if (typeof v[k] !== 'number') return null;
+  return {
+    x: v.x as number,
+    y: v.y as number,
+    width: v.width as number,
+    height: v.height as number,
+  };
+}
+
+function sanitizeSourceSlice(value: unknown): NonNullable<PickedEvidence['sourceSlice']> | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.code !== 'string') return null;
+  if (typeof v.startLine !== 'number' || typeof v.endLine !== 'number') return null;
+  return { code: v.code, startLine: v.startLine, endLine: v.endLine };
 }

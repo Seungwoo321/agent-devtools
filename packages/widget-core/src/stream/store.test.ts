@@ -43,22 +43,80 @@ beforeEach(() => {
 });
 
 describe('createMessageStore', () => {
-  it('appends user messages', () => {
+  it('appends user messages and parks a pending assistant placeholder behind them', () => {
     const store = createMessageStore({ generateId: counterIds(), persist: false });
     const id = store.appendUserMessage('hello');
     expect(id).toBe('id-1');
-    expect(store.getItems()).toEqual([{ kind: 'user', id: 'id-1', text: 'hello' }]);
+    expect(store.getItems()).toEqual([
+      { kind: 'user', id: 'id-1', text: 'hello' },
+      { kind: 'assistant-pending', id: 'id-2' },
+    ]);
   });
 
-  it('includes pickedSummary when provided', () => {
+  it('includes pickedEvidence when provided', () => {
     const store = createMessageStore({ generateId: counterIds(), persist: false });
-    store.appendUserMessage('q', '<Button>');
+    const evidence = {
+      componentName: 'Button',
+      tagName: 'BUTTON',
+      selector: 'button.primary',
+      outerHTML: '<button class="primary">Go</button>',
+      attributes: { class: 'primary' },
+      componentChain: [],
+    } as const;
+    store.appendUserMessage('q', evidence);
     expect(store.getItems()[0]).toEqual({
       kind: 'user',
       id: 'id-1',
       text: 'q',
-      pickedSummary: '<Button>',
+      pickedEvidence: evidence,
     });
+  });
+
+  it('drops the pending placeholder on the first text delta of the turn', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('hi');
+    expect(store.getItems().some((it) => it.kind === 'assistant-pending')).toBe(true);
+    store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'reply' });
+    const kinds = store.getItems().map((it) => it.kind);
+    expect(kinds).not.toContain('assistant-pending');
+    expect(kinds).toContain('assistant-text');
+  });
+
+  it('drops the pending placeholder on the first tool-use-start of the turn', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('hi');
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'pick' });
+    const kinds = store.getItems().map((it) => it.kind);
+    expect(kinds).not.toContain('assistant-pending');
+    expect(kinds).toContain('tool-use');
+  });
+
+  it('drops the pending placeholder on an error event', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('hi');
+    store.applyEvent({ type: 'error', message: 'boom' });
+    const kinds = store.getItems().map((it) => it.kind);
+    expect(kinds).not.toContain('assistant-pending');
+    expect(kinds).toContain('error');
+  });
+
+  it('drops a leftover pending placeholder on done so degenerate empty turns finalise', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('hi');
+    store.applyEvent({ type: 'done' });
+    const kinds = store.getItems().map((it) => it.kind);
+    expect(kinds).not.toContain('assistant-pending');
+  });
+
+  it('clears a stale pending placeholder on the next user turn so only one is in flight at a time', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('first');
+    // No assistant event arrives — the previous turn was aborted. The next
+    // user turn must replace the stale pending placeholder, not stack a
+    // second one behind it.
+    store.appendUserMessage('second');
+    const pendings = store.getItems().filter((it) => it.kind === 'assistant-pending');
+    expect(pendings).toHaveLength(1);
   });
 
   it('accumulates assistant text deltas by blockId', () => {
@@ -253,7 +311,9 @@ describe('createMessageStore — persistence', () => {
     const second = createMessageStore({ generateId: counterIds(), storage });
     expect(second.getItems()).toEqual([
       { kind: 'user', id: 'id-1', text: 'first turn' },
-      { kind: 'assistant-text', id: 'id-2', text: 'reply', streaming: false },
+      // id-2 was consumed by the inert pending placeholder (stripped from
+      // storage); the assistant-text id therefore advances to id-3.
+      { kind: 'assistant-text', id: 'id-3', text: 'reply', streaming: false },
     ]);
   });
 
