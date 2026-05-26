@@ -71,13 +71,56 @@ describe('createSettingsPanel', () => {
     expect(store.get().provider).toBe('sdk');
   });
 
-  it('toggling a permission radio mutates the store', () => {
+  it('toggling a non-bypass permission radio mutates the store', () => {
     const store = createSettingsStore({ storage: makeStorage() });
     createSettingsPanel({ container, store, visible: true });
+    const planRadio = permissionInput('plan');
+    planRadio.checked = true;
+    planRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().permissionMode).toBe('plan');
+  });
+
+  it('selecting bypassPermissions prompts for confirmation and commits on accept', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    (window as unknown as { confirm: (msg?: string) => boolean }).confirm = () => true;
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const bypassRadio = permissionInput('bypassPermissions');
     bypassRadio.checked = true;
     bypassRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(store.get().permissionMode).toBe('bypassPermissions');
+    confirmSpy.mockRestore();
+  });
+
+  it('selecting bypassPermissions and cancelling reverts the radio + leaves store unchanged', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    store.set({ permissionMode: 'acceptEdits' });
+    createSettingsPanel({ container, store, visible: true });
+    (window as unknown as { confirm: (msg?: string) => boolean }).confirm = () => false;
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const bypassRadio = permissionInput('bypassPermissions');
+    bypassRadio.checked = true;
+    bypassRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(store.get().permissionMode).toBe('acceptEdits');
+    expect(permissionInput('acceptEdits').checked).toBe(true);
+    expect(permissionInput('bypassPermissions').checked).toBe(false);
+    confirmSpy.mockRestore();
+  });
+
+  it('does not re-prompt when bypassPermissions is already the active mode', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    store.set({ permissionMode: 'bypassPermissions' });
+    createSettingsPanel({ container, store, visible: true });
+    (window as unknown as { confirm: (msg?: string) => boolean }).confirm = () => true;
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const bypassRadio = permissionInput('bypassPermissions');
+    bypassRadio.checked = true;
+    bypassRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(store.get().permissionMode).toBe('bypassPermissions');
+    confirmSpy.mockRestore();
   });
 
   it('re-renders when the store changes from outside', () => {
