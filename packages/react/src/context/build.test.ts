@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildPageContext } from './build.js';
-import type { ErrorRecord } from '../observers/types.js';
+import type { ErrorRecord } from '@agent-devtools/widget-core';
 import type { FiberNodeLike, FiberSourceLocation } from '../fiber/types.js';
 
 beforeEach(() => {
