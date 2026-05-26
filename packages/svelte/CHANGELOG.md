@@ -1,5 +1,27 @@
 # @agent-devtools/svelte
 
+## 0.6.0
+
+### Minor Changes
+
+- [#8](https://github.com/Seungwoo321/agent-devtools/pull/8) [`a7e5ed5`](https://github.com/Seungwoo321/agent-devtools/commit/a7e5ed5fec27895545f511e21f0b9f0f7a51488b) Thanks [@Seungwoo321](https://github.com/Seungwoo321)! - Publish the resumable handoff flow and per-action permission controls that
+  landed on the repository after the 0.5.0 release. The terminal handoff modal
+  now offers a `claude --resume <session>` command beside the append system
+  prompt file, resolved from the client session through the ACP session store.
+  The agent runtime gates file edits, shell, web fetch, and MCP tool calls
+  through an action-aware permission policy instead of a single mode switch.
+  The Vite plugin hardens its enrichment endpoints and ships safer defaults,
+  the launcher gains visibility controls, and the picked-context preamble and
+  stream renderer carry richer evidence and pending placeholders. These
+  changes were merged but never reached npm because the merging pull request
+  carried no changeset; this changeset closes that gap.
+
+### Patch Changes
+
+- Updated dependencies [[`a7e5ed5`](https://github.com/Seungwoo321/agent-devtools/commit/a7e5ed5fec27895545f511e21f0b9f0f7a51488b)]:
+  - @agent-devtools/core@0.6.0
+  - @agent-devtools/widget-core@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
