@@ -14,7 +14,7 @@ agent-devtools/
 │   ├── core/          @agent-devtools/core         (server + widget shell, framework-agnostic, CLI bin)
 │   ├── harness-core/  @agent-devtools/harness-core (LLM provider 추상화 + loop, optional)
 │   ├── react/         @agent-devtools/react        (React 19 fiber walker + DOM picker + widget UI)
-│   ├── vite/          @agent-devtools/vite         (Vite 8 plugin, dev-only 주입 + 서버 spawn)
+│   ├── vite/          @agent-devtools/vite         (Vite 5–8 plugin, dev-only 주입 + 서버 spawn)
 │   └── e2e/           @agent-devtools/e2e          (Playwright E2E, private)
 ├── examples/
 │   └── react-vite/    @agent-devtools/example-react-vite (Phase 0 종단 검증 샘플)
@@ -37,7 +37,7 @@ pnpm e2e                  # Playwright (브라우저 사전 설치: pnpm e2e:ins
 pnpm --filter @agent-devtools/example-react-vite dev   # 예제 dev 서버
 ```
 
-엔진 요구: Node `>=22.12.0` (LTS Jod, Node 24+ 도 동작), pnpm `>=11.0.0`. `pnpm@11.1.1` 으로 핀.
+엔진 요구: Node `>=22.13.0` (LTS Jod, Node 24+ 도 동작), pnpm `>=11.0.0`. `pnpm@11.1.1` 으로 핀.
 
 ## 어댑터 작업 규칙
 
