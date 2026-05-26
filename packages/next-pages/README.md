@@ -5,6 +5,17 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/next-pages.svg)](https://www.npmjs.com/package/@agent-devtools/next-pages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
+## What this adapter provides
+
+- **Walker reuse** — Pages Router renders client components through the same React fiber tree the App Router does, so the React fiber walker (`__reactFiber$<nonce>`, `walkComponentAncestors`, `_debugSource` for React ≤18 + `_debugStack` for React 19) imported from `@agent-devtools/react` works without re-implementation.
+- **Pages Router boundary** — `bootstrapAgentDevtools` runs inside `pages/_app.tsx`. The dev server emits an env flag the bootstrap reads; production builds drop the env flag and the webpack alias eliminates the widget chain.
+- **Route file attachment** — the mount injects `resolveNextPagesRouteFile`, which reads `window.next.router.pathname` (Next's dynamic-segment form like `/blog/[slug]`) and emits `pages${pathname}` into `pageContext.route.routeFile`. The extension is deliberately omitted because Pages Router accepts `.tsx`/`.jsx`/`.ts`/`.js`/`.mdx` for the same route — the agent has the directory match and can glob for the actual file.
+- **Webpack alias on production** — `withAgentDevtools` rewrites `next.config` so client-side webpack resolves `@agent-devtools/{react,core,harness-core,widget-core}` to `false`. Even if a host accidentally static-imports the widget, the production bundle ends up zero bytes for those modules.
+- **React 18 + 19** — fiber `_debugSource` covers React 18; `_debugStack` covers React 19. The walker takes whichever is present.
+- **Widget UI** — `@agent-devtools/widget-core` shell, same shadow root contract.
+
+Peer range: `next >= 12`, `react >= 18`, `react-dom >= 18` (intentionally wide for Pages Router hosts that stayed on older majors).
+
 ## Features
 
 - **`withAgentDevtools`** — wraps `next.config.{js,mjs,ts}` so the dev server propagates the pairing token + base URL via environment variables, and installs a webpack alias that strips the widget chain from production bundles (Layer 1 of the dev-only guard).
