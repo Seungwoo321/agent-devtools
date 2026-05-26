@@ -109,7 +109,7 @@ if (import.meta.env.DEV) {
 
 ## 요구 사항
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - React `>= 19` dev 빌드 (picker 가 React 19 dev runtime 의 JSX source 정보를 읽습니다).
 
 ## 관련 링크

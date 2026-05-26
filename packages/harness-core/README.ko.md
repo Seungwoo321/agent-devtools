@@ -97,7 +97,7 @@ for await (const event of orchestratorLoop(
 
 ## 요구 사항
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 
 ## 관련 링크
 

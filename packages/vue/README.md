@@ -97,7 +97,7 @@ Walk the `.parent` chain leaf-first, yielding instances with a resolvable identi
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - Vue `>= 3.4` running in a dev build with `@vitejs/plugin-vue` (the walker reads `__file` injected by the plugin).
 
 ## Links

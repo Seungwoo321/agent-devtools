@@ -136,7 +136,7 @@ export default function App({ Component, pageProps }) {
 
 ## 요구 사항
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - Next.js `>= 15`, React `>= 19`
 
 ## 링크

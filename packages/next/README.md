@@ -147,7 +147,7 @@ Same options as `mountAgentDevtools` from `@agent-devtools/react`. Use this when
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - Next.js `>= 15`, React `>= 19`
 
 ## Links

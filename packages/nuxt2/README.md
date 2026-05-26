@@ -77,7 +77,7 @@ export default {
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - Nuxt `>= 2.15.0`, Vue `>= 2.7.0`
 
 ## Links

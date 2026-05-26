@@ -120,7 +120,7 @@ Thrown by the transport when the reader receives no chunk for longer than `strea
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - React `>= 19` running in a dev build (the picker reads JSX source via the React 19 dev runtime).
 
 ## Links
