@@ -78,8 +78,14 @@ Vite dev 서버 옆에 에이전트 서버를 함께 띄울지 결정한다. 기
 
 ### `workspace` (string, 기본 Vite `config.root`)
 
-에이전트가 읽고 쓸 수 있는 워크스페이스 루트. 기본값은
-`configureServer` 시점에 잡힌 Vite `config.root` 다.
+에이전트 서버가 "프로젝트" 로 취급하는 워크스페이스 루트. 이 값은
+스폰되는 Claude Code 자식 프로세스의 canonical `cwd` 가 되고,
+picker preamble 의 source-slice 읽기에 쓰이는 `FileTools` 가
+`PathOutsideWorkspaceError` 로 강제하는 경계이기도 하다. **OS 레벨
+샌드박스는 아니다** — SDK 가 자체적으로 호출하는 도구는 호스트
+사용자의 파일 시스템 권한을 그대로 상속한다. 그 디렉토리에서
+터미널로 `claude` 를 직접 실행한 것과 동일한 권한 표면이다.
+기본값은 `configureServer` 시점에 잡힌 Vite `config.root` 다.
 
 경로 해석 규칙:
 

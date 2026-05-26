@@ -6,6 +6,17 @@ Nuxt 3 module for [agent-devtools](https://github.com/Seungwoo321/agent-devtools
 
 > **Dev-only.** This module never runs in `nuxt build` / `nuxt generate` output. It is the Nuxt-side wiring of the [2-layer dev-only guard](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/dev-only-guard.md).
 
+## What this adapter provides
+
+- **Walker reuse** — DOM → component via `__vueParentComponent`, `.parent` walk, `__file` source extraction is delegated to `@agent-devtools/vue`. No duplicate walker code lives here.
+- **Module setup** — `defineNuxtModule` `setup` reads `nuxt.options.dev`. On `nuxt build` / `nuxt generate` it returns before `addPlugin` is called, so the widget chain never enters the bundle graph at all (Layer 1).
+- **Client plugin** — registered through `addPlugin({ src, mode: 'client' })`. On the first client render the plugin calls `mountAgentDevtoolsVue` exactly once. The Vue adapter throws if `NODE_ENV === 'production'` (Layer 2).
+- **Route attachment** — the client plugin reads the leaf record of `$router.currentRoute.value.matched` and forwards its `components.default.__file` (the `pages/**/*.vue` path that @vitejs/plugin-vue stamped on the SFC) into `pageContext.route.routeFile`, so the agent knows the exact file that defined the current screen without grepping `pages/`.
+- **No transpile workaround** — Nuxt 3's Vite-powered build resolves the widget chain ESM natively. Compare with `@agent-devtools/nuxt2` which has to add the chain to `build.transpile`.
+- **Widget UI** — `@agent-devtools/widget-core` shell.
+
+Peer range: `nuxt >= 3`, `vue >= 3`.
+
 ## Install
 
 ```bash
