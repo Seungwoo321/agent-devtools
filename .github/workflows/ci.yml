@@ -1,8 +1,16 @@
 name: CI
 
+# main is intentionally absent from the push trigger. Every change reaches
+# main through a develop -> main pull request, which already runs this
+# workflow against the merge result. A second post-merge run on main would
+# only duplicate that validation while racing the Publish and Sync workflows
+# on the same push — and because Publish does not depend on CI, a cancelled
+# or failed main-push CI is a misleading "deployment failed" signal that has
+# no bearing on whether the release succeeded. develop keeps the push trigger
+# because it receives direct pushes that never open a pull request.
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]
   pull_request:
     branches: [main, develop]
 
@@ -14,6 +22,33 @@ permissions:
   contents: read
 
 jobs:
+  # Release-hygiene gate. Blocks a pull request that edits publishable
+  # package source without a changeset, so merged feature work can never
+  # publish nothing for lack of a version bump. Pull-request only — there is
+  # no base to diff a direct develop push against, and develop publishes a
+  # snapshot beta on every push regardless of changesets.
+  changeset:
+    name: changeset present
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Verify a changeset accompanies publishable source changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-changeset.mjs
+
   quality:
     name: typecheck + lint + test + build
     runs-on: ubuntu-latest
