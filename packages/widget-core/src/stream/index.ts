@@ -27,7 +27,11 @@ export {
   type ConversationStorageOptions,
 } from './storage.js';
 export {
+  createAnimationFrameScheduler,
   createStreamRenderer,
   type CreateStreamRendererOptions,
+  type FrameScheduler,
   type StreamRendererHandle,
 } from './renderer.js';
+
+export type { AssistantPendingItem } from './types.js';
