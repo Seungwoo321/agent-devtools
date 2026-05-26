@@ -13,13 +13,14 @@
  *     pull `toolUseId`; if no match (out-of-order delivery), the result is
  *     still appended so the UI doesn't silently drop it.
  */
+import type { PickedEvidence } from '../context/types.js';
 import { loadMessages, saveMessages, type ConversationStorageOptions } from './storage.js';
 import type { MessageItem, StreamEvent, ToolUseItem } from './types.js';
 
 export interface MessageStore {
   getItems(): readonly MessageItem[];
   subscribe(listener: () => void): () => void;
-  appendUserMessage(text: string, pickedSummary?: string): string;
+  appendUserMessage(text: string, pickedEvidence?: PickedEvidence): string;
   applyEvent(event: StreamEvent): void;
   clear(): void;
 }
@@ -78,6 +79,25 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
     return it && it.kind === 'tool-use' ? it : null;
   }
 
+  // Pending placeholders are only ever pushed at the end of `items` (right
+  // after the latest user message) and only ever dropped from the end (on
+  // the first concrete assistant content event or before the next user
+  // turn). Because indexed items — assistant-text and tool-use, tracked in
+  // `blockIndex` — always sit before any in-flight pending placeholder,
+  // removing pending entries never shifts an indexed item's position.
+  function clearPending(): boolean {
+    let changed = false;
+    const next = items.filter((item) => {
+      if (item.kind === 'assistant-pending') {
+        changed = true;
+        return false;
+      }
+      return true;
+    });
+    if (changed) items = next;
+    return changed;
+  }
+
   function applyEvent(event: StreamEvent): void {
     switch (event.type) {
       case 'message-start':
@@ -86,6 +106,7 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
       case 'text-delta': {
         const existingIdx = blockIndex.get(event.blockId);
         if (existingIdx === undefined) {
+          clearPending();
           const id = generateId();
           const idx = pushItem({
             kind: 'assistant-text',
@@ -113,6 +134,7 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
       }
       case 'tool-use-start': {
         if (blockIndex.has(event.blockId)) return;
+        clearPending();
         const id = generateId();
         const idx = pushItem({
           kind: 'tool-use',
@@ -157,6 +179,7 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
         return;
       }
       case 'error': {
+        clearPending();
         const id = generateId();
         pushItem({ kind: 'error', id, message: event.message });
         notify();
@@ -164,8 +187,9 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
       }
       case 'done': {
         // Mark all streaming items finalized so the renderer can drop the
-        // cursor / pulsing indicator.
-        let changed = false;
+        // cursor / pulsing indicator, and drop any in-flight pending
+        // placeholder (degenerate case: model returned no content blocks).
+        let changed = clearPending();
         items = items.map((item) => {
           if (item.kind === 'assistant-text' && item.streaming) {
             changed = true;
@@ -193,13 +217,20 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
         listeners.delete(listener);
       };
     },
-    appendUserMessage(text, pickedSummary): string {
+    appendUserMessage(text, pickedEvidence): string {
+      // Drop any in-flight pending placeholder from an aborted previous
+      // turn so the new pending marker is always the only one at the end.
+      clearPending();
       const id = generateId();
       pushItem({
         kind: 'user',
         id,
         text,
-        ...(pickedSummary !== undefined && { pickedSummary }),
+        ...(pickedEvidence !== undefined && { pickedEvidence }),
+      });
+      pushItem({
+        kind: 'assistant-pending',
+        id: generateId(),
       });
       notify();
       return id;

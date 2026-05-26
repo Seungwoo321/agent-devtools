@@ -187,6 +187,70 @@ describe('saveMessages', () => {
     expect(raw).toContain('"streaming":false');
     expect(raw).not.toContain('"streaming":true');
   });
+
+  it('strips pending placeholders so a reloaded conversation never shows a stale typing indicator', () => {
+    const storage = makeStorage();
+    saveMessages(
+      [
+        { kind: 'user', id: 'u1', text: 'hi' },
+        { kind: 'assistant-pending', id: 'p1' },
+      ],
+      { storage },
+    );
+    const raw = storage.getItem(DEFAULT_CONVERSATION_STORAGE_KEY) ?? '';
+    expect(raw).not.toContain('assistant-pending');
+    expect(loadMessages({ storage })).toEqual([{ kind: 'user', id: 'u1', text: 'hi' }]);
+  });
+
+  it('round-trips the picked evidence payload on user messages', () => {
+    const storage = makeStorage();
+    const evidence = {
+      componentName: 'TodoItem',
+      tagName: 'BUTTON',
+      selector: 'button.todo-item',
+      outerHTML: '<button class="todo-item">Buy milk</button>',
+      attributes: { class: 'todo-item', 'data-id': '7' },
+      componentChain: [
+        {
+          componentName: 'TodoItem',
+          source: { fileName: 'src/TodoItem.tsx', lineNumber: 23 },
+        },
+      ],
+      source: { fileName: 'src/TodoItem.tsx', lineNumber: 23 },
+      boundingRect: { x: 10, y: 20, width: 120, height: 32 },
+      propsSnapshot: '{"id":7}',
+      relatedImports: ['src/types.ts'],
+      sourceSlice: {
+        code: 'function TodoItem() {}',
+        startLine: 20,
+        endLine: 24,
+      },
+    } as const;
+    saveMessages([{ kind: 'user', id: 'u1', text: 'explain', pickedEvidence: evidence }], {
+      storage,
+    });
+    const reloaded = loadMessages({ storage });
+    expect(reloaded).toHaveLength(1);
+    const first = reloaded[0];
+    if (first?.kind !== 'user') throw new Error('expected user item');
+    expect(first.pickedEvidence).toEqual(evidence);
+  });
+
+  it('drops malformed picked evidence on rehydration without losing the user message', () => {
+    const storage = makeStorage();
+    storage.setItem(
+      DEFAULT_CONVERSATION_STORAGE_KEY,
+      JSON.stringify([
+        {
+          kind: 'user',
+          id: 'u1',
+          text: 'hi',
+          pickedEvidence: { componentName: 42, tagName: null },
+        },
+      ]),
+    );
+    expect(loadMessages({ storage })).toEqual([{ kind: 'user', id: 'u1', text: 'hi' }]);
+  });
 });
 
 describe('clearMessages', () => {
