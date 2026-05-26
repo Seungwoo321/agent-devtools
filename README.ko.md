@@ -5,14 +5,28 @@
 <h1 align="center">agent-devtools</h1>
 
 <p align="center">
-  React/Vue/Next/Nuxt 용 인페이지 에이전트 개발자도구 OSS — 본인의 LLM 구독을 그대로 사용.
+  <strong>당신이 띄워둔 앱 안의 Claude Code.</strong>
+</p>
+
+<p align="center">
+  화면 위 어떤 컴포넌트든 픽해서 가리키면, 떠 있는 채팅창 안에서 에이전트가 코드를 읽고 직접 파일을 고친다. IDE 로 메시지를 떠넘기지도, 새 계정을 만들지도 않는다. 본인의 Claude Pro/Max 구독을 그대로 쓴다.
 </p>
 
 <p align="center">
   <a href="./README.md">English</a> · <strong>한국어</strong>
 </p>
 
-브라우저에서 개발 중인 페이지에 떠 있는 floating 채팅창. 자연어로 UI/기능 수정을 요청하면, **그 채팅창 안에서 직접** 에이전트가 코드를 읽고 수정한다. 별도 IDE 가 필요 없다.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@agent-devtools/core"><img src="https://img.shields.io/npm/v/@agent-devtools/core?label=npm&color=cb3837" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@agent-devtools/core"><img src="https://img.shields.io/node/v/@agent-devtools/core?color=339933" alt="Node engine" /></a>
+  <a href="https://github.com/Seungwoo321/agent-devtools/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Seungwoo321/agent-devtools/ci.yml?branch=main&label=ci" alt="ci" /></a>
+  <a href="https://agent-devtools-docs.vercel.app/guides/security/#dev-only-guard-2-layer"><img src="https://img.shields.io/badge/production-no--leak%20verified-2ea44f" alt="production no-leak verified" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Seungwoo321/agent-devtools" alt="license" /></a>
+</p>
+
+<p align="center">
+  <sub><strong>production no-leak</strong> 배지는 <a href="https://agent-devtools-docs.vercel.app/guides/security/#dev-only-guard-2-layer">2-layer dev-only guard</a> 의 결과다 — 빌드 시점에 production 그래프에서 위젯 chain 을 배제하고, 런타임에 <code>NODE_ENV</code> 를 한 번 더 검사한다. 모든 example 은 심볼 스캐너 (<a href="./scripts/check-no-leak.mjs"><code>scripts/check-no-leak.mjs</code></a>) 를 갖추며 CI 매트릭스가 실제 <code>dist/</code>, <code>.next/</code>, <code>.output/</code> 산출물을 매 push 마다 검사한다.</sub>
+</p>
 
 ## Demo
 
@@ -21,7 +35,23 @@
 위젯 안에서 자연어로 "Counter 제목 글씨 키우고 빨간색으로 바꿔줘" 라고 지시하면 에이전트가 `App.tsx` 와 `styles.css` 를 읽고 `Edit` 으로 수정한다. Vite HMR 이 변경된 CSS 를 즉시 반영해 같은 화면 안에서 결과까지 확인된다.
 
 - 사용자 가이드 (en / ko): <https://agent-devtools-docs.vercel.app/>
+- 작동 원리 (한 장의 다이어그램): <https://agent-devtools-docs.vercel.app/guides/how-it-works/>
 - 컨텍스트·결정 로그·스코프: [`CONTEXT.md`](./CONTEXT.md)
+
+## 카테고리 안에서의 위치
+
+가장 가까운 이웃 도구들과의 사실 기반 비교. 우열이 아니라 축이 다르다.
+
+| 축                     | agent-devtools                                                                                               | In-page → IDE 포워더 (예: Stagewise)    | 브라우저 devtools 확장 (예: React DevTools) | In-app 피드백 위젯 (예: ProductLift, Pastel) |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| 누가 코드를 수정하는가 | 에이전트, 브라우저 탭 안에서                                                                                 | 별도 에디터/IDE 의 에이전트가 ping 받음 | 아무도 — 읽기 전용 inspection               | 아무도 — 백로그 아이템으로 캡처              |
+| IDE 필요 여부          | 아니오                                                                                                       | 예 (Cursor / VS Code 등)                | 아니오 (브라우저만)                         | 아니오                                       |
+| 픽한 컨텍스트 패키징   | `PickedEvidence` (컴포넌트 체인, 소스 경로, selector, outerHTML — source slice / related imports 로 확장 중) | URL + 스크린샷 + 선택 element           | 해당 없음                                   | 스크린샷 + 페이지 URL                        |
+| 구독 모델              | 본인의 Claude Pro/Max (CLI OAuth 재사용)                                                                     | 본인의 모델 API 키                      | 없음                                        | 벤더 구독                                    |
+| Production 번들 바이트 | 0 (2-layer dev-only guard)                                                                                   | 도구마다 다름                           | 0 (확장이라 별도)                           | production 번들에 SDK 임베드                 |
+| 권한 경계              | action 별 정책 (`bash`/`webFetch`/`mcpTool` 기본 ask)                                                        | 호스트 에디터의 권한 모델 상속          | 읽기 전용                                   | 해당 없음 (코드 실행 없음)                   |
+
+"브라우저 탭 안에서 에이전트가 직접 수정, IDE 불필요, 추가 구독 없음" 행이 agent-devtools 가 차지하려는 자리다. 다른 행은 적이 아니라 다른 자리의 이웃이다.
 
 ## Quick Start
 
@@ -213,21 +243,24 @@ export default function App({ Component, pageProps }: AppProps) {
 
 ## Packages
 
-| Package                                                   | Version | Description                                               |
-| --------------------------------------------------------- | ------- | --------------------------------------------------------- |
-| [`@agent-devtools/core`](./packages/core)                 | `0.1.0` | 프레임워크-무관 코어 (server, agent engine, widget shell) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | 도메인-무관 loop 전략 + LLM provider 추상화               |
-| [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context         |
-| [`@agent-devtools/vue`](./packages/vue)                   | `0.1.0` | Vue 3 vnode walker + DOM picker + closed shadow widget    |
-| [`@agent-devtools/vue2`](./packages/vue2)                 | `0.1.0` | Vue 2.7 컴포넌트 트리 walker + picker + widget            |
-| [`@agent-devtools/angular`](./packages/angular)           | `0.1.0` | Angular Ivy walker + picker + widget                      |
-| [`@agent-devtools/svelte`](./packages/svelte)             | `0.1.0` | Svelte 4/5 `__svelte_meta` resolver + picker + widget     |
-| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | `0.1.0` | SvelteKit layout mount + server `handle` 바인딩           |
-| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 App Router wrapper — webpack alias + bootstrap |
-| [`@agent-devtools/next-pages`](./packages/next-pages)     | `0.1.0` | Next.js Pages Router wrapper — `>= 12` 호환 동일 패턴     |
-| [`@agent-devtools/nuxt`](./packages/nuxt)                 | `0.1.0` | Nuxt 3 module — dev-only plugin 자동 주입                 |
-| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | `0.1.0` | Nuxt 2 module — dev-only client plugin 자동 주입          |
-| [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard       |
+모든 `@agent-devtools/*` 패키지는 단일 공유 버전 라인으로 함께 publish 된다 — 상단의 npm 배지가 항상 현재 릴리즈를 가리킨다.
+
+| Package                                                   | Description                                               |
+| --------------------------------------------------------- | --------------------------------------------------------- |
+| [`@agent-devtools/core`](./packages/core)                 | 프레임워크-무관 코어 (server, agent engine, transport)    |
+| [`@agent-devtools/widget-core`](./packages/widget-core)   | 프레임워크-무관 widget shell (closed Shadow DOM mount)    |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | 도메인-무관 loop 전략 + LLM provider 추상화               |
+| [`@agent-devtools/react`](./packages/react)               | React 19 fiber walker + DOM picker + auto context         |
+| [`@agent-devtools/vue`](./packages/vue)                   | Vue 3 vnode walker + DOM picker + closed shadow widget    |
+| [`@agent-devtools/vue2`](./packages/vue2)                 | Vue 2.7 컴포넌트 트리 walker + picker + widget            |
+| [`@agent-devtools/angular`](./packages/angular)           | Angular Ivy walker + picker + widget                      |
+| [`@agent-devtools/svelte`](./packages/svelte)             | Svelte 4/5 `__svelte_meta` resolver + picker + widget     |
+| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | SvelteKit layout mount + server `handle` 바인딩           |
+| [`@agent-devtools/next`](./packages/next)                 | Next.js 15 App Router wrapper — webpack alias + bootstrap |
+| [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — `>= 12` 호환 동일 패턴     |
+| [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin 자동 주입                 |
+| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin 자동 주입          |
+| [`@agent-devtools/vite`](./packages/vite)                 | Vite 8 plugin — auto-inject widget + dev-only guard       |
 
 ## Security defaults
 
@@ -236,10 +269,12 @@ export default function App({ Component, pageProps }: AppProps) {
 - **127.0.0.1 binding** — 로컬 에이전트 서버는 loopback only. 외부 네트워크 노출 없음. 점유 시 sequential fallback.
 - **페어링 토큰** — CLI 시작마다 회전, 메모리 only, 디스크 미저장, URL embed 금지. `Authorization: Bearer …` 헤더로만 전달.
 - **closed Shadow DOM** — 호스트 앱 CSS/DOM·상태 격리. React 19 (또는 Vue 3) 별도 모듈 인스턴스로 호스트와의 dual-tree 경계를 둔다.
+- **액션 인지 권한 정책** — 런타임이 ACP `ToolKind` 별로 권한 요청을 판정한다. 디폴트 정책은 `fileEdit` (`edit` / `delete` / `move`) 만 자동 허용하고 `bash`, `webFetch`, `mcpTool` 은 사용자가 명시적으로 `bypassPermissions` 로 올리지 않는 한 cancelled. 전체 모드 × 카테고리 매트릭스는 [permission-modes 가이드](https://agent-devtools-docs.vercel.app/guides/permission-modes/) 참조.
+- **워크스페이스 경계 (정직한 범위)** — `workspace` 옵션은 스폰되는 Claude Code 자식 프로세스의 canonical `cwd` 이자, picker preamble 의 source-slice 읽기에 쓰이는 in-process `FileTools` 가 `PathOutsideWorkspaceError` 로 강제하는 경계다. **OS 레벨 샌드박스는 아니다** — SDK 가 자체 호출하는 도구는 호스트 사용자의 파일 시스템 권한을 그대로 상속한다. 그 디렉토리에서 터미널로 `claude` 를 직접 실행한 것과 동일한 권한 표면이다. 전체 범위는 [보안 모델](https://agent-devtools-docs.vercel.app/guides/security/#workspace-boundary--%EC%8B%A4%EC%A0%9C%EB%A1%9C-%EA%B0%95%EC%A0%9C%EB%90%98%EB%8A%94-%EB%B2%94%EC%9C%84) 참조.
 
 ## Requirements
 
-- Node.js **≥24** (LTS Krypton)
+- Node.js **≥22.12** (LTS Jod) — Node 24+ 에서도 동작
 - pnpm **≥11**
 - (사용 시) 활성 Claude Pro/Max 구독 (Agent SDK Credit 포함, 2026-06-15 시행)
 
