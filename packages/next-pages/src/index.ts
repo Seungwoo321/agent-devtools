@@ -19,6 +19,7 @@
  */
 export { mountAgentDevtoolsNextPages, type MountAgentDevtoolsNextPagesOptions } from './mount.js';
 export { withAgentDevtools, type WithAgentDevtoolsOptions } from './config.js';
+export { resolveNextPagesRouteFile } from './route.js';
 // Framework-uniform aliases. The vite plugin's injected bootstrap imports
 // these names verbatim from whichever adapter package the host project
 // resolves to, so every adapter must surface the same symbols. Next-pages'
@@ -28,6 +29,9 @@ export { withAgentDevtools, type WithAgentDevtoolsOptions } from './config.js';
 export { mountAgentDevtoolsNextPages as mountAgentDevtools } from './mount.js';
 export {
   createDefaultTransport,
+  createRelatedImportsFetcher,
+  createSourceSliceFetcher,
+  createPageContextEnricher,
   createAgentInfoFetcher,
   createHandoffRequester,
   createSettingsStore,
