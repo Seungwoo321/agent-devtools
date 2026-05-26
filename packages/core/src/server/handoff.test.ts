@@ -177,4 +177,59 @@ describe('writeHandoffArtifact', () => {
     );
     expect(result.command).toContain("cd '/Users/dev/it'\\''s project' && ");
   });
+
+  it('omits resumeCommand when no acpSessionId is provided', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+        workspaceRoot: '/Users/dev/project',
+      },
+    );
+    expect(result.resumeCommand).toBeUndefined();
+  });
+
+  it('emits a cd-prefixed resumeCommand when both workspaceRoot and acpSessionId are present', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+        workspaceRoot: '/Users/dev/project',
+        acpSessionId: 'acp-session-abc123',
+      },
+    );
+    expect(result.resumeCommand).toBe(
+      "cd '/Users/dev/project' && claude --resume 'acp-session-abc123'",
+    );
+  });
+
+  it('emits a bare resumeCommand when only acpSessionId is present', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+        acpSessionId: 'acp-session-abc123',
+      },
+    );
+    expect(result.resumeCommand).toBe("claude --resume 'acp-session-abc123'");
+  });
+
+  it('POSIX-escapes embedded apostrophes in the acpSessionId', async () => {
+    const result = await writeHandoffArtifact(
+      { conversation: [] },
+      {
+        tmpDir: '/var/tmp/test',
+        generateId: () => 'fixed-id',
+        writeFile: async () => undefined,
+        acpSessionId: "weird'id",
+      },
+    );
+    expect(result.resumeCommand).toBe("claude --resume 'weird'\\''id'");
+  });
 });
