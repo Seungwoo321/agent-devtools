@@ -13,8 +13,11 @@
  * settings panel, not the chat composer.
  *
  * Cwd: when a workspace is configured on the server, its canonical root is
- * passed as the SDK `cwd`. Combined with the workspace boundary enforced by
- * `FileTools`, this scopes the agent's reads/writes to the project.
+ * passed as the SDK `cwd`. The Claude Code child process inherits the host
+ * user's OS file-system permissions — agent-devtools does NOT layer an
+ * additional sandbox on top of the SDK. The workspace-bounded `FileTools`
+ * (see `../files/`) is a separate handle used by the picker preamble path to
+ * read source slices safely; it does not constrain the SDK's own tool calls.
  *
  * Streaming: SDK messages are translated into the ACP envelope wire format
  * (`acp.session_update | acp.result | acp.error`) before yielding, so the
