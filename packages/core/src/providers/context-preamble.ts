@@ -179,6 +179,36 @@ function appendPickedBlock(lines: string[], picked: Record<string, unknown> | un
     lines.push(picked.propsSnapshot);
     lines.push('```');
   }
+
+  // Dev-server enrichment: the widget's `enrichPageContext` hook
+  // populates `relatedImports` from the module graph and `sourceSlice`
+  // from a server-side file read. When present, render them inline so
+  // the agent gets the same evidence the user saw — no extra Read call
+  // needed for short prompts like "explain this".
+  const relatedImports = Array.isArray(picked.relatedImports) ? picked.relatedImports : [];
+  if (relatedImports.length > 0) {
+    lines.push('Related imports:');
+    for (const entry of relatedImports) {
+      if (typeof entry !== 'string' || entry.length === 0) continue;
+      lines.push(`  - ${entry}`);
+    }
+  }
+
+  const sourceSlice = isPlainObject(picked.sourceSlice) ? picked.sourceSlice : undefined;
+  if (
+    sourceSlice &&
+    typeof sourceSlice.code === 'string' &&
+    sourceSlice.code.length > 0 &&
+    typeof sourceSlice.startLine === 'number' &&
+    typeof sourceSlice.endLine === 'number'
+  ) {
+    lines.push(
+      `Source slice (lines ${String(sourceSlice.startLine)}-${String(sourceSlice.endLine)}):`,
+    );
+    lines.push('```');
+    lines.push(sourceSlice.code);
+    lines.push('```');
+  }
 }
 
 interface SourceSlice {
