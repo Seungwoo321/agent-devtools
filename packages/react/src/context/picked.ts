@@ -15,13 +15,18 @@
  *   - componentChain stops at 10 named ancestors — far more than any
  *     real explanation needs.
  */
+import {
+  buildSelector,
+  type BoundingRect,
+  type BuildSelectorOptions,
+  type ComponentChainEntry,
+  type PickedEvidence,
+} from '@agent-devtools/widget-core';
 import { resolveComponentName } from '../fiber/component-name.js';
 import { getFiberForElement } from '../fiber/dom-bridge.js';
 import { resolveFiberSource } from '../fiber/source.js';
 import { walkComponentAncestors } from '../fiber/walker.js';
 import type { FiberNodeLike } from '../fiber/types.js';
-import { buildSelector, type BuildSelectorOptions } from './selector.js';
-import type { BoundingRect, ComponentChainEntry, PickedEvidence } from './types.js';
 
 const DEFAULT_TEXT_LIMIT = 120;
 const DEFAULT_OUTER_HTML_LIMIT = 4096;
