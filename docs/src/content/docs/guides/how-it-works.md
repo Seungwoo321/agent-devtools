@@ -64,7 +64,7 @@ agent-devtools 는 이미 당신 머신에 있는 네 가지 — **개발 중인
 
 - `127.0.0.1` 에만 bind 한다. 외부 포트도, reverse-proxy 친화 모드도 없다.
 - 모든 요청을 in-memory 페어링 토큰과 `timingSafeEqual` 로 비교한다. 새 프로세스 = 새 토큰.
-- 에이전트가 만지는 모든 파일 경로를 프로젝트 워크스페이스 기준으로 해소하고, 그 밖은 거부한다. 자세한 범위는 [보안 모델 → 워크스페이스 스코프](./security/) 참조.
+- 에이전트가 만지는 모든 파일 경로를 프로젝트 워크스페이스 기준으로 해소하고, 그 밖은 거부한다. 자세한 범위는 [보안 모델 → 워크스페이스 스코프](./security/#workspace-boundary--실제로-강제되는-범위) 참조.
 
 ### 하니스 (`@agent-devtools/harness-core`)
 
@@ -80,8 +80,8 @@ agent-devtools 는 이미 당신 머신에 있는 네 가지 — **개발 중인
 
 마케팅 문구가 아니라 서로 독립된 세 개의 경계가 모델을 정직하게 유지한다.
 
-1. **dev-only 2-layer guard** — 빌드 시점에 위젯 chain 을 production 그래프에서 배제하고, 런타임에 `NODE_ENV` 를 한 번 더 검사. 자세히는 [보안 모델 → dev-only guard](./security/) 참조.
-2. **루프백 전용 bind + 페어링 토큰** — 외부 접근 가능한 표면 없음, URL 미포함, constant-time 비교. 자세히는 [보안 모델 → 페어링 토큰](./security/) 참조.
+1. **dev-only 2-layer guard** — 빌드 시점에 위젯 chain 을 production 그래프에서 배제하고, 런타임에 `NODE_ENV` 를 한 번 더 검사. 자세히는 [보안 모델 → dev-only guard](./security/#dev-only-guard-2-layer) 참조.
+2. **루프백 전용 bind + 페어링 토큰** — 외부 접근 가능한 표면 없음, URL 미포함, constant-time 비교. 자세히는 [보안 모델 → 페어링 토큰](./security/#pairing-token) 참조.
 3. **action 별 권한 정책** — 파괴적 툴 (`bash`, `webFetch`, `mcpTool`) 은 permissive 모드에서도 기본 `ask`. 자세히는 [권한 모드](./permission-modes/) 참조.
 
 ## 다음 단계

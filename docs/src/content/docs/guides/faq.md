@@ -5,7 +5,7 @@ description: 자주 묻는 질문 — 지원 스택, 프로덕션 사용 가능 
 
 ## Q. 어떤 프레임워크 스택을 지원하나요?
 
-**A.** 네 가지 어댑터가 제공됩니다 — **React + Vite**, **Vue 3 + Vite**, **Next.js 15** (App Router + Pages Router), **Nuxt 3**.
+**A.** 열 가지 어댑터가 제공됩니다 — **React + Vite**, **Vue 3 + Vite**, **Vue 2 + Vite**, **Angular + Vite**, **Svelte + Vite**, **SvelteKit**, **Next.js 15** (App Router), **Next.js** (Pages Router), **Nuxt 3**, **Nuxt 2**.
 
 각 어댑터는 [`examples/`](https://github.com/Seungwoo321/agent-devtools/tree/main/examples) 에 실행 가능한 예제와, CI 가 강제하는 `smoke:no-leak` 회귀 스캐너를 함께 갖습니다 — 실제 production 산출물 (`dist/`, `.next/`, `.output/`) 을 훑어 widget chain 식별자가 한 번이라도 등장하면 빌드가 실패합니다. 스택별 설치 방법은 [설치 가이드](/guides/installation/) 와 README 의 Packages 표를 참고하세요.
 

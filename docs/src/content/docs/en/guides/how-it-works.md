@@ -64,7 +64,7 @@ agent-devtools wires four moving parts that already exist on your machine into a
 
 - Binds to `127.0.0.1` only. There is no external port and no reverse-proxy friendly mode.
 - Every request is checked against the in-memory pairing token (`timingSafeEqual`). A new process means a new token.
-- Resolves every file path the agent touches relative to the project workspace and rejects anything outside it. This is the workspace guard called out on the [security page](./security/#workspace-scope-honest-statement).
+- Resolves every file path the agent touches relative to the project workspace and rejects anything outside it. This is the workspace guard called out on the [security page](./security/#workspace-boundary--what-it-does-and-does-not-enforce).
 
 ### Harness (`@agent-devtools/harness-core`)
 

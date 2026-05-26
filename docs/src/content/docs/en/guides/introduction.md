@@ -37,10 +37,11 @@ agent-devtools merges the two worlds.
 - **Developers who already use their own Claude Pro / Max subscription.**
   agent-devtools does not require a new API billing relationship. It reuses
   the `~/.claude` OAuth session of your local Claude Code CLI as-is.
-- **Product teams building on React, Vue, Next, or Nuxt.**
-  Official adapters ship for React + Vite, Vue 3 + Vite, Next.js 15 (App
-  Router + Pages Router), and Nuxt 3. Each one carries a CI-enforced
-  production-leak guard against the real build output.
+- **Product teams building on React, Vue, Next, Nuxt, Angular, or Svelte.**
+  Official adapters ship for React + Vite, Vue 3 + Vite, Vue 2 + Vite,
+  Angular + Vite, Svelte + Vite, SvelteKit, Next.js 15 (App Router),
+  Next.js (Pages Router), Nuxt 3, and Nuxt 2 — ten in total. Each one carries
+  a CI-enforced production-leak guard against the real build output.
 - **People who want a tool that only turns on in the local dev environment.**
   agent-devtools is not included in production builds. It is designed to mount
   only in dev mode (via `import.meta.env.DEV` and equivalents).
