@@ -14,7 +14,13 @@
 import { createApp, type AgentStreamFactory, type PermissionMode, type ProviderId } from './app.js';
 import { generatePairingToken } from './auth.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
-import { createAcpProvider, createSdkProvider } from '../providers/index.js';
+import {
+  createAcpProvider,
+  createDefaultAcpRuntime,
+  createDefaultAcpSessionStore,
+  createSdkProvider,
+} from '../providers/index.js';
+import type { PermissionPolicy } from '../providers/acp.js';
 import { DEFAULT_PORT, PORT_FALLBACK_ATTEMPTS, startServer, type StartedServer } from './server.js';
 
 export interface StartAgentDevtoolsServerOptions {
@@ -33,6 +39,12 @@ export interface StartAgentDevtoolsServerOptions {
   defaultProvider?: ProviderId;
   /** Permission mode used when the request omits `permissionMode`. Defaults to `'acceptEdits'`. */
   defaultPermissionMode?: PermissionMode;
+  /**
+   * Per-action permission policy used when the request omits `permissionPolicy`.
+   * When unset, the provider's safe-by-default policy applies (file edits auto,
+   * everything else ask).
+   */
+  defaultPermissionPolicy?: PermissionPolicy;
 }
 
 export interface AgentDevtoolsServerHandle {
@@ -55,18 +67,32 @@ export async function startAgentDevtoolsServer(
 ): Promise<AgentDevtoolsServerHandle> {
   const workspace = createWorkspace(options.workspace);
   const pairingToken = generatePairingToken();
-  // Match `runCli`: register built-in providers when the embedder didn't
-  // supply its own.
+  // One shared persistent `(cwd, clientSessionId) → acpSessionId` store
+  // backs both the ACP runtime (so a dev-server restart can resume a
+  // tab's prior session) AND the terminal-handoff route (so the
+  // browser-side modal can offer `claude --resume <id>` as a second
+  // continuation option alongside `--append-system-prompt-file`). When
+  // the embedder injects its own `providers` map we skip wiring our
+  // default runtime — they own the lifecycle — but we still hand the
+  // store to `createApp` so any provider that participates in the
+  // mapping can light up the resume path.
+  const acpSessionStore = createDefaultAcpSessionStore();
   const providers: Partial<Record<ProviderId, AgentStreamFactory>> = options.providers ?? {
-    acp: createAcpProvider(),
+    acp: createAcpProvider({
+      runtime: createDefaultAcpRuntime({ sessionStore: acpSessionStore }),
+    }),
     sdk: createSdkProvider(),
   };
   const handler = createApp({
     pairingToken,
     workspace,
     providers,
+    acpSessionStore,
     ...(options.defaultProvider && { defaultProvider: options.defaultProvider }),
     ...(options.defaultPermissionMode && { defaultPermissionMode: options.defaultPermissionMode }),
+    ...(options.defaultPermissionPolicy && {
+      defaultPermissionPolicy: options.defaultPermissionPolicy,
+    }),
   });
   const started = await startServer(handler, {
     port: options.port ?? DEFAULT_PORT,
