@@ -32,11 +32,21 @@
 import type { Plugin, IndexHtmlTransformResult, ViteDevServer, HtmlTagDescriptor } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { request as httpRequest } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
-import { isAbsolute, relative as relativePath, resolve as resolvePath } from 'node:path';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join as joinPath,
+  relative as relativePath,
+  resolve as resolvePath,
+} from 'node:path';
 import {
   startAgentDevtoolsServer,
+  verifyAuthorization,
   type AgentDevtoolsServerHandle,
+  type PermissionMode,
+  type PermissionPolicy,
   type StartAgentDevtoolsServerOptions,
 } from '@agent-devtools/core/server';
 import { resolveImportFrom, type Framework } from './framework.js';
@@ -111,6 +121,28 @@ export interface AgentDevtoolsPluginOptions {
    * without changing the production-default closed isolation.
    */
   shadowOpen?: boolean;
+  /**
+   * Whether the floating widget (launcher + composer) is visible on first
+   * page load. Defaults to `true`. Set to `false` to ship the widget
+   * hidden — the developer brings it back with the Ctrl/Cmd + Shift + ;
+   * toggle hotkey. Useful for dev environments where non-frontend
+   * operators (backend engineers, QA, designers) load the page and the
+   * floating button would otherwise be an unwanted distraction or worse
+   * a footgun. The hotkey itself stays armed so toggling back on is one
+   * keystroke.
+   */
+  defaultVisible?: boolean;
+  /**
+   * Permission mode the spawned agent server applies when the request body
+   * omits `permissionMode`. Defaults to `'acceptEdits'` inside the core.
+   */
+  defaultPermissionMode?: PermissionMode;
+  /**
+   * Per-action permission policy the spawned agent server applies when the
+   * request body omits `permissionPolicy`. When unset, the provider's
+   * safe-by-default policy applies (file edits auto, everything else ask).
+   */
+  defaultPermissionPolicy?: PermissionPolicy;
 }
 
 export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin {
@@ -118,6 +150,7 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
   const spawnServer = options.spawnServer ?? true;
   const startServer = options.startServer ?? startAgentDevtoolsServer;
   const shadowOpen = options.shadowOpen ?? readEnv('AGENT_DEVTOOLS_OPEN_SHADOW') === '1';
+  const defaultVisible = options.defaultVisible ?? true;
 
   let handle: AgentDevtoolsServerHandle | null = null;
   // Resolved at configureServer time (when we have access to the Vite
@@ -125,6 +158,15 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
   // somehow precede configureServer — fall back to the react default so
   // the bootstrap is always emittable.
   let resolvedImportFrom = resolveImportFrom(options, process.cwd());
+  // Boundary the enrichment middlewares enforce. Set at configureServer
+  // time from `resolveWorkspace(options.workspace, server.config.root)` so
+  // a `workspace: '..'` (or any other override) is honored end-to-end
+  // rather than silently shrinking back to the Vite project root.
+  let resolvedWorkspace: string | null = null;
+  // Pairing token expected on every enrichment request. Captured after
+  // the agent server spawns. Null until then — middlewares reject with
+  // 401 while it is null so an unconfigured plugin cannot leak files.
+  let expectedToken: string | null = null;
 
   return {
     name: DEFAULT_PLUGIN_NAME,
@@ -132,13 +174,14 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
     async configureServer(server: ViteDevServer): Promise<void> {
       if (!enabled) return;
       resolvedImportFrom = resolveImportFrom(options, server.config.root);
+      resolvedWorkspace = resolveWorkspace(options.workspace, server.config.root);
       // Related-imports middleware sits BEFORE the proxy so the more-specific
       // path wins. The module graph only exists inside the Vite process —
       // the agent server cannot answer this, so we serve it locally.
       server.middlewares.use(
         RELATED_IMPORTS_PATH,
         (req: IncomingMessage, res: ServerResponse): void => {
-          handleRelatedImportsRequest(req, res, server);
+          handleRelatedImportsRequest(req, res, server, resolvedWorkspace, expectedToken);
         },
       );
       // Source-slice middleware — same locality principle as related-imports:
@@ -147,7 +190,7 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
       server.middlewares.use(
         SOURCE_SLICE_PATH,
         (req: IncomingMessage, res: ServerResponse): void => {
-          handleSourceSliceRequest(req, res, server);
+          handleSourceSliceRequest(req, res, server, resolvedWorkspace, expectedToken);
         },
       );
       // Install the proxy middleware unconditionally (even before the agent
@@ -162,12 +205,18 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
         proxyToAgentServer(req, res, () => handle);
       });
       if (!spawnServer) return;
-      const workspace = resolveWorkspace(options.workspace, server.config.root);
       const started = await startServer({
-        workspace,
+        workspace: resolvedWorkspace,
         ...(options.port !== undefined && { port: options.port }),
+        ...(options.defaultPermissionMode !== undefined && {
+          defaultPermissionMode: options.defaultPermissionMode,
+        }),
+        ...(options.defaultPermissionPolicy !== undefined && {
+          defaultPermissionPolicy: options.defaultPermissionPolicy,
+        }),
       });
       handle = started;
+      expectedToken = started.pairingToken;
       // Bind teardown to the actual HTTP socket so a graceful Vite shutdown
       // closes the agent server too. In middlewareMode httpServer is null;
       // the agent server is then leaked until process exit (documented).
@@ -196,7 +245,7 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
           tag: 'script',
           attrs: { type: 'module' },
           injectTo: 'head',
-          children: buildBootstrap(resolvedImportFrom, handle !== null, shadowOpen),
+          children: buildBootstrap(resolvedImportFrom, handle !== null, shadowOpen, defaultVisible),
         });
         return { html: '', tags };
       },
@@ -255,16 +304,23 @@ const HOP_BY_HOP = new Set([
 
 /**
  * Serve a workspace-relative `?file=` query against the Vite dev server's
- * module graph. Walks `module.importedModules` once and returns each
- * importer's path back to the caller as workspace-relative strings.
+ * module graph. Walks the picked file's downstream imports (the modules it
+ * depends on, via `module.importedModules`) and returns them as
+ * workspace-relative strings.
  *
- * Security boundary: the requested file is resolved against
- * `server.config.root` and only accepted if the resolved absolute path
- * stays inside that root. Anything outside (`../` escapes, symlink jumps)
- * returns 403. The same root filter is applied to each returned import.
+ * Authentication: the same pairing token used by the agent server. Missing
+ * or invalid `Authorization: Bearer …` headers return 401 — the endpoint
+ * never reads the requested file from disk in that case.
+ *
+ * Security boundary: the configured workspace (the resolved
+ * `options.workspace`, NOT the bare Vite project root) defines the
+ * allowed read surface. Both sides of the containment check are resolved
+ * through `realpath` so a symlink inside the workspace that targets a
+ * file outside it returns 403. Anything outside (`../` escapes, symlink
+ * jumps) returns 403. The same boundary is applied to each returned import.
  *
  * Best-effort by contract: a malformed query, an unknown file, or a path
- * outside the root all return `{ imports: [] }` (or 403 for boundary
+ * outside the workspace all return `{ imports: [] }` (or 403 for boundary
  * violations) rather than an error — the orchestrator treats an empty
  * list as "no enrichment available" and keeps the base page context.
  */
@@ -272,11 +328,20 @@ function handleRelatedImportsRequest(
   req: IncomingMessage,
   res: ServerResponse,
   server: ViteDevServer,
+  workspace: string | null,
+  expectedToken: string | null,
 ): void {
   if (req.method !== 'GET') {
     res.statusCode = 405;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ error: 'method not allowed' }));
+    return;
+  }
+  if (!authorizeRequest(req, res, expectedToken)) return;
+  if (!workspace) {
+    res.statusCode = 503;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'workspace not ready' }));
     return;
   }
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -287,43 +352,53 @@ function handleRelatedImportsRequest(
     res.end(JSON.stringify({ imports: [] }));
     return;
   }
-  const root = server.config.root;
-  const absolute = isAbsolute(file) ? file : resolvePath(root, file);
-  if (!isInsideRoot(absolute, root)) {
-    res.statusCode = 403;
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ error: 'file outside workspace root' }));
-    return;
-  }
-  const modules = server.moduleGraph.getModulesByFile(absolute);
-  const imports: string[] = [];
-  const seen = new Set<string>();
-  if (modules) {
-    for (const mod of modules) {
-      for (const imported of mod.importedModules) {
-        const importedFile = imported.file;
-        if (!importedFile || seen.has(importedFile)) continue;
-        seen.add(importedFile);
-        if (!isInsideRoot(importedFile, root)) continue;
-        const rel = toWorkspaceRelative(importedFile, root);
-        if (rel) imports.push(rel);
+  const absolute = isAbsolute(file) ? file : resolvePath(workspace, file);
+  void (async (): Promise<void> => {
+    if (!(await isInsideWorkspace(absolute, workspace))) {
+      res.statusCode = 403;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ error: 'file outside workspace root' }));
+      return;
+    }
+    const modules = server.moduleGraph.getModulesByFile(absolute);
+    const imports: string[] = [];
+    const seen = new Set<string>();
+    if (modules) {
+      for (const mod of modules) {
+        for (const imported of mod.importedModules) {
+          const importedFile = imported.file;
+          if (!importedFile || seen.has(importedFile)) continue;
+          seen.add(importedFile);
+          if (!(await isInsideWorkspace(importedFile, workspace))) continue;
+          const rel = toWorkspaceRelative(importedFile, workspace);
+          if (rel) imports.push(rel);
+        }
       }
     }
-  }
-  res.statusCode = 200;
-  res.setHeader('content-type', 'application/json');
-  res.end(JSON.stringify({ imports }));
+    res.statusCode = 200;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ imports }));
+  })();
 }
 
 function handleSourceSliceRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  server: ViteDevServer,
+  _server: ViteDevServer,
+  workspace: string | null,
+  expectedToken: string | null,
 ): void {
   if (req.method !== 'GET') {
     res.statusCode = 405;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ error: 'method not allowed' }));
+    return;
+  }
+  if (!authorizeRequest(req, res, expectedToken)) return;
+  if (!workspace) {
+    res.statusCode = 503;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'workspace not ready' }));
     return;
   }
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -342,15 +417,14 @@ function handleSourceSliceRequest(
     res.end(JSON.stringify({ error: 'line must be a positive integer' }));
     return;
   }
-  const root = server.config.root;
-  const absolute = isAbsolute(file) ? file : resolvePath(root, file);
-  if (!isInsideRoot(absolute, root)) {
-    res.statusCode = 403;
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ error: 'file outside workspace root' }));
-    return;
-  }
+  const absolute = isAbsolute(file) ? file : resolvePath(workspace, file);
   void (async (): Promise<void> => {
+    if (!(await isInsideWorkspace(absolute, workspace))) {
+      res.statusCode = 403;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ error: 'file outside workspace root' }));
+      return;
+    }
     try {
       const stats = await stat(absolute);
       if (!stats.isFile()) {
@@ -381,12 +455,78 @@ function handleSourceSliceRequest(
   })();
 }
 
-function isInsideRoot(absolute: string, root: string): boolean {
+/**
+ * Enforce the pairing-token bearer scheme on enrichment endpoints. Returns
+ * `false` when the request was rejected (response already sent) so the
+ * caller short-circuits without touching disk or the module graph.
+ *
+ * Rejection cases:
+ *   - `expectedToken` is null (agent server has not yet spawned, or
+ *     `spawnServer: false` with no embedder-supplied token).
+ *   - `Authorization` header missing, wrong scheme, or wrong value.
+ *
+ * Mirrors the shape of `app.ts`'s 401 response so the widget transport
+ * sees one consistent unauthorized contract whether the request hit the
+ * agent server directly or one of the Vite-local enrichment endpoints.
+ */
+function authorizeRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedToken: string | null,
+): boolean {
+  if (!expectedToken || !verifyAuthorization(req.headers.authorization, expectedToken)) {
+    res.statusCode = 401;
+    res.setHeader('content-type', 'application/json');
+    res.setHeader('www-authenticate', 'Bearer realm="agent-devtools"');
+    res.end(JSON.stringify({ error: 'unauthorized' }));
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Canonical containment check. Both `absolute` and `workspace` are resolved
+ * through `realpath` so a symlink inside the workspace that targets a path
+ * outside it is rejected. When the requested file does not yet exist
+ * (`/tmp/.../Ghost.tsx`) `realpath` walks up to the nearest existing
+ * ancestor — necessary on macOS, where `/tmp` is itself a symlink to
+ * `/private/tmp` and a naive lexical compare against the realpathed
+ * workspace would reject every missing-file probe as "outside".
+ */
+async function isInsideWorkspace(absolute: string, workspace: string): Promise<boolean> {
+  const [canonicalAbsolute, canonicalWorkspace] = await Promise.all([
+    realpathOrAncestor(absolute),
+    realpathOrAncestor(workspace),
+  ]);
+  const left = canonicalAbsolute ?? absolute;
+  const right = canonicalWorkspace ?? workspace;
+  return isInsideLexical(left, right);
+}
+
+function isInsideLexical(absolute: string, root: string): boolean {
   const rel = relativePath(root, absolute);
   if (rel === '') return true;
   if (rel.startsWith('..')) return false;
   if (isAbsolute(rel)) return false;
   return true;
+}
+
+/**
+ * Resolve `realpath(path)`, or — if the leaf does not exist — recursively
+ * resolve the deepest existing ancestor and rebuild the missing tail on
+ * top of it. Returns null only when even the filesystem root cannot be
+ * resolved (e.g. caller passed an empty string).
+ */
+async function realpathOrAncestor(path: string): Promise<string | null> {
+  try {
+    return await realpath(path);
+  } catch {
+    const parent = dirname(path);
+    if (parent === path) return null;
+    const parentReal = await realpathOrAncestor(parent);
+    if (!parentReal) return null;
+    return joinPath(parentReal, basename(path));
+  }
 }
 
 function toWorkspaceRelative(absolute: string, root: string): string | undefined {
@@ -462,7 +602,12 @@ function proxyToAgentServer(
   req.pipe(upstreamReq);
 }
 
-function buildBootstrap(importFrom: string, hasConfig: boolean, shadowOpen: boolean): string {
+function buildBootstrap(
+  importFrom: string,
+  hasConfig: boolean,
+  shadowOpen: boolean,
+  defaultVisible: boolean,
+): string {
   const spec = JSON.stringify(importFrom);
   // Idempotent mount marker. Even though a full page reload tears down the
   // global, an inline `<script type="module">` can occasionally run twice
@@ -484,6 +629,9 @@ function buildBootstrap(importFrom: string, hasConfig: boolean, shadowOpen: bool
       `  var __settings = createSettingsStore();`,
       `  var __opts = { settingsStore: __settings };`,
       shadowOpen ? `  __opts.shadowOpen = true;` : `  /* shadow closed (default) */`,
+      defaultVisible
+        ? `  /* defaultVisible: true (default) */`
+        : `  __opts.defaultVisible = false;`,
       `  mountAgentDevtools(__opts);`,
       `}`,
     ]
@@ -502,7 +650,7 @@ function buildBootstrap(importFrom: string, hasConfig: boolean, shadowOpen: bool
     `  var __settings = createSettingsStore();`,
     `  var __transport = __cfg ? createDefaultTransport(Object.assign({}, __cfg, { getSettings: function () { return __settings.get(); } })) : undefined;`,
     `  var __getServerInfo = __cfg ? createAgentInfoFetcher(__cfg) : undefined;`,
-    `  var __requestHandoff = __cfg ? createHandoffRequester(__cfg) : undefined;`,
+    `  var __requestHandoff = __cfg ? createHandoffRequester(Object.assign({}, __cfg, { getClientSessionId: __transport ? function () { return __transport.getClientSessionId && __transport.getClientSessionId(); } : undefined })) : undefined;`,
     `  var __enrich = __cfg ? createPageContextEnricher({ fetchRelatedImports: createRelatedImportsFetcher(__cfg), fetchSourceSlice: createSourceSliceFetcher(__cfg) }) : undefined;`,
     `  var __opts = { settingsStore: __settings };`,
     `  if (__transport) __opts.transport = __transport;`,
@@ -510,6 +658,7 @@ function buildBootstrap(importFrom: string, hasConfig: boolean, shadowOpen: bool
     `  if (__requestHandoff) __opts.requestHandoff = __requestHandoff;`,
     `  if (__enrich) __opts.enrichPageContext = __enrich;`,
     shadowOpen ? `  __opts.shadowOpen = true;` : `  /* shadow closed (default) */`,
+    defaultVisible ? `  /* defaultVisible: true (default) */` : `  __opts.defaultVisible = false;`,
     `  mountAgentDevtools(__opts);`,
     `}`,
   ]
