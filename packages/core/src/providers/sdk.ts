@@ -26,10 +26,17 @@
  */
 import {
   query as defaultQuery,
+  type CanUseTool,
   type Options as SdkOptions,
+  type PermissionResult,
   type Query as SdkQuery,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentStreamFactory } from '../server/app.js';
+import {
+  DEFAULT_PERMISSION_POLICY,
+  type PermissionPolicy,
+  type PermissionResolution,
+} from './acp.js';
 import { formatContextPreamble } from './context-preamble.js';
 import { translateSdkMessage, type AcpEnvelope } from './sdk-to-acp.js';
 
@@ -44,10 +51,18 @@ export interface CreateSdkProviderOptions {
    * `pathToClaudeCodeExecutable`. Omit to use the SDK's built-in default.
    */
   pathToClaudeCodeExecutable?: string;
+  /**
+   * Override the per-action permission policy applied to every request.
+   * Missing entries fall back to {@link DEFAULT_PERMISSION_POLICY}. A
+   * request-scoped `permissionPolicy` on the context takes precedence so
+   * the widget's Safe-mode toggle propagates per turn.
+   */
+  permissionPolicy?: Partial<PermissionPolicy>;
 }
 
 export function createSdkProvider(options: CreateSdkProviderOptions = {}): AgentStreamFactory {
   const queryFn: QueryFn = options.query ?? defaultQuery;
+  const defaultPolicy = options.permissionPolicy;
 
   return async function* sdkProvider(request, context) {
     const controller = new AbortController();
@@ -58,11 +73,20 @@ export function createSdkProvider(options: CreateSdkProviderOptions = {}): Agent
       context.signal.addEventListener('abort', onAbort, { once: true });
     }
 
+    const effectivePolicy: PermissionPolicy = {
+      ...DEFAULT_PERMISSION_POLICY,
+      ...defaultPolicy,
+      ...context.permissionPolicy,
+    };
+
     const sdkOptions: SdkOptions = {
       abortController: controller,
       permissionMode: context.permissionMode,
       ...(context.permissionMode === 'bypassPermissions' && {
         allowDangerouslySkipPermissions: true,
+      }),
+      ...(context.permissionMode !== 'bypassPermissions' && {
+        canUseTool: createCanUseTool(effectivePolicy),
       }),
       ...(context.workspace && { cwd: context.workspace.root }),
       ...(options.pathToClaudeCodeExecutable && {
@@ -115,4 +139,81 @@ function toErrorEnvelope(error: unknown): AcpEnvelope {
   const name = error instanceof Error ? error.name : 'Error';
   const message = error instanceof Error ? error.message : String(error);
   return { type: 'acp.error', error: { name, message } };
+}
+
+/**
+ * SDK provider parity with the ACP runtime's `decidePermission`. The SDK
+ * `canUseTool` callback receives a tool *name* (string) rather than an ACP
+ * `ToolKind`, so we map Claude Code's built-in tool names to the same four
+ * categories. MCP-served tools (`mcp__<server>__<tool>`) bucket into
+ * `mcpTool` so the conservative default ('ask') applies.
+ *
+ * `'auto'` allows the call with the SDK's `input` passed through unchanged.
+ * `'ask'` denies with an explanatory message — the widget has no live UI
+ *   for permission prompts in this transport, so deferring is the only safe
+ *   resolution. The user can re-issue with a more permissive
+ *   `permissionMode` (e.g. `'bypassPermissions'`) or by toggling Safe mode.
+ * `'deny'` denies with `interrupt: true` so the SDK halts the turn instead
+ *   of letting the agent retry with adjusted input.
+ */
+function createCanUseTool(policy: PermissionPolicy): CanUseTool {
+  return async (toolName, input): Promise<PermissionResult> => {
+    const category = categorizeSdkToolName(toolName);
+    if (category === 'safeRead') {
+      return { behavior: 'allow', updatedInput: input };
+    }
+    const resolution: PermissionResolution = policy[category];
+    switch (resolution) {
+      case 'auto':
+        return { behavior: 'allow', updatedInput: input };
+      case 'deny':
+        return {
+          behavior: 'deny',
+          message: `${toolName} is denied by the active permission policy.`,
+          interrupt: true,
+        };
+      case 'ask':
+      default:
+        return {
+          behavior: 'deny',
+          message: `${toolName} requires explicit permission; toggle Safe mode off or set permissionPolicy.${category} to 'auto' to allow it.`,
+        };
+    }
+  };
+}
+
+type SdkPermissionCategory = keyof PermissionPolicy | 'safeRead';
+
+/**
+ * Map a Claude Code SDK tool name into the same security buckets the ACP
+ * runtime uses. Built-in tool names are stable enough to enumerate; anything
+ * unrecognized falls through to `mcpTool` so third-party MCP tools (which
+ * arrive as `mcp__<server>__<tool>`) inherit the conservative default.
+ */
+function categorizeSdkToolName(toolName: string): SdkPermissionCategory {
+  switch (toolName) {
+    case 'Read':
+    case 'Glob':
+    case 'Grep':
+    case 'WebSearch':
+    case 'NotebookRead':
+    case 'TodoWrite':
+      return 'safeRead';
+    case 'Edit':
+    case 'Write':
+    case 'NotebookEdit':
+    case 'MultiEdit':
+      return 'fileEdit';
+    case 'Bash':
+    case 'BashOutput':
+    case 'KillBash':
+      return 'bash';
+    case 'WebFetch':
+      return 'webFetch';
+    default:
+      // Unknown / MCP tools (`mcp__<server>__<tool>`) bucket into `mcpTool`
+      // so they inherit the conservative MCP default ('ask') rather than
+      // silently running.
+      return 'mcpTool';
+  }
 }
