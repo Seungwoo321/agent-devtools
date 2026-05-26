@@ -4,6 +4,16 @@ SvelteKit adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devt
 
 > Dev-only. The mount entry refuses to run when `NODE_ENV === 'production'`. The Vite plugin (`@agent-devtools/vite`) further strips imports from production builds via `apply: 'serve'` — see [`dev-only-guard`](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/dev-only-guard.md).
 
+## What this adapter provides
+
+- **Walker reuse** — DOM → source via `element.__svelte_meta.loc.{file,line,column}` is delegated to `@agent-devtools/svelte`. No duplicate walker code lives here.
+- **Layout mount** — `mountAgentDevtoolsSvelteKit()` runs inside `+layout.svelte`'s `onMount` and only when `import.meta.env.PROD` is false. Rollup eliminates the branch on `vite build`, so the widget chain never lands in the client bundle.
+- **SSR seam** — `createAgentDevtoolsHandle()` (`@agent-devtools/sveltekit/hooks`) is a passthrough today; the binding point for per-request pairing-token injection and bootstrap config emission once those land.
+- **Route attachment** — `$page.url.pathname` is attached to picked evidence so the agent gets the active route alongside the picked component.
+- **Widget UI** — same `@agent-devtools/widget-core` shell as the rest of the adapter family.
+
+Peer range: `@sveltejs/kit >= 2`, `svelte >= 4`.
+
 ## Install
 
 ```bash
