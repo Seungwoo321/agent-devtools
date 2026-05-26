@@ -83,7 +83,11 @@ describe('mountAgentDevtools', () => {
     handle.composer.element
       .querySelector('textarea')!
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    // `handleSubmit` clears the textarea synchronously but reaches `transport.send`
+    // only after the async `maybeEnrichPageContext` microtask resolves.
     expect(handle.composer.getText()).toBe('');
+    await Promise.resolve();
+    await Promise.resolve();
     expect(send).toHaveBeenCalledTimes(1);
     const payload = send.mock.calls[0]![0];
     expect(payload.text).toBe('hello agent');
@@ -95,7 +99,7 @@ describe('mountAgentDevtools', () => {
     handle.destroy();
   });
 
-  it('aborts the in-flight request on destroy', () => {
+  it('aborts the in-flight request on destroy', async () => {
     let capturedSignal: AbortSignal | null = null;
     const send = vi.fn().mockImplementation((p: { signal: AbortSignal }) => {
       capturedSignal = p.signal;
@@ -106,6 +110,10 @@ describe('mountAgentDevtools', () => {
     handle.composer.element
       .querySelector('textarea')!
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    // Flush past `await maybeEnrichPageContext` so `transport.send` is invoked
+    // and `capturedSignal` is populated before we trigger destroy.
+    await Promise.resolve();
+    await Promise.resolve();
     handle.destroy();
     expect(capturedSignal!.aborted).toBe(true);
   });
@@ -317,6 +325,9 @@ describe('mountAgentDevtools — new conversation handler', () => {
     handle.composer.element
       .querySelector('textarea')!
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    // `handleSubmit` only calls `transport.send` after the enrichment microtask resolves.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(capturedSignal).not.toBeNull();
     expect(capturedSignal!.aborted).toBe(false);
 
@@ -622,6 +633,9 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     handle.store.applyEvent({ type: 'error', message: 'noisy' });
 
     clickHandoff(handle);
+    // `handleHandoff` reaches `requestHandoff` only after the enrichment microtask resolves.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(requestHandoff).toHaveBeenCalledTimes(1);
     const req = requestHandoff.mock.calls[0]![0];
     expect(req.conversation).toEqual([
@@ -644,9 +658,14 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     );
     const handle = mountAgentDevtools({ requestHandoff });
     clickHandoff(handle);
-    // Loading frame.
+    // Loading frame is shown synchronously by `handoffModal.showLoading()`
+    // before the first await in `handleHandoff`.
     const cmd = handle.handoffModal.element.querySelector('[data-agent-devtools-handoff-command]');
     expect(cmd?.textContent ?? '').toMatch(/preparing/i);
+    // Flush past enrichment so `requestHandoff` is invoked and `resolveReq`
+    // is rebound to the in-flight promise's resolver.
+    await Promise.resolve();
+    await Promise.resolve();
     resolveReq({ file: '/tmp/x.md', command: 'claude --append-system-prompt-file /tmp/x.md' });
     await Promise.resolve();
     await Promise.resolve();
@@ -665,7 +684,7 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     handle.destroy();
   });
 
-  it('aborts the in-flight handoff request on destroy', () => {
+  it('aborts the in-flight handoff request on destroy', async () => {
     let captured: AbortSignal | null = null;
     const requestHandoff = vi.fn().mockImplementation((req: { signal?: AbortSignal }) => {
       captured = req.signal ?? null;
@@ -673,11 +692,14 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     });
     const handle = mountAgentDevtools({ requestHandoff });
     clickHandoff(handle);
+    // Flush past enrichment so `requestHandoff` is invoked and `captured` is populated.
+    await Promise.resolve();
+    await Promise.resolve();
     handle.destroy();
     expect(captured!.aborted).toBe(true);
   });
 
-  it('aborts the in-flight handoff request when the modal is closed', () => {
+  it('aborts the in-flight handoff request when the modal is closed', async () => {
     let captured: AbortSignal | null = null;
     const requestHandoff = vi.fn().mockImplementation((req: { signal?: AbortSignal }) => {
       captured = req.signal ?? null;
@@ -685,6 +707,9 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     });
     const handle = mountAgentDevtools({ requestHandoff });
     clickHandoff(handle);
+    // Flush past enrichment so `requestHandoff` is invoked.
+    await Promise.resolve();
+    await Promise.resolve();
     (
       handle.handoffModal.element.querySelector(
         '[data-agent-devtools-handoff-close]',
@@ -694,13 +719,84 @@ describe('mountAgentDevtools — terminal handoff wiring', () => {
     handle.destroy();
   });
 
-  it('forwards the current permissionMode from the settings store', () => {
+  it('forwards the current permissionMode from the settings store', async () => {
     const settingsStore = createSettingsStore();
     settingsStore.set({ permissionMode: 'bypassPermissions' });
     const requestHandoff = vi.fn().mockResolvedValue({ file: '/tmp/x.md', command: 'cmd' });
     const handle = mountAgentDevtools({ settingsStore, requestHandoff });
     clickHandoff(handle);
+    // Flush past enrichment so `requestHandoff.mock.calls[0]` exists.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(requestHandoff.mock.calls[0]![0].permissionMode).toBe('bypassPermissions');
     handle.destroy();
+  });
+});
+
+describe('mountAgentDevtools — enrichPageContext wiring', () => {
+  function submit(handle: ReturnType<typeof mountAgentDevtools>, text: string): void {
+    handle.composer.setText(text);
+    handle.composer.element
+      .querySelector('textarea')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  }
+
+  it('awaits enrichment and forwards the enriched page context to the transport', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const enrichPageContext = vi.fn(async (ctx) => ({
+      ...ctx,
+      picked: {
+        componentName: 'Synth',
+        tagName: 'DIV',
+        selector: '#x',
+        outerHTML: '<div />',
+        attributes: {},
+        componentChain: [],
+        relatedImports: ['src/Imported.tsx'],
+      },
+    }));
+    const handle = mountAgentDevtools({ transport: { send }, enrichPageContext });
+    submit(handle, 'hi');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(enrichPageContext).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    const payload = send.mock.calls[0]![0];
+    expect(payload.pageContext.picked.relatedImports).toEqual(['src/Imported.tsx']);
+    handle.destroy();
+  });
+
+  it('falls back to the base page context when enrichment rejects', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const enrichPageContext = vi.fn(async () => {
+      throw new Error('module-graph down');
+    });
+    const handle = mountAgentDevtools({ transport: { send }, enrichPageContext });
+    submit(handle, 'hi');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0].pageContext).toBeDefined();
+    // The pageContext should be the unenriched base — no relatedImports field.
+    expect(send.mock.calls[0]![0].pageContext.picked?.relatedImports).toBeUndefined();
+    handle.destroy();
+  });
+
+  it('skips the transport.send when enrichment lasts past abort', async () => {
+    let resolveEnrich: (() => void) | null = null;
+    const enrichPageContext = vi.fn((ctx, _signal) => {
+      return new Promise<typeof ctx>((res) => {
+        resolveEnrich = () => res(ctx);
+      });
+    });
+    const send = vi.fn().mockResolvedValue(undefined);
+    const handle = mountAgentDevtools({ transport: { send }, enrichPageContext });
+    submit(handle, 'hi');
+    // Destroy aborts the in-flight controller before enrichment completes.
+    handle.destroy();
+    resolveEnrich!();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).not.toHaveBeenCalled();
   });
 });
