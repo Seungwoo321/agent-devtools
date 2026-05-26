@@ -222,6 +222,43 @@ describe('mountAgentDevtools', () => {
     handle.destroy();
   });
 
+  it('calls the adapter-supplied resolveRouteFile with the current pathname and surfaces routeFile', async () => {
+    const send = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const resolveRouteFile = vi.fn((pathname: string) => `pages${pathname}.tsx`);
+    const handle = mountAgentDevtools({ transport: { send }, resolveRouteFile });
+    handle.composer.setText('which file owns this');
+    handle.composer.element
+      .querySelector('textarea')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolveRouteFile).toHaveBeenCalled();
+    const calledWith = resolveRouteFile.mock.calls[0]?.[0];
+    expect(calledWith).toBe(window.location.pathname);
+    const payload = send.mock.calls[0]![0];
+    expect(payload.pageContext.route.routeFile).toBe(`pages${window.location.pathname}.tsx`);
+    handle.destroy();
+  });
+
+  it('omits route.routeFile when the resolver returns undefined', async () => {
+    const send = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const resolveRouteFile = vi.fn(() => undefined);
+    const handle = mountAgentDevtools({ transport: { send }, resolveRouteFile });
+    handle.composer.setText('no route file please');
+    handle.composer.element
+      .querySelector('textarea')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolveRouteFile).toHaveBeenCalled();
+    const payload = send.mock.calls[0]![0];
+    expect(payload.pageContext.route.routeFile).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(payload.pageContext.route, 'routeFile')).toBe(
+      false,
+    );
+    handle.destroy();
+  });
+
   it('hides the composer when the user closes it', () => {
     const handle = mountAgentDevtools();
     handle.composer.setVisible(true);

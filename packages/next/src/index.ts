@@ -15,6 +15,7 @@
  */
 export { mountAgentDevtoolsNext, type MountAgentDevtoolsNextOptions } from './mount.js';
 export { withAgentDevtools, type WithAgentDevtoolsOptions } from './config.js';
+export { resolveNextAppRouterRouteFile } from './route.js';
 // Framework-uniform aliases. The vite plugin's injected bootstrap imports
 // these names verbatim from whichever adapter package the host project
 // resolves to, so every adapter must surface the same symbols. Next's
