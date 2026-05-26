@@ -4,7 +4,7 @@ import {
   type BuildSelectorOptions,
   type ComponentChainEntry,
   type PickedEvidence,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';
 import { readSvelteMeta } from './dom-bridge.js';
 import { deriveComponentName, resolveSourceFromMeta } from './source.js';
 import { walkComponentAncestors } from './walker.js';

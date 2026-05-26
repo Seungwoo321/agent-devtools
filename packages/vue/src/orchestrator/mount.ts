@@ -1,6 +1,6 @@
 /**
  * Vue 3 mount entry. Delegates to the framework-agnostic widget orchestrator
- * exported by `@agent-devtools/react` (composer / launcher / picker / shadow
+ * exported by `@agent-devtools/widget-core` (composer / launcher / picker / shadow
  * root are plain DOM modules that depend on no host framework runtime) and
  * injects `describePickedVue` so the picker resolves to Vue component
  * identity instead of React fibers.
@@ -16,7 +16,7 @@ import {
   mountAgentDevtools,
   type AgentDevtoolsHandle,
   type MountAgentDevtoolsOptions,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';
 import { describePickedVue } from '../vnode/picked.js';
 
 export interface MountAgentDevtoolsVueOptions extends Omit<
