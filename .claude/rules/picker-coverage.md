@@ -10,7 +10,7 @@ agent-devtools 의 picker 는 **모든 DOM element 를 받는다**. 프레임워
 
 ## 현재 동작 — React 어댑터 (코드 기준)
 
-`packages/react/src/context/picked.ts:47` `describePicked(element, options)` 는 어떤 element 에 대해서도 PickedEvidence 를 빌드한다. fiber 가 있든 없든:
+`packages/react/src/context/picked.ts:52` `describePicked(element, options)` 는 어떤 element 에 대해서도 PickedEvidence 를 빌드한다. fiber 가 있든 없든:
 
 ```ts
 const fiber = getFiberForElement(element); // 없으면 null
@@ -23,7 +23,7 @@ if (source) result.source = source; // 없으면 omit
 // componentChain 도 fiber 가 null 이면 빈 배열
 ```
 
-`packages/react/src/picker/picker.ts:83` `onClick` 도 단순히 `dispatch({ type: 'pick', target })` 만 한다. `shouldSkip` predicate 외엔 거르지 않는다 — 즉 **widget 자기 DOM 만 빼면 무엇이든 pick 가능**.
+`packages/widget-core/src/picker/picker.ts:83` `onClick` 도 단순히 `dispatch({ type: 'pick', target })` 만 한다. `shouldSkip` predicate 외엔 거르지 않는다 — 즉 **widget 자기 DOM 만 빼면 무엇이든 pick 가능**.
 
 따라서 세 케이스의 결과는 다음과 같다.
 
