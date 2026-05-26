@@ -260,7 +260,7 @@ All `@agent-devtools/*` packages publish on a single shared version line — the
 | [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — same wrapper for `>= 12`   |
 | [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin auto-injection            |
 | [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin auto-injection     |
-| [`@agent-devtools/vite`](./packages/vite)                 | Vite 8 plugin — auto-inject widget + dev-only guard       |
+| [`@agent-devtools/vite`](./packages/vite)                 | Vite plugin (5–8) — auto-inject widget + dev-only guard   |
 
 ## Security defaults
 
@@ -274,7 +274,7 @@ All `@agent-devtools/*` packages publish on a single shared version line — the
 
 ## Requirements
 
-- Node.js **≥22.12** (LTS Jod) — also runs on Node 24+
+- Node.js **≥22.13** (LTS Jod) — also runs on Node 24+
 - pnpm **≥11**
 - (To actually run) an active Claude Pro/Max subscription (includes Agent SDK Credit from 2026-06-15)
 
@@ -284,7 +284,7 @@ All `@agent-devtools/*` packages publish on a single shared version line — the
 pnpm install
 pnpm typecheck
 pnpm test
-pnpm build:examples  # builds all four examples and runs the no-leak smoke
+pnpm build:examples  # builds every adapter example and runs the no-leak smoke
 ```
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full developer guide.

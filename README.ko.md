@@ -36,7 +36,7 @@
 
 - 사용자 가이드 (en / ko): <https://agent-devtools-docs.vercel.app/>
 - 작동 원리 (한 장의 다이어그램): <https://agent-devtools-docs.vercel.app/guides/how-it-works/>
-- 컨텍스트·결정 로그·스코프: [`CONTEXT.md`](./CONTEXT.md)
+- 컨텍스트·스코프: [`CONTEXT.md`](./CONTEXT.md)
 
 ## 카테고리 안에서의 위치
 
@@ -260,7 +260,7 @@ export default function App({ Component, pageProps }: AppProps) {
 | [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — `>= 12` 호환 동일 패턴     |
 | [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin 자동 주입                 |
 | [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin 자동 주입          |
-| [`@agent-devtools/vite`](./packages/vite)                 | Vite 8 plugin — auto-inject widget + dev-only guard       |
+| [`@agent-devtools/vite`](./packages/vite)                 | Vite 플러그인 (5–8) — auto-inject widget + dev-only guard |
 
 ## Security defaults
 
@@ -274,7 +274,7 @@ export default function App({ Component, pageProps }: AppProps) {
 
 ## Requirements
 
-- Node.js **≥22.12** (LTS Jod) — Node 24+ 에서도 동작
+- Node.js **≥22.13** (LTS Jod) — Node 24+ 에서도 동작
 - pnpm **≥11**
 - (사용 시) 활성 Claude Pro/Max 구독 (Agent SDK Credit 포함, 2026-06-15 시행)
 
@@ -284,7 +284,7 @@ export default function App({ Component, pageProps }: AppProps) {
 pnpm install
 pnpm typecheck
 pnpm test
-pnpm build:examples  # 4 개 예제 모두 build + no-leak smoke 까지 돌린다
+pnpm build:examples  # 모든 어댑터 예제 build + no-leak smoke 까지 돌린다
 ```
 
 자세한 개발 가이드는 [`CONTRIBUTING.md`](./CONTRIBUTING.md).
