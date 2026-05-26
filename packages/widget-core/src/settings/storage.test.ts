@@ -69,19 +69,24 @@ describe('loadSettings', () => {
 
   it('round-trips a saved payload', () => {
     const storage = makeStorage();
-    saveSettings({ provider: 'sdk', permissionMode: 'plan' }, { storage });
+    saveSettings({ provider: 'sdk', permissionMode: 'plan', safeMode: true }, { storage });
     expect(loadSettings({ storage })).toEqual({
       provider: 'sdk',
       permissionMode: 'plan',
+      safeMode: true,
     });
   });
 
   it('uses a custom key when provided', () => {
     const storage = makeStorage();
-    saveSettings({ provider: 'sdk', permissionMode: 'plan' }, { storage, key: 'custom' });
+    saveSettings(
+      { provider: 'sdk', permissionMode: 'plan', safeMode: true },
+      { storage, key: 'custom' },
+    );
     expect(loadSettings({ storage, key: 'custom' })).toEqual({
       provider: 'sdk',
       permissionMode: 'plan',
+      safeMode: true,
     });
     // Defaults under the default key remain untouched.
     expect(loadSettings({ storage })).toEqual(DEFAULT_SETTINGS);
@@ -96,6 +101,7 @@ describe('loadSettings', () => {
     expect(loadSettings({ storage })).toEqual({
       provider: DEFAULT_SETTINGS.provider,
       permissionMode: 'plan',
+      safeMode: true,
     });
   });
 
@@ -133,7 +139,7 @@ describe('saveSettings', () => {
 describe('clearSettings', () => {
   it('removes the stored payload so the next load is default', () => {
     const storage = makeStorage();
-    saveSettings({ provider: 'sdk', permissionMode: 'plan' }, { storage });
+    saveSettings({ provider: 'sdk', permissionMode: 'plan', safeMode: true }, { storage });
     clearSettings({ storage });
     expect(loadSettings({ storage })).toEqual(DEFAULT_SETTINGS);
   });

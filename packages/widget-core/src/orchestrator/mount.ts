@@ -220,6 +220,25 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     onClose: handleClose,
     onHandoff: handleHandoff,
     onNewSession: handleNewSession,
+    // Seed the toggle from the canonical store value so the very first
+    // render matches whatever the orchestrator handed us (typically the
+    // mount-default `true`, but tests can preload another value).
+    safeMode: settingsStore.get().safeMode,
+    onToggleSafeMode: (next): void => {
+      // Composer already painted the local mirror — push the value into
+      // the store so the transport and any other store subscriber see it
+      // on the very next read.
+      settingsStore.set({ safeMode: next });
+    },
+  });
+  // External mutations to the store (e.g. an upcoming settings-panel
+  // surface) must propagate back to the composer's visible affordance.
+  // Compare against the last value so we skip no-op repaints.
+  let lastSafeMode = settingsStore.get().safeMode;
+  const unsubscribeSafeMode = settingsStore.subscribe((settings) => {
+    if (settings.safeMode === lastSafeMode) return;
+    lastSafeMode = settings.safeMode;
+    composer.setSafeMode(settings.safeMode);
   });
   // Insert the stream renderer above the textarea so the conversation
   // scrolls in the panel while the composer's input sticks to the bottom.
@@ -469,6 +488,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       destroyed = true;
       inflight?.abort();
       handoffController?.abort();
+      unsubscribeSafeMode();
       picker.stop();
       observer.stop();
       handoffModal.destroy();

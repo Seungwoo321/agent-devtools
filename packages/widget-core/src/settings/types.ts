@@ -18,6 +18,14 @@ export interface Settings {
    * because it disables every safety prompt for the rest of the session.
    */
   readonly permissionMode: PermissionMode;
+  /**
+   * Header-level safety switch. When `true` the widget asks the agent to
+   * prompt for `bash`, `webFetch`, and `mcpTool` actions while keeping
+   * `fileEdit` on auto. Stored in memory only and resets to `true` on
+   * every widget mount — by design, so a fresh tab never silently inherits
+   * a relaxed safety posture from a previous session.
+   */
+  readonly safeMode: boolean;
 }
 
 export const PROVIDER_IDS: readonly ProviderId[] = ['acp', 'sdk'];
@@ -37,6 +45,7 @@ export const PERMISSION_MODES: readonly PermissionMode[] = [
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'acp',
   permissionMode: 'acceptEdits',
+  safeMode: true,
 };
 
 /**

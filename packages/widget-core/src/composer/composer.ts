@@ -21,6 +21,7 @@ const PICK_TOGGLE_ATTR = 'data-agent-devtools-composer-pick';
 const SETTINGS_TOGGLE_ATTR = 'data-agent-devtools-composer-settings';
 const HANDOFF_ATTR = 'data-agent-devtools-composer-handoff';
 const NEW_SESSION_ATTR = 'data-agent-devtools-composer-new-session';
+const SAFE_MODE_ATTR = 'data-agent-devtools-composer-safe-mode';
 const CHIP_ATTR = 'data-agent-devtools-composer-chip';
 const TEXTAREA_ATTR = 'data-agent-devtools-composer-input';
 const SEND_ATTR = 'data-agent-devtools-composer-send';
@@ -130,6 +131,21 @@ export interface CreateComposerOptions {
   readonly pickerActive?: boolean;
   /** Required: called with `{ text, picked }` when the user submits. */
   readonly onSubmit: (payload: ComposerSubmitPayload) => void;
+  /**
+   * Initial state of the header-level "Safe mode" toggle. The orchestrator
+   * owns the canonical value (it lives in the shared settings store) and
+   * feeds it in here so the toggle paints correctly on first render. When
+   * omitted the toggle defaults to ON, matching the in-memory contract
+   * documented on `Settings.safeMode`.
+   */
+  readonly safeMode?: boolean;
+  /**
+   * Called when the user clicks the "Safe mode" toggle. The orchestrator
+   * persists the flip into the shared settings store. The composer keeps
+   * its local render in sync via `setSafeMode`, so callers don't need to
+   * round-trip through the store to update the visible label.
+   */
+  readonly onToggleSafeMode?: (next: boolean) => void;
   /** Called when the user toggles the pick-element button. */
   readonly onTogglePicker?: (next: boolean) => void;
   /** Called when the user clears the picked chip. */
@@ -168,6 +184,8 @@ export interface ComposerHandle {
   setPickerActive(active: boolean): void;
   /** Highlight the gear icon while the settings overlay is open. */
   setSettingsActive(active: boolean): void;
+  /** Repaint the header-level "Safe mode" toggle to reflect external state. */
+  setSafeMode(safeMode: boolean): void;
   /** Disable input + send while a request is in flight. */
   setSending(sending: boolean): void;
   /** Show / hide the panel. */
@@ -198,6 +216,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   let picked: PickedEvidence | null = options.picked ?? null;
   let pickerActive = options.pickerActive ?? false;
   let settingsActive = false;
+  let safeMode = options.safeMode ?? true;
   let sending = false;
   let visible = options.visible ?? false;
   let destroyed = false;
@@ -240,6 +259,18 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   pickButton.setAttribute('aria-label', 'Pick element');
   pickButton.textContent = 'Pick';
   applyPickButtonStyles(pickButton, pickerActive);
+  // Header-level safety switch. When on (the default), the transport
+  // attaches a per-action permission policy that locks bash / web fetch /
+  // MCP tool calls to "ask" while leaving file edits on auto. The button
+  // is `role="switch"` so screen readers announce a toggle state instead
+  // of a button press, and the visible "On" / "Off" suffix gives sighted
+  // users an at-a-glance affordance without depending on colour alone.
+  const safeModeButton = doc.createElement('button');
+  safeModeButton.type = 'button';
+  safeModeButton.setAttribute(SAFE_MODE_ATTR, '');
+  safeModeButton.setAttribute('role', 'switch');
+  safeModeButton.setAttribute('aria-label', 'Safe mode');
+  applySafeModeButtonState(safeModeButton, safeMode);
   const settingsButton = doc.createElement('button');
   settingsButton.type = 'button';
   settingsButton.setAttribute(SETTINGS_TOGGLE_ATTR, '');
@@ -278,6 +309,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   closeButton.textContent = '✕';
   applyCloseButtonStyles(closeButton);
   header.appendChild(title);
+  header.appendChild(safeModeButton);
   header.appendChild(pickButton);
   header.appendChild(handoffButton);
   header.appendChild(newSessionButton);
@@ -407,6 +439,17 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   function onPickClick(): void {
     options.onTogglePicker?.(!pickerActive);
+  }
+
+  function onSafeModeClick(): void {
+    // Composer owns the visible affordance, but the canonical value lives in
+    // the orchestrator's settings store. Flip the local mirror first so the
+    // click feels instant, then notify — the orchestrator will call back
+    // through `setSafeMode` if any external listener mutates the store in a
+    // way that produces a different value.
+    safeMode = !safeMode;
+    applySafeModeButtonState(safeModeButton, safeMode);
+    options.onToggleSafeMode?.(safeMode);
   }
 
   function onSettingsClick(): void {
@@ -591,6 +634,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   textarea.addEventListener('keydown', onKeyDown);
   sendButton.addEventListener('click', onSendClick);
   pickButton.addEventListener('click', onPickClick);
+  safeModeButton.addEventListener('click', onSafeModeClick);
   settingsButton.addEventListener('click', onSettingsClick);
   handoffButton.addEventListener('click', onHandoffClick);
   newSessionButton.addEventListener('click', onNewSessionClick);
@@ -613,6 +657,14 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       if (destroyed) return;
       settingsActive = active;
       applyIconButtonStyles(settingsButton, settingsActive);
+    },
+    setSafeMode(next): void {
+      if (destroyed) return;
+      // External update path — repaint without firing `onToggleSafeMode`
+      // (that callback is reserved for user-driven clicks; this setter is
+      // how the orchestrator pushes the canonical store value back down).
+      safeMode = next;
+      applySafeModeButtonState(safeModeButton, safeMode);
     },
     setSending(next): void {
       if (destroyed) return;
@@ -649,6 +701,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       textarea.removeEventListener('keydown', onKeyDown);
       sendButton.removeEventListener('click', onSendClick);
       pickButton.removeEventListener('click', onPickClick);
+      safeModeButton.removeEventListener('click', onSafeModeClick);
       settingsButton.removeEventListener('click', onSettingsClick);
       handoffButton.removeEventListener('click', onHandoffClick);
       newSessionButton.removeEventListener('click', onNewSessionClick);
@@ -895,6 +948,28 @@ function applyPickButtonStyles(button: HTMLButtonElement, active: boolean): void
   s.border = active ? '1px solid #1a1a1a' : '1px solid rgba(0, 0, 0, 0.16)';
   s.background = active ? '#1a1a1a' : 'transparent';
   s.color = active ? '#ffffff' : '#1a1a1a';
+  s.fontSize = '12px';
+  s.cursor = 'pointer';
+}
+
+/**
+ * Paint the header-level "Safe mode" toggle to match the supplied boolean.
+ * Mirrors `applyPickButtonStyles` so the on-state reads as a filled pill —
+ * the visible "Safe · On" / "Safe · Off" label keeps the affordance
+ * accessible to users who cannot perceive the colour swap, and the
+ * `aria-checked` + `data-safe-mode` pair gives assistive tech and
+ * automated tests a programmatic hook.
+ */
+function applySafeModeButtonState(button: HTMLButtonElement, safeMode: boolean): void {
+  button.setAttribute('aria-checked', safeMode ? 'true' : 'false');
+  button.setAttribute('data-safe-mode', safeMode ? 'on' : 'off');
+  button.textContent = safeMode ? 'Safe · On' : 'Safe · Off';
+  const s = button.style;
+  s.padding = '4px 10px';
+  s.borderRadius = '999px';
+  s.border = safeMode ? '1px solid #1a1a1a' : '1px solid rgba(0, 0, 0, 0.16)';
+  s.background = safeMode ? '#1a1a1a' : 'transparent';
+  s.color = safeMode ? '#ffffff' : '#1a1a1a';
   s.fontSize = '12px';
   s.cursor = 'pointer';
 }

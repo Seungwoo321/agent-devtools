@@ -889,4 +889,70 @@ describe('createComposer', () => {
     expect(() => btn?.click()).not.toThrow();
     handle.destroy();
   });
+
+  // --- Safe mode toggle ---------------------------------------------------
+
+  it('renders a safe-mode toggle in the header with role="switch" and aria-label', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    const btn = handle.element.querySelector<HTMLButtonElement>(
+      '[data-agent-devtools-composer-safe-mode]',
+    );
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('role')).toBe('switch');
+    expect(btn?.getAttribute('aria-label')).toBe('Safe mode');
+    // Defaults to on — aria-checked=true and the data attribute mirrors it.
+    expect(btn?.getAttribute('aria-checked')).toBe('true');
+    expect(btn?.getAttribute('data-safe-mode')).toBe('on');
+    handle.destroy();
+  });
+
+  it('starts the safe-mode toggle in the off state when safeMode: false is supplied', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), safeMode: false });
+    const btn = handle.element.querySelector<HTMLButtonElement>(
+      '[data-agent-devtools-composer-safe-mode]',
+    );
+    expect(btn?.getAttribute('aria-checked')).toBe('false');
+    expect(btn?.getAttribute('data-safe-mode')).toBe('off');
+    handle.destroy();
+  });
+
+  it('clicking the safe-mode toggle flips state and emits onToggleSafeMode with the new value', () => {
+    const onToggleSafeMode = vi.fn();
+    const handle = createComposer({ container, onSubmit: vi.fn(), onToggleSafeMode });
+    const btn = handle.element.querySelector<HTMLButtonElement>(
+      '[data-agent-devtools-composer-safe-mode]',
+    )!;
+    btn.click();
+    expect(onToggleSafeMode).toHaveBeenLastCalledWith(false);
+    expect(btn.getAttribute('aria-checked')).toBe('false');
+    btn.click();
+    expect(onToggleSafeMode).toHaveBeenLastCalledWith(true);
+    expect(btn.getAttribute('aria-checked')).toBe('true');
+    handle.destroy();
+  });
+
+  it('setSafeMode repaints without invoking onToggleSafeMode', () => {
+    const onToggleSafeMode = vi.fn();
+    const handle = createComposer({ container, onSubmit: vi.fn(), onToggleSafeMode });
+    const btn = handle.element.querySelector<HTMLButtonElement>(
+      '[data-agent-devtools-composer-safe-mode]',
+    )!;
+    handle.setSafeMode(false);
+    expect(btn.getAttribute('aria-checked')).toBe('false');
+    expect(btn.getAttribute('data-safe-mode')).toBe('off');
+    expect(onToggleSafeMode).not.toHaveBeenCalled();
+    handle.setSafeMode(true);
+    expect(btn.getAttribute('aria-checked')).toBe('true');
+    expect(onToggleSafeMode).not.toHaveBeenCalled();
+    handle.destroy();
+  });
+
+  it('clicking the safe-mode toggle without onToggleSafeMode does not throw', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    const btn = handle.element.querySelector<HTMLButtonElement>(
+      '[data-agent-devtools-composer-safe-mode]',
+    );
+    expect(() => btn?.click()).not.toThrow();
+    handle.destroy();
+  });
 });

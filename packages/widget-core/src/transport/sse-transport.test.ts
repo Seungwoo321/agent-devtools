@@ -166,11 +166,15 @@ describe('createDefaultTransport', () => {
 
   it('forwards provider + permissionMode from getSettings() on every request', async () => {
     const { fetch: fetchImpl, captured } = makeFetch({ textBody: '' });
-    let current: { provider: 'acp' | 'sdk'; permissionMode: 'acceptEdits' | 'bypassPermissions' } =
-      {
-        provider: 'acp',
-        permissionMode: 'acceptEdits',
-      };
+    let current: {
+      provider: 'acp' | 'sdk';
+      permissionMode: 'acceptEdits' | 'bypassPermissions';
+      safeMode: boolean;
+    } = {
+      provider: 'acp',
+      permissionMode: 'acceptEdits',
+      safeMode: true,
+    };
     const transport = createDefaultTransport({
       baseUrl: 'http://127.0.0.1:4317',
       pairingToken: 'tok',
@@ -179,7 +183,7 @@ describe('createDefaultTransport', () => {
     });
     await transport.send(basePayload());
     // Live snapshot — the second turn should see the mutated value.
-    current = { provider: 'sdk', permissionMode: 'bypassPermissions' };
+    current = { provider: 'sdk', permissionMode: 'bypassPermissions', safeMode: true };
     await transport.send(basePayload());
     expect(captured).toHaveLength(2);
     const bodies = captured.map(
@@ -200,6 +204,57 @@ describe('createDefaultTransport', () => {
     const body = JSON.parse(captured[0]?.init.body as string) as Record<string, unknown>;
     expect(body).not.toHaveProperty('provider');
     expect(body).not.toHaveProperty('permissionMode');
+  });
+
+  it('attaches a locked permissionPolicy when safeMode is on', async () => {
+    const { fetch: fetchImpl, captured } = makeFetch({ textBody: '' });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getSettings: () => ({ provider: 'acp', permissionMode: 'acceptEdits', safeMode: true }),
+    });
+    await transport.send(basePayload());
+    const body = JSON.parse(captured[0]?.init.body as string) as {
+      permissionPolicy?: Record<string, string>;
+    };
+    expect(body.permissionPolicy).toEqual({
+      fileEdit: 'auto',
+      bash: 'ask',
+      webFetch: 'ask',
+      mcpTool: 'ask',
+    });
+  });
+
+  it('omits permissionPolicy when safeMode is off so the server falls back to host defaults', async () => {
+    const { fetch: fetchImpl, captured } = makeFetch({ textBody: '' });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getSettings: () => ({ provider: 'acp', permissionMode: 'acceptEdits', safeMode: false }),
+    });
+    await transport.send(basePayload());
+    const body = JSON.parse(captured[0]?.init.body as string) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('permissionPolicy');
+  });
+
+  it('re-evaluates the safeMode policy on every send (live snapshot)', async () => {
+    const { fetch: fetchImpl, captured } = makeFetch({ textBody: '' });
+    let safeMode = true;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getSettings: () => ({ provider: 'acp', permissionMode: 'acceptEdits', safeMode }),
+    });
+    await transport.send(basePayload());
+    safeMode = false;
+    await transport.send(basePayload());
+    const first = JSON.parse(captured[0]?.init.body as string) as Record<string, unknown>;
+    const second = JSON.parse(captured[1]?.init.body as string) as Record<string, unknown>;
+    expect(first).toHaveProperty('permissionPolicy');
+    expect(second).not.toHaveProperty('permissionPolicy');
   });
 
   it('defaults clientSessionId to a fresh UUID per transport instance', async () => {

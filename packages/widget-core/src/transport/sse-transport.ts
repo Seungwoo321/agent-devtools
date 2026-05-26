@@ -114,6 +114,21 @@ export class StreamSilentError extends Error {
 const STREAM_PATH = '/v1/agent/stream';
 const SESSION_ID_STORAGE_KEY = 'agent-devtools:clientSessionId';
 
+/**
+ * Per-action permission policy attached to the request whenever the
+ * header-level "Safe mode" toggle is on. Mirrors the four-category shape
+ * the server's ACP runtime expects (`fileEdit | bash | webFetch | mcpTool`)
+ * — file edits still run unattended because that's the whole point of an
+ * agentic devtool, but every other side-effecting category surfaces a
+ * permission prompt.
+ */
+const SAFE_MODE_PERMISSION_POLICY = Object.freeze({
+  fileEdit: 'auto',
+  bash: 'ask',
+  webFetch: 'ask',
+  mcpTool: 'ask',
+} as const);
+
 export function createDefaultTransport(
   options: CreateDefaultTransportOptions,
 ): AgentDevtoolsTransport {
@@ -155,6 +170,11 @@ export function createDefaultTransport(
           ...(settings && {
             provider: settings.provider,
             permissionMode: settings.permissionMode,
+            // When the header-level "Safe mode" toggle is on, lock the
+            // side-effecting categories to `ask` while leaving file edits
+            // on auto. When off, omit `permissionPolicy` so the server
+            // falls back to whatever the host configured at startup.
+            ...(settings.safeMode && { permissionPolicy: SAFE_MODE_PERMISSION_POLICY }),
           }),
         }),
         signal: payload.signal,

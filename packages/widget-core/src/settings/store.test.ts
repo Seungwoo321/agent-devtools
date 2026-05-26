@@ -39,7 +39,9 @@ describe('createSettingsStore', () => {
       JSON.stringify({ provider: 'sdk', permissionMode: 'plan' }),
     );
     const store = createSettingsStore({ storage });
-    expect(store.get()).toEqual({ provider: 'sdk', permissionMode: 'plan' });
+    // `safeMode` is in-memory only — even if storage somehow held a value,
+    // the store must re-default it to `true` on every mount.
+    expect(store.get()).toEqual({ provider: 'sdk', permissionMode: 'plan', safeMode: true });
   });
 
   it('applies partial patches and notifies subscribers', () => {
@@ -50,6 +52,7 @@ describe('createSettingsStore', () => {
     expect(store.get()).toEqual({
       provider: 'sdk',
       permissionMode: DEFAULT_SETTINGS.permissionMode,
+      safeMode: DEFAULT_SETTINGS.safeMode,
     });
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(store.get());
@@ -62,6 +65,8 @@ describe('createSettingsStore', () => {
     store.set({ provider: 'sdk', permissionMode: 'plan' });
     const raw = storage.getItem('agent-devtools:settings');
     expect(raw).not.toBeNull();
+    // `safeMode` is intentionally absent from the persisted payload — see
+    // settings/storage.ts for the rationale.
     expect(JSON.parse(raw as string)).toEqual({
       provider: 'sdk',
       permissionMode: 'plan',
@@ -99,6 +104,47 @@ describe('createSettingsStore', () => {
     expect(seen).toEqual({
       provider: DEFAULT_SETTINGS.provider,
       permissionMode: 'bypassPermissions',
+      safeMode: DEFAULT_SETTINGS.safeMode,
     });
+  });
+
+  it('defaults safeMode to true on every store construction', () => {
+    // Recreate the store twice against fresh storage — the second store
+    // must still see `safeMode: true` because the field is mount-scoped
+    // and storage never carries it.
+    const first = createSettingsStore({ storage: makeStorage() });
+    expect(first.get().safeMode).toBe(true);
+    const second = createSettingsStore({ storage: makeStorage() });
+    expect(second.get().safeMode).toBe(true);
+  });
+
+  it('flips safeMode through update({ safeMode: false }) and notifies', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    const listener = vi.fn();
+    store.subscribe(listener);
+    expect(store.get().safeMode).toBe(true);
+    store.set({ safeMode: false });
+    expect(store.get().safeMode).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    store.set({ safeMode: true });
+    expect(store.get().safeMode).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not persist safeMode through storage (in-memory only)', () => {
+    const storage = makeStorage();
+    const store = createSettingsStore({ storage });
+    store.set({ safeMode: false });
+    // Settings file is either absent or, if a provider/permission set
+    // happened previously, does not contain the safeMode key.
+    const raw = storage.getItem('agent-devtools:settings');
+    if (raw !== null) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      expect(parsed).not.toHaveProperty('safeMode');
+    }
+    // A freshly-recreated store on the same storage backend re-defaults
+    // safeMode to true regardless of what the previous instance did.
+    const next = createSettingsStore({ storage });
+    expect(next.get().safeMode).toBe(true);
   });
 });

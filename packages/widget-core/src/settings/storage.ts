@@ -5,6 +5,10 @@
  * storage-quota-exceeded conditions. A dropped read just falls back to
  * defaults; a dropped write loses the user's most recent toggle, which is
  * acceptable for a dev-only widget.
+ *
+ * `safeMode` is intentionally NOT included in the persisted payload: the
+ * field is in-memory only and must re-default to `true` on every widget
+ * mount, so a fresh tab cannot silently inherit a relaxed posture.
  */
 import { DEFAULT_SETTINGS, isPermissionMode, isProviderId, type Settings } from './types.js';
 
@@ -47,7 +51,10 @@ export function loadSettings(options: SettingsStorageOptions = {}): Settings {
     const permissionMode = isPermissionMode(p.permissionMode)
       ? p.permissionMode
       : DEFAULT_SETTINGS.permissionMode;
-    return { provider, permissionMode };
+    // `safeMode` is never read from storage — it is mount-scoped state that
+    // must always start from the default (`true`). Any value present in the
+    // persisted payload is ignored on purpose.
+    return { provider, permissionMode, safeMode: DEFAULT_SETTINGS.safeMode };
   } catch {
     return DEFAULT_SETTINGS;
   }
