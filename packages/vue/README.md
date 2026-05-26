@@ -2,7 +2,7 @@
 
 # @agent-devtools/vue
 
-> Vue 3 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Resolves the picked DOM element to its Vue ComponentInternalInstance, walks the parent chain to build the component identity payload, and delegates the widget UI to the framework-agnostic shell shared with the React adapter.
+> Vue 3 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Resolves the picked DOM element to its Vue ComponentInternalInstance, walks the parent chain to build the component identity payload, and delegates the widget UI to the framework-agnostic shell in `@agent-devtools/widget-core`.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vue.svg)](https://www.npmjs.com/package/@agent-devtools/vue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
@@ -23,7 +23,7 @@ See [picker-strategy.md](https://github.com/Seungwoo321/agent-devtools/blob/main
 - **`mountAgentDevtoolsVue`** — mounts the floating widget into a closed Shadow DOM and wires the picker to a Vue 3 vnode walker.
 - **Vue 3 component identity** — `describePickedVue` reads `element.__vueParentComponent`, resolves the component name from `name` / `__name` / `__file` (injected by `@vitejs/plugin-vue`), and walks the `.parent` chain leaf-first to build the component breadcrumb.
 - **SFC source mapping** — `__file` (set by `@vitejs/plugin-vue` in dev) is normalised against the workspace root so the agent can grep against the workspace root.
-- **Shared widget UI** — the launcher, composer, settings panel, and transport are reused verbatim from `@agent-devtools/react`. They are implemented as plain DOM factories inside a closed Shadow DOM, so the Vue adapter does not pull React or any host framework into your bundle.
+- **Shared widget UI** — the launcher, composer, settings panel, and transport are reused verbatim from `@agent-devtools/widget-core`. They are implemented as plain DOM factories inside a closed Shadow DOM, so the Vue adapter does not pull React or any host framework into your bundle.
 - **Production guard** — `mountAgentDevtoolsVue` refuses to mount when `NODE_ENV === 'production'`.
 
 ## Install
@@ -57,7 +57,8 @@ The Vite plugin auto-detects `vue` in `package.json` and uses `@agent-devtools/v
 // Keep the widget bundle out of production builds.
 if (import.meta.env.DEV) {
   const { mountAgentDevtoolsVue } = await import('@agent-devtools/vue');
-  const { createDefaultTransport } = await import('@agent-devtools/react');
+  const { createDefaultTransport } =
+    await import('@agent-devtools/widget-core');
 
   const handle = mountAgentDevtoolsVue({
     transport: createDefaultTransport({
@@ -75,11 +76,11 @@ if (import.meta.env.DEV) {
 
 ### `mountAgentDevtoolsVue(options)`
 
-Same options as `mountAgentDevtools` from `@agent-devtools/react`, except `describePicked` defaults to the Vue 3 vnode walker. Pass your own resolver to override.
+Same options as `mountAgentDevtools` from `@agent-devtools/widget-core`, except `describePicked` defaults to the Vue 3 vnode walker. Pass your own resolver to override.
 
 ### `describePickedVue(element, options?)`
 
-Build a `PickedEvidence` for a DOM element rendered by Vue 3. Returns the same shape the React adapter emits — the widget UI consumes a single interface.
+Build a `PickedEvidence` for a DOM element rendered by Vue 3. Returns the same shape every other adapter emits — the widget UI consumes a single interface.
 
 ### `getComponentInstanceForElement(element)`
 
