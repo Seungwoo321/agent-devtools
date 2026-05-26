@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/vue",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Vue 3 adapter for agent-devtools — vnode walker + DOM picker + closed Shadow DOM widget",
   "keywords": [
     "agent-devtools",
