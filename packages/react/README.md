@@ -7,6 +7,17 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/react.svg)](https://www.npmjs.com/package/@agent-devtools/react)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
+## What this adapter provides
+
+- **DOM → component bridge** — own-property enumeration of `__reactFiber$<nonce>` on the clicked element. React 17+ contract, holds through React 19.
+- **Ancestor walker** — `walkComponentAncestors` follows `fiber.return` leaf-first, yields named component fibers, skips host fibers (string `type`), capped at depth 10.
+- **Source extraction** — React ≤18 reads `_debugSource` straight off the fiber. React 19 parses `_debugStack.stack` (the JSX capture stack) with a V8 grammar and resolves the first non-React frame to `{ fileName, lineNumber, columnNumber }`.
+- **Component name** — `displayName` → `function.name` → `memo`/`forwardRef` inner type → `'Unknown'`.
+- **Path normalization** — Vite dev URLs (`http://host/src/App.tsx?t=…`) collapse to workspace-relative paths; `@fs/` keeps absolute; `file://` decodes.
+- **Reused by** — `@agent-devtools/next` (App Router) and `@agent-devtools/next-pages` import this walker directly.
+
+See [picker-strategy.md](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/picker-strategy.md) for the cross-adapter contract.
+
 ## Features
 
 - **`mountAgentDevtools`** — mounts the launcher, composer, and settings widget into a closed Shadow DOM so host styles, events, and the host React instance stay isolated.
