@@ -455,7 +455,7 @@ export async function buildPromptContent(params: AcpRunParams): Promise<ContentB
  *
  * Pure-read kinds (`read | search | think | switch_mode`) are always
  * auto-allowed regardless of policy — the agent cannot make progress
- * without them and they have no external side effects.
+ * without them and they have no write/network/process side effects.
  */
 export function decidePermission(
   request: RequestPermissionRequest,

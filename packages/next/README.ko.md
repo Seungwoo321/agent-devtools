@@ -2,7 +2,7 @@
 
 # @agent-devtools/next
 
-> [agent-devtools](https://github.com/Seungwoo321/agent-devtools) 의 Next.js 15 어댑터. `@agent-devtools/react` 의 React fiber walker 와 widget shell 을 그대로 재사용하고, App Router 와 Pages Router 양쪽을 위한 dev 전용 부트스트랩 훅을 제공합니다.
+> [agent-devtools](https://github.com/Seungwoo321/agent-devtools) 의 Next.js 15 어댑터. `@agent-devtools/react` 의 React fiber walker 와 `@agent-devtools/widget-core` 의 framework-agnostic widget shell 을 그대로 재사용하고, App Router 와 Pages Router 양쪽을 위한 dev 전용 부트스트랩 훅을 제공합니다.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/next.svg)](https://www.npmjs.com/package/@agent-devtools/next)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)

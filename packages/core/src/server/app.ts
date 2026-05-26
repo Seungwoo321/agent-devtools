@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { verifyAuthorization } from './auth.js';
 import { createFileTools, type FileTools, type Workspace } from '../files/index.js';
+import type { PermissionPolicy, PermissionResolution } from '../providers/acp.js';
+import type { AcpSessionStore } from '../providers/acp-session-store.js';
 import {
   writeHandoffArtifact,
   type HandoffArtifact,
@@ -62,7 +64,24 @@ export interface AgentStreamRequest {
   provider?: ProviderId;
   /** Permission mode forwarded to the runtime. Defaults to `AppOptions.defaultPermissionMode`. */
   permissionMode?: PermissionMode;
+  /**
+   * Per-action permission policy forwarded to the runtime. Each category
+   * (`fileEdit`, `bash`, `webFetch`, `mcpTool`) accepts `'auto' | 'ask' | 'deny'`.
+   * Overrides `AppOptions.defaultPermissionPolicy` on a per-request basis so
+   * the widget's Safe-mode toggle can travel end-to-end without restarting
+   * the dev server.
+   */
+  permissionPolicy?: PermissionPolicy;
 }
+
+const PERMISSION_POLICY_KEYS: readonly (keyof PermissionPolicy)[] = [
+  'fileEdit',
+  'bash',
+  'webFetch',
+  'mcpTool',
+];
+
+const PERMISSION_RESOLUTIONS: readonly PermissionResolution[] = ['auto', 'ask', 'deny'];
 
 /**
  * Per-request context handed to the agent factory.
@@ -78,6 +97,13 @@ export interface AgentRequestContext {
   workspace?: Workspace;
   files?: FileTools;
   permissionMode: PermissionMode;
+  /**
+   * Resolved per-action policy for this turn. Present when the request body
+   * carried a `permissionPolicy`, or when the server was started with a
+   * `defaultPermissionPolicy`. Absent when neither was supplied — the
+   * provider then falls back to its own safe-by-default policy.
+   */
+  permissionPolicy?: PermissionPolicy;
 }
 
 export type AgentStreamFactory = (
@@ -102,6 +128,14 @@ export interface AppOptions {
    * Defaults to `'acceptEdits'`.
    */
   defaultPermissionMode?: PermissionMode;
+  /**
+   * Per-action permission policy used when the request body omits
+   * `permissionPolicy`. When unset the provider applies its own safe-by-
+   * default policy ({@link DEFAULT_PERMISSION_POLICY}). Surfaced on
+   * `GET /v1/agent/info` so the widget settings panel can mount in sync
+   * with the server's baseline.
+   */
+  defaultPermissionPolicy?: PermissionPolicy;
   /** Cap on request body size (bytes). Default 1 MiB. */
   maxBodyBytes?: number;
   /**
@@ -131,6 +165,16 @@ export interface AppOptions {
     payload: HandoffRequestPayload,
     options: WriteHandoffArtifactOptions,
   ) => Promise<HandoffArtifact>;
+  /**
+   * Optional persistent `(cwd, clientSessionId) → acpSessionId` store.
+   * When set together with a `workspace`, the handoff route looks up
+   * the ACP session id for the widget's current `clientSessionId` and
+   * surfaces a `claude --resume <id>` sibling command alongside the
+   * always-emitted `--append-system-prompt-file` command. Omitted when
+   * the embedder doesn't run the ACP provider or doesn't want to
+   * expose resume.
+   */
+  acpSessionStore?: AcpSessionStore;
 }
 
 const DEFAULT_MAX_BODY = 1 * 1024 * 1024;
@@ -143,7 +187,9 @@ export function createApp(options: AppOptions = {}) {
   const providers = options.providers ?? {};
   const defaultProvider: ProviderId = options.defaultProvider ?? 'acp';
   const defaultPermissionMode: PermissionMode = options.defaultPermissionMode ?? 'acceptEdits';
+  const defaultPermissionPolicy = options.defaultPermissionPolicy;
   const writeArtifact = options.writeHandoffArtifact ?? writeHandoffArtifact;
+  const acpSessionStore = options.acpSessionStore;
 
   const healthRoute: RouteHandler = ({ res }) => {
     res.statusCode = 200;
@@ -167,6 +213,7 @@ export function createApp(options: AppOptions = {}) {
         ),
         defaultProvider,
         defaultPermissionMode,
+        ...(defaultPermissionPolicy !== undefined && { defaultPermissionPolicy }),
       }),
     );
   };
@@ -224,12 +271,27 @@ export function createApp(options: AppOptions = {}) {
       return;
     }
 
+    let resolvedPolicy: PermissionPolicy | undefined;
+    if (body.permissionPolicy !== undefined) {
+      const validation = validatePermissionPolicy(body.permissionPolicy);
+      if (!validation.ok) {
+        res.statusCode = 400;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: validation.error }));
+        return;
+      }
+      resolvedPolicy = validation.policy;
+    } else if (defaultPermissionPolicy !== undefined) {
+      resolvedPolicy = defaultPermissionPolicy;
+    }
+
     const writer = startSse(res);
     const iterable = factory(body, {
       signal,
       ...(workspace !== undefined && { workspace }),
       ...(files !== undefined && { files }),
       permissionMode: requestedPermissionMode,
+      ...(resolvedPolicy !== undefined && { permissionPolicy: resolvedPolicy }),
     });
     await pumpToSse(writer, iterable, toEvent ? { signal, toEvent } : { signal });
   };
@@ -254,11 +316,30 @@ export function createApp(options: AppOptions = {}) {
       return;
     }
 
+    // Best-effort `acpSessionId` lookup — failure to find one just means
+    // we don't emit the `--resume` sibling command. Any error from the
+    // store is swallowed (the store interface itself is best-effort) so
+    // the always-emitted `--append-system-prompt-file` path still works
+    // when the persisted store file is unreadable or corrupted.
+    let acpSessionId: string | undefined;
+    if (
+      acpSessionStore !== undefined &&
+      workspace !== undefined &&
+      validation.clientSessionId !== undefined
+    ) {
+      try {
+        acpSessionId = await acpSessionStore.get(workspace.root, validation.clientSessionId);
+      } catch {
+        acpSessionId = undefined;
+      }
+    }
+
     let artifact: HandoffArtifact;
     try {
       artifact = await writeArtifact(validation.payload, {
         ...(workspace !== undefined && { workspaceRoot: workspace.root }),
         ...(files !== undefined && { files }),
+        ...(acpSessionId !== undefined && { acpSessionId }),
       });
     } catch (error) {
       res.statusCode = 500;
@@ -270,7 +351,13 @@ export function createApp(options: AppOptions = {}) {
 
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ file: artifact.file, command: artifact.command }));
+    res.end(
+      JSON.stringify({
+        file: artifact.file,
+        command: artifact.command,
+        ...(artifact.resumeCommand !== undefined && { resumeCommand: artifact.resumeCommand }),
+      }),
+    );
   };
 
   const router = createRouter([
@@ -311,10 +398,11 @@ interface HandoffRequestBody {
   picked?: unknown;
   pageContext?: unknown;
   permissionMode?: unknown;
+  clientSessionId?: unknown;
 }
 
 type HandoffValidation =
-  | { ok: true; payload: HandoffRequestPayload }
+  | { ok: true; payload: HandoffRequestPayload; clientSessionId?: string }
   | { ok: false; error: string };
 
 function validateHandoffBody(
@@ -350,6 +438,14 @@ function validateHandoffBody(
     permissionMode = body.permissionMode as PermissionMode;
   }
 
+  let clientSessionId: string | undefined;
+  if (body.clientSessionId !== undefined) {
+    if (typeof body.clientSessionId !== 'string' || body.clientSessionId.length === 0) {
+      return { ok: false, error: 'clientSessionId must be a non-empty string' };
+    }
+    clientSessionId = body.clientSessionId;
+  }
+
   return {
     ok: true,
     payload: {
@@ -358,7 +454,49 @@ function validateHandoffBody(
       ...(body.picked !== undefined && { picked: body.picked }),
       ...(body.pageContext !== undefined && { pageContext: body.pageContext }),
     },
+    ...(clientSessionId !== undefined && { clientSessionId }),
   };
+}
+
+type PermissionPolicyValidation =
+  | { ok: true; policy: PermissionPolicy }
+  | { ok: false; error: string };
+
+/**
+ * Strict shape check on the request-supplied per-action policy. Accepts only
+ * an object whose keys are a subset of {@link PERMISSION_POLICY_KEYS} and
+ * whose values are members of {@link PERMISSION_RESOLUTIONS}. Missing keys
+ * are tolerated (the runtime's safe-default fills them in) but the four
+ * keys must collectively cover every category present in the input — i.e.
+ * we reject typos like `webfetch` outright rather than silently dropping
+ * them and letting the default mask the misconfiguration.
+ */
+function validatePermissionPolicy(value: unknown): PermissionPolicyValidation {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'permissionPolicy must be an object' };
+  }
+  const policy: Partial<PermissionPolicy> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!(PERMISSION_POLICY_KEYS as readonly string[]).includes(key)) {
+      return { ok: false, error: `unsupported permissionPolicy key: ${key}` };
+    }
+    if (
+      typeof entry !== 'string' ||
+      !(PERMISSION_RESOLUTIONS as readonly string[]).includes(entry)
+    ) {
+      return {
+        ok: false,
+        error: `unsupported permissionPolicy.${key}: ${String(entry)}`,
+      };
+    }
+    policy[key as keyof PermissionPolicy] = entry as PermissionResolution;
+  }
+  for (const key of PERMISSION_POLICY_KEYS) {
+    if (policy[key] === undefined) {
+      return { ok: false, error: `permissionPolicy.${key} is required` };
+    }
+  }
+  return { ok: true, policy: policy as PermissionPolicy };
 }
 
 async function readJsonBody<T>(req: IncomingMessage, maxBytes: number): Promise<T> {

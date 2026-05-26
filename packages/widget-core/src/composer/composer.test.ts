@@ -232,7 +232,7 @@ describe('createComposer', () => {
     handle.destroy();
   });
 
-  it('chip exposes a multi-line title attribute as an a11y fallback', () => {
+  it('chip does NOT set a native title attribute so only the custom tooltip surfaces on hover', () => {
     const picked = makePicked({
       componentName: 'Button',
       tagName: 'BUTTON',
@@ -242,9 +242,7 @@ describe('createComposer', () => {
     const chip = handle.element.querySelector<HTMLElement>(
       '[data-agent-devtools-composer-chip] > span',
     );
-    const title = chip?.getAttribute('title') ?? '';
-    expect(title).toContain('Button <button>');
-    expect(title).toContain('source: src/Button.tsx:7');
+    expect(chip?.hasAttribute('title')).toBe(false);
     handle.destroy();
   });
 
@@ -546,7 +544,7 @@ describe('createComposer', () => {
 
   it('applies the default size when no persisted value is present', () => {
     const handle = createComposer({ container, onSubmit: vi.fn(), sizeStorage: null });
-    expect(handle.element.style.width).toBe('320px');
+    expect(handle.element.style.width).toBe('360px');
     expect(handle.element.style.height).toBe('420px');
     handle.destroy();
   });
@@ -559,7 +557,7 @@ describe('createComposer', () => {
     left.dispatchEvent(pointerEvent('pointerdown', { pointerId: 1, clientX: 500, clientY: 300 }));
     // Drag 80px leftward → width should grow by 80 (startWidth + (startX - clientX))
     left.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 420, clientY: 300 }));
-    expect(handle.element.style.width).toBe('400px');
+    expect(handle.element.style.width).toBe('440px');
     expect(handle.element.style.height).toBe('420px'); // unchanged on left-only drag
     left.dispatchEvent(pointerEvent('pointerup', { pointerId: 1, clientX: 420, clientY: 300 }));
     handle.destroy();
@@ -574,7 +572,7 @@ describe('createComposer', () => {
     // Drag 100px upward → height should grow by 100 (startY - clientY)
     top.dispatchEvent(pointerEvent('pointermove', { pointerId: 2, clientX: 800, clientY: 500 }));
     expect(handle.element.style.height).toBe('520px');
-    expect(handle.element.style.width).toBe('320px');
+    expect(handle.element.style.width).toBe('360px');
     top.dispatchEvent(pointerEvent('pointerup', { pointerId: 2, clientX: 800, clientY: 500 }));
     handle.destroy();
   });
@@ -586,13 +584,13 @@ describe('createComposer', () => {
     const corner = getHandle(handle.element, 'corner-nw');
     corner.dispatchEvent(pointerEvent('pointerdown', { pointerId: 3, clientX: 800, clientY: 600 }));
     corner.dispatchEvent(pointerEvent('pointermove', { pointerId: 3, clientX: 750, clientY: 550 }));
-    expect(handle.element.style.width).toBe('370px');
+    expect(handle.element.style.width).toBe('410px');
     expect(handle.element.style.height).toBe('470px');
     corner.dispatchEvent(pointerEvent('pointerup', { pointerId: 3, clientX: 750, clientY: 550 }));
     handle.destroy();
   });
 
-  it('clamps width to the minimum (280px) when dragged inward beyond the floor', () => {
+  it('clamps width to the minimum (320px) when dragged inward beyond the floor', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1200 });
     const handle = createComposer({ container, onSubmit: vi.fn(), sizeStorage: null });
@@ -600,7 +598,7 @@ describe('createComposer', () => {
     left.dispatchEvent(pointerEvent('pointerdown', { pointerId: 4, clientX: 500, clientY: 300 }));
     // Drag rightward (clientX > startX) shrinks; pull way past zero width.
     left.dispatchEvent(pointerEvent('pointermove', { pointerId: 4, clientX: 1000, clientY: 300 }));
-    expect(handle.element.style.width).toBe('280px');
+    expect(handle.element.style.width).toBe('320px');
     left.dispatchEvent(pointerEvent('pointerup', { pointerId: 4, clientX: 1000, clientY: 300 }));
     handle.destroy();
   });
@@ -653,7 +651,7 @@ describe('createComposer', () => {
     // happy-dom doesn't lay out so offsetWidth/Height are 0; the impl falls
     // back to parseFloat(style.width/height) which we just set during the
     // drag. After a 100px corner drag, both axes grew by 100.
-    expect(parsed.width).toBe(420);
+    expect(parsed.width).toBe(460);
     expect(parsed.height).toBe(520);
     handle.destroy();
   });
@@ -697,7 +695,7 @@ describe('createComposer', () => {
     left.dispatchEvent(pointerEvent('pointerdown', { pointerId: 7, clientX: 500, clientY: 300 }));
     left.dispatchEvent(pointerEvent('pointermove', { pointerId: 7, clientX: 480, clientY: 300 }));
     left.dispatchEvent(pointerEvent('pointerup', { pointerId: 7, clientX: 480, clientY: 300 }));
-    expect(handle.element.style.width).toBe('340px');
+    expect(handle.element.style.width).toBe('380px');
     handle.destroy();
   });
 
@@ -747,7 +745,7 @@ describe('createComposer', () => {
     left.dispatchEvent(pointerEvent('pointerdown', { pointerId: 8, clientX: 500, clientY: 300 }));
     // Different pointerId — should not move the panel.
     left.dispatchEvent(pointerEvent('pointermove', { pointerId: 99, clientX: 400, clientY: 300 }));
-    expect(handle.element.style.width).toBe('320px');
+    expect(handle.element.style.width).toBe('360px');
     left.dispatchEvent(pointerEvent('pointerup', { pointerId: 8, clientX: 500, clientY: 300 }));
     handle.destroy();
   });
@@ -770,7 +768,7 @@ describe('createComposer', () => {
     right.dispatchEvent(pointerEvent('pointerdown', { pointerId: 10, clientX: 800, clientY: 300 }));
     // Drag 50px rightward → width grows by 50, panel.style.right shrinks by 50.
     right.dispatchEvent(pointerEvent('pointermove', { pointerId: 10, clientX: 850, clientY: 300 }));
-    expect(handle.element.style.width).toBe('370px');
+    expect(handle.element.style.width).toBe('410px');
     expect(handle.element.style.height).toBe('420px'); // unchanged on horizontal-only drag
     expect(handle.element.style.right).toBe('50px'); // 100 - 50
     right.dispatchEvent(pointerEvent('pointerup', { pointerId: 10, clientX: 850, clientY: 300 }));
@@ -791,7 +789,7 @@ describe('createComposer', () => {
       pointerEvent('pointermove', { pointerId: 11, clientX: 800, clientY: 350 }),
     );
     expect(handle.element.style.height).toBe('470px');
-    expect(handle.element.style.width).toBe('320px');
+    expect(handle.element.style.width).toBe('360px');
     expect(handle.element.style.bottom).toBe('38px'); // 88 - 50
     bottom.dispatchEvent(pointerEvent('pointerup', { pointerId: 11, clientX: 800, clientY: 350 }));
     handle.destroy();
@@ -810,7 +808,7 @@ describe('createComposer', () => {
     corner.dispatchEvent(
       pointerEvent('pointermove', { pointerId: 12, clientX: 850, clientY: 550 }),
     );
-    expect(handle.element.style.width).toBe('370px');
+    expect(handle.element.style.width).toBe('410px');
     expect(handle.element.style.height).toBe('470px');
     expect(handle.element.style.right).toBe('50px');
     corner.dispatchEvent(pointerEvent('pointerup', { pointerId: 12, clientX: 850, clientY: 550 }));
@@ -830,7 +828,7 @@ describe('createComposer', () => {
     corner.dispatchEvent(
       pointerEvent('pointermove', { pointerId: 13, clientX: 750, clientY: 350 }),
     );
-    expect(handle.element.style.width).toBe('370px');
+    expect(handle.element.style.width).toBe('410px');
     expect(handle.element.style.height).toBe('470px');
     expect(handle.element.style.bottom).toBe('38px');
     corner.dispatchEvent(pointerEvent('pointerup', { pointerId: 13, clientX: 750, clientY: 350 }));
@@ -850,7 +848,7 @@ describe('createComposer', () => {
     corner.dispatchEvent(
       pointerEvent('pointermove', { pointerId: 14, clientX: 850, clientY: 350 }),
     );
-    expect(handle.element.style.width).toBe('370px');
+    expect(handle.element.style.width).toBe('410px');
     expect(handle.element.style.height).toBe('470px');
     expect(handle.element.style.right).toBe('50px');
     expect(handle.element.style.bottom).toBe('114px'); // 164 - 50

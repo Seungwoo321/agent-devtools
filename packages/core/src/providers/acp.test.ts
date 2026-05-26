@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createAcpProvider, type AcpEvent, type AcpRuntime } from './acp.js';
+import { createAcpProvider, type AcpEvent, type AcpRuntime, type PermissionPolicy } from './acp.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
 import type { AgentRequestContext, PermissionMode } from '../server/app.js';
 
@@ -212,6 +212,64 @@ describe('createAcpProvider', () => {
       await collect(provider({ prompt: 'p' }, makeCtx({ workspace: ws })));
       expect(seenContext).toBeUndefined();
       expect(contextWasInParams).toBe(false);
+    } finally {
+      (ws as Workspace & { [Symbol.dispose]: () => void })[Symbol.dispose]();
+    }
+  });
+
+  it('lets a request-scoped permissionPolicy override the provider default', async () => {
+    const ws = makeWorkspace();
+    try {
+      const seen: Array<Partial<PermissionPolicy> | undefined> = [];
+      const runtime: AcpRuntime = {
+        run: async function* (params): AsyncIterable<AcpEvent> {
+          seen.push(params.permissionPolicy);
+          yield { kind: 'result', stopReason: 'end_turn' };
+        },
+      };
+      const providerDefault: PermissionPolicy = {
+        fileEdit: 'auto',
+        bash: 'ask',
+        webFetch: 'ask',
+        mcpTool: 'ask',
+      };
+      const requestOverride: PermissionPolicy = {
+        fileEdit: 'auto',
+        bash: 'auto',
+        webFetch: 'auto',
+        mcpTool: 'auto',
+      };
+      const provider = createAcpProvider({ runtime, permissionPolicy: providerDefault });
+
+      await collect(
+        provider({ prompt: 'p' }, makeCtx({ workspace: ws, permissionPolicy: requestOverride })),
+      );
+      expect(seen).toEqual([requestOverride]);
+    } finally {
+      (ws as Workspace & { [Symbol.dispose]: () => void })[Symbol.dispose]();
+    }
+  });
+
+  it('falls back to the provider default permissionPolicy when the request omits it', async () => {
+    const ws = makeWorkspace();
+    try {
+      const seen: Array<Partial<PermissionPolicy> | undefined> = [];
+      const runtime: AcpRuntime = {
+        run: async function* (params): AsyncIterable<AcpEvent> {
+          seen.push(params.permissionPolicy);
+          yield { kind: 'result', stopReason: 'end_turn' };
+        },
+      };
+      const providerDefault: PermissionPolicy = {
+        fileEdit: 'auto',
+        bash: 'deny',
+        webFetch: 'deny',
+        mcpTool: 'deny',
+      };
+      const provider = createAcpProvider({ runtime, permissionPolicy: providerDefault });
+
+      await collect(provider({ prompt: 'p' }, makeCtx({ workspace: ws })));
+      expect(seen).toEqual([providerDefault]);
     } finally {
       (ws as Workspace & { [Symbol.dispose]: () => void })[Symbol.dispose]();
     }

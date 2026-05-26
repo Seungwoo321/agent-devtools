@@ -62,6 +62,15 @@ export interface LauncherHandle {
   getState(): LauncherState;
   /** Programmatically move the button. Clamped + persisted. */
   setPosition(position: LauncherPosition): void;
+  /**
+   * Show or hide the launcher button itself. Hidden launchers stop
+   * intercepting pointer events; visibility flips `display` between
+   * the static `flex` value and `none`. Independent of the composer
+   * panel's own visibility — the orchestrator coordinates both.
+   */
+  setVisible(visible: boolean): void;
+  /** Whether the launcher button is currently visible. */
+  isVisible(): boolean;
   /** Remove the button from the DOM and detach listeners. */
   destroy(): void;
 }
@@ -95,6 +104,7 @@ export function createLauncher(options: CreateLauncherOptions): LauncherHandle {
   options.onPositionChange?.(state.position);
 
   let destroyed = false;
+  let visible = true;
 
   function dispatch(event: LauncherEvent): void {
     const before = state;
@@ -175,6 +185,14 @@ export function createLauncher(options: CreateLauncherOptions): LauncherHandle {
         ...(options.storage !== undefined && { storage: options.storage }),
         ...(options.key !== undefined && { key: options.key }),
       });
+    },
+    setVisible(next: boolean): void {
+      if (destroyed) return;
+      visible = next;
+      button.style.display = next ? 'flex' : 'none';
+    },
+    isVisible(): boolean {
+      return visible;
     },
     destroy(): void {
       if (destroyed) return;

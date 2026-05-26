@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  A floating chat that picks any component, reads the code, and edits files itself — right there in the browser. No IDE forwarding, no extra account. Bring your own Claude Pro/Max subscription.
+  A floating chat that picks any component, reads the code, and edits files itself — right there in the browser. No IDE forwarding, no second login or vendor API key — it reuses your existing Claude Pro/Max subscription through the Claude Code CLI OAuth.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)
 
-Inside the widget, type something like "make the Counter title bigger and red" and the agent reads `App.tsx` and `styles.css` and applies an `Edit`. Vite HMR reflects the new CSS instantly so you confirm the result without leaving the page.
+Pick the disabled "Add to cart" button in the widget and ask "why does this stay disabled after I pick a size?" The agent walks the React fiber chain back to the parent `ProductDetail`, follows the imports the picker shipped along (`useCart`, `selectors/inventory.ts`), reads the actual handler and selector source, then either explains the dependency it's missing or applies an `Edit` to fix it. The same flow handles "why doesn't this list refresh after a mutation?" or "this form swallows the validation error — where is it caught?" — context the picker already packaged so the agent does not have to grep first.
 
 - User guide (en / ko): <https://agent-devtools-docs.vercel.app/>
 - How it works (single-diagram walk-through): <https://agent-devtools-docs.vercel.app/en/guides/how-it-works/>
@@ -156,7 +156,7 @@ export default {
     transpile: [
       '@agent-devtools/nuxt2',
       '@agent-devtools/vue2',
-      '@agent-devtools/react',
+      '@agent-devtools/widget-core',
       '@agent-devtools/core',
       'marked',
     ],

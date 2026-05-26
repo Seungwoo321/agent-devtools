@@ -2,7 +2,7 @@
 
 # @agent-devtools/vue
 
-> [agent-devtools](https://github.com/Seungwoo321/agent-devtools) 의 Vue 3 어댑터. 피킹된 DOM 요소를 Vue ComponentInternalInstance 로 환원하고, `.parent` 체인을 따라 컴포넌트 정체성 페이로드를 만들고, widget UI 는 React 어댑터와 공유되는 framework-agnostic shell 에 위임합니다.
+> [agent-devtools](https://github.com/Seungwoo321/agent-devtools) 의 Vue 3 어댑터. 피킹된 DOM 요소를 Vue ComponentInternalInstance 로 환원하고, `.parent` 체인을 따라 컴포넌트 정체성 페이로드를 만들고, widget UI 는 `@agent-devtools/widget-core` 의 framework-agnostic shell 에 위임합니다.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vue.svg)](https://www.npmjs.com/package/@agent-devtools/vue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
@@ -12,7 +12,7 @@
 - **`mountAgentDevtoolsVue`** — floating widget 을 closed Shadow DOM 에 마운트하고 picker 를 Vue 3 vnode walker 에 연결합니다.
 - **Vue 3 컴포넌트 정체성** — `describePickedVue` 가 `element.__vueParentComponent` 를 읽어 `name` / `__name` / `__file` (`@vitejs/plugin-vue` 가 주입) 로 컴포넌트 이름을 환원하고, `.parent` 체인을 leaf-first 로 따라가 컴포넌트 breadcrumb 을 구성합니다.
 - **SFC source 매핑** — dev 모드의 `__file` 을 workspace 루트 기준 경로로 정규화해 에이전트가 그대로 grep 할 수 있게 합니다.
-- **공유 widget UI** — launcher, composer, settings panel, transport 는 `@agent-devtools/react` 에서 그대로 재사용됩니다. 모두 closed Shadow DOM 안의 plain DOM factory 로 구현되어 있어 Vue 어댑터가 React 나 호스트 framework 런타임을 끌어들이지 않습니다.
+- **공유 widget UI** — launcher, composer, settings panel, transport 는 `@agent-devtools/widget-core` 에서 그대로 재사용됩니다. 모두 closed Shadow DOM 안의 plain DOM factory 로 구현되어 있어 Vue 어댑터가 React 나 호스트 framework 런타임을 끌어들이지 않습니다.
 - **Production 가드** — `mountAgentDevtoolsVue` 는 `NODE_ENV === 'production'` 일 때 mount 를 거부합니다.
 
 ## 설치
@@ -46,7 +46,8 @@ Vite 플러그인은 `package.json` 에서 `vue` 를 자동 감지하고 `@agent
 // production 번들에 widget 이 새지 않도록 동적 import.
 if (import.meta.env.DEV) {
   const { mountAgentDevtoolsVue } = await import('@agent-devtools/vue');
-  const { createDefaultTransport } = await import('@agent-devtools/react');
+  const { createDefaultTransport } =
+    await import('@agent-devtools/widget-core');
 
   const handle = mountAgentDevtoolsVue({
     transport: createDefaultTransport({
@@ -64,11 +65,11 @@ if (import.meta.env.DEV) {
 
 ### `mountAgentDevtoolsVue(options)`
 
-`@agent-devtools/react` 의 `mountAgentDevtools` 와 동일한 옵션. `describePicked` 가 Vue 3 vnode walker 로 기본 설정된다는 점만 다릅니다. 직접 resolver 를 넘기면 override 가능.
+`@agent-devtools/widget-core` 의 `mountAgentDevtools` 와 동일한 옵션. `describePicked` 가 Vue 3 vnode walker 로 기본 설정된다는 점만 다릅니다. 직접 resolver 를 넘기면 override 가능.
 
 ### `describePickedVue(element, options?)`
 
-Vue 3 가 렌더한 DOM 요소에 대해 `PickedEvidence` 를 빌드. React 어댑터와 동일한 shape — widget UI 는 단일 인터페이스로 양쪽을 소비합니다.
+Vue 3 가 렌더한 DOM 요소에 대해 `PickedEvidence` 를 빌드. 다른 어댑터들과 동일한 shape — widget UI 는 단일 인터페이스로 모든 어댑터를 소비합니다.
 
 ### `getComponentInstanceForElement(element)`
 

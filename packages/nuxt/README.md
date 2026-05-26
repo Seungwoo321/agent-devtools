@@ -32,7 +32,7 @@ export default defineNuxtConfig({
 });
 ```
 
-The module reads `nuxt.options.dev`. In production builds the `setup` function returns immediately, before `addPlugin` is ever called — the widget chain (`@agent-devtools/vue` → `@agent-devtools/react`) is therefore never resolved by the bundler.
+The module reads `nuxt.options.dev`. In production builds the `setup` function returns immediately, before `addPlugin` is ever called — the widget chain (`@agent-devtools/vue` → `@agent-devtools/widget-core` → `@agent-devtools/core`) is therefore never resolved by the bundler.
 
 ## Options
 

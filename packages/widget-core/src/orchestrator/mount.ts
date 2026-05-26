@@ -8,10 +8,13 @@
  *   3. Open the composer panel with an embedded stream view.
  *   4. Stand up the picker so the composer's "Pick" button can capture an
  *      element + populate the picked-element chip.
- *   5. Forward composer submissions to the configured transport. The MVP
- *      ships without a transport adapter (ADT-26); for now the orchestrator
- *      appends an error item explaining that the server isn't wired yet so
- *      the empty-state is obvious in the example app.
+ *   5. Forward composer submissions through `buildPageContext` →
+ *      optional `enrichPageContext` (related-imports + source-slice from
+ *      the dev server's module graph) → `transport.send`, which POSTs to
+ *      `/v1/agent/stream` and streams events back into the message store.
+ *      When no transport is configured the orchestrator surfaces a clear
+ *      error item in the conversation so the failure mode is obvious in
+ *      tests and ad-hoc harness embeds.
  *
  * The pieces are deliberately decoupled (each `create*` factory owns its
  * own DOM + listeners and returns a `destroy`) so this file is just glue.
@@ -33,6 +36,7 @@ import {
 import { createErrorObserver, type ErrorObserverHandle } from '../observers/index.js';
 import { createPicker, type Picker } from '../picker/index.js';
 import {
+  createAnimationFrameScheduler,
   createMessageStore,
   createStreamRenderer,
   type MessageItem,
@@ -73,6 +77,14 @@ export interface AgentDevtoolsTransport {
    * a no-op when missing.
    */
   resetSession?(): void;
+  /**
+   * Read the live tab-scoped `clientSessionId` (the same id the
+   * transport sends on every `send`). The handoff path reads this so
+   * the server can look up a matching ACP session id and surface
+   * `claude --resume <id>` as a second continuation option. Optional
+   * for the same reason `resetSession` is.
+   */
+  getClientSessionId?(): string | undefined;
 }
 
 export interface MountAgentDevtoolsOptions {
@@ -165,6 +177,25 @@ export interface MountAgentDevtoolsOptions {
    * agent gets the unenriched page context instead.
    */
   enrichPageContext?: (pageContext: PageContext, signal: AbortSignal) => Promise<PageContext>;
+  /**
+   * Whether the widget (launcher + composer) is visible on first mount.
+   * Defaults to `true`. Set to `false` to ship the widget hidden until a
+   * developer triggers the toggle hotkey — useful for dev environments
+   * where non-frontend operators (backend engineers debugging, QA) load
+   * the page and shouldn't see the floating launcher by default.
+   *
+   * The Vite plugin exposes this as `defaultVisible` so it can be set
+   * declaratively in `vite.config`.
+   */
+  defaultVisible?: boolean;
+  /**
+   * Disable the keyboard toggle (Ctrl/Cmd + Shift + ;) that flips widget
+   * visibility. Defaults to `false`. Set to `true` to remove the
+   * keydown listener entirely — pair this with `defaultVisible: false`
+   * for hosts that must never surface the widget without code-level
+   * intervention.
+   */
+  disableToggleHotkey?: boolean;
 }
 
 const PRODUCTION_REFUSAL_MESSAGE =
@@ -247,6 +278,11 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     container: composer.element,
     document: doc,
     store,
+    // Stream assistant text into the bubble at a steady cadence so bursty
+    // server-side buffering doesn't translate into visibly lumpy reveal.
+    // Falls back to instant rendering in environments without rAF (SSR,
+    // certain test harnesses).
+    frameScheduler: createAnimationFrameScheduler(),
   });
   if (textarea && textarea.parentElement === composer.element) {
     composer.element.insertBefore(streamRenderer.element, textarea);
@@ -336,7 +372,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     const text = payload.text.trim();
     if (!text) return;
     composer.setText('');
-    store.appendUserMessage(text, payload.picked ? summarizePicked(payload.picked) : undefined);
+    store.appendUserMessage(text, payload.picked ?? undefined);
 
     if (!options.transport) {
       store.applyEvent({ type: 'error', message: NO_TRANSPORT_MESSAGE });
@@ -454,12 +490,14 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
         options.enrichPageContext,
       );
       if (controller.signal.aborted) return;
+      const clientSessionId = options.transport?.getClientSessionId?.();
       const result = await options.requestHandoff({
         conversation,
         picked: pageContext.picked ?? (pickedElement ? resolvePicked(pickedElement) : null),
         pageContext,
         permissionMode: settingsStore.get().permissionMode,
         signal: controller.signal,
+        ...(clientSessionId !== undefined && clientSessionId.length > 0 && { clientSessionId }),
       });
       if (controller.signal.aborted) return;
       handoffModal.showReady(result);
@@ -470,6 +508,49 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     } finally {
       if (handoffController === controller) handoffController = null;
     }
+  }
+
+  // ── Widget-level visibility (launcher + composer combined) ──────────
+  //
+  // The orchestrator owns the "is the widget surface visible at all"
+  // axis. The launcher controls only its own button; the composer
+  // already has its panel-level `setVisible`. We coordinate the two so
+  // operators can toggle the entire devtools surface with one hotkey
+  // — and so `defaultVisible: false` ships a fully dormant widget for
+  // dev environments where non-frontend users load the page.
+  let widgetVisible = options.defaultVisible ?? true;
+  if (!widgetVisible) {
+    launcher.setVisible(false);
+    composer.setVisible(false);
+  }
+
+  function setWidgetVisible(next: boolean): void {
+    if (widgetVisible === next) return;
+    widgetVisible = next;
+    launcher.setVisible(next);
+    if (!next) {
+      // Going dark: collapse the composer and abort any picker so the
+      // widget surface leaves no overlay behind. Keep the message store
+      // intact — toggling visibility is not "new session".
+      composer.setVisible(false);
+      picker.cancel();
+    }
+  }
+
+  const handleToggleKeydown = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented) return;
+    if (!(event.metaKey || event.ctrlKey)) return;
+    if (!event.shiftKey) return;
+    // `event.code` is layout-stable; `event.key` covers older browsers and
+    // the IME case where the shifted ';' arrives as ':'.
+    const isSemicolon = event.code === 'Semicolon' || event.key === ';' || event.key === ':';
+    if (!isSemicolon) return;
+    event.preventDefault();
+    setWidgetVisible(!widgetVisible);
+  };
+  const hotkeyEnabled = options.disableToggleHotkey !== true;
+  if (hotkeyEnabled) {
+    doc.addEventListener('keydown', handleToggleKeydown);
   }
 
   return {
@@ -486,6 +567,9 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
+      if (hotkeyEnabled) {
+        doc.removeEventListener('keydown', handleToggleKeydown);
+      }
       inflight?.abort();
       handoffController?.abort();
       unsubscribeSafeMode();
@@ -523,10 +607,6 @@ function collectHandoffConversation(items: readonly MessageItem[]): HandoffTurn[
     }
   }
   return turns;
-}
-
-function summarizePicked(picked: PickedEvidence): string {
-  return picked.componentName || picked.tagName.toLowerCase();
 }
 
 /**

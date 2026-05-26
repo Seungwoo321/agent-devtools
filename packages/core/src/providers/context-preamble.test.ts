@@ -305,6 +305,114 @@ describe('formatContextPreamble', () => {
     });
   });
 
+  it('renders picked.relatedImports as a bullet list inside the picked block', async () => {
+    const out = await formatContextPreamble({
+      pageContext: {
+        picked: {
+          componentName: 'MyButton',
+          tagName: 'BUTTON',
+          selector: 'button',
+          outerHTML: '<button></button>',
+          attributes: {},
+          componentChain: [],
+          relatedImports: ['src/util/x.ts', 'src/util/y.ts', ''],
+        },
+      },
+    });
+    expect(out).toContain('Related imports:');
+    expect(out).toContain('  - src/util/x.ts');
+    expect(out).toContain('  - src/util/y.ts');
+    const bulletLines = out.match(/^\s+- src\/util\//gm) ?? [];
+    expect(bulletLines).toHaveLength(2);
+  });
+
+  it('omits the relatedImports block when the list is empty or absent', async () => {
+    const noField = await formatContextPreamble({
+      pageContext: {
+        picked: {
+          componentName: 'X',
+          tagName: 'DIV',
+          selector: 'div',
+          outerHTML: '<div></div>',
+          attributes: {},
+          componentChain: [],
+        },
+      },
+    });
+    expect(noField).not.toContain('Related imports:');
+
+    const emptyList = await formatContextPreamble({
+      pageContext: {
+        picked: {
+          componentName: 'X',
+          tagName: 'DIV',
+          selector: 'div',
+          outerHTML: '<div></div>',
+          attributes: {},
+          componentChain: [],
+          relatedImports: [],
+        },
+      },
+    });
+    expect(emptyList).not.toContain('Related imports:');
+  });
+
+  it('renders picked.sourceSlice as a fenced code block with the line range header', async () => {
+    const out = await formatContextPreamble({
+      pageContext: {
+        picked: {
+          componentName: 'MyButton',
+          tagName: 'BUTTON',
+          selector: 'button',
+          outerHTML: '<button></button>',
+          attributes: {},
+          componentChain: [],
+          sourceSlice: {
+            code: 'export function MyButton() {\n  return null;\n}',
+            startLine: 12,
+            endLine: 14,
+          },
+        },
+      },
+    });
+    expect(out).toContain('Source slice (lines 12-14):');
+    expect(out).toContain('```');
+    expect(out).toContain('export function MyButton() {');
+    expect(out).toContain('  return null;');
+  });
+
+  it('omits the sourceSlice block when code is empty or shape is invalid', async () => {
+    const emptyCode = await formatContextPreamble({
+      pageContext: {
+        picked: {
+          componentName: 'X',
+          tagName: 'DIV',
+          selector: 'div',
+          outerHTML: '<div></div>',
+          attributes: {},
+          componentChain: [],
+          sourceSlice: { code: '', startLine: 1, endLine: 1 },
+        },
+      },
+    });
+    expect(emptyCode).not.toContain('Source slice');
+
+    const missingLines = await formatContextPreamble({
+      pageContext: {
+        picked: {
+          componentName: 'X',
+          tagName: 'DIV',
+          selector: 'div',
+          outerHTML: '<div></div>',
+          attributes: {},
+          componentChain: [],
+          sourceSlice: { code: 'x' },
+        },
+      },
+    });
+    expect(missingLines).not.toContain('Source slice');
+  });
+
   it('clamps line numbers past the end of the file', async () => {
     await withWorkspace(async (root, files) => {
       writeFileSync(join(root, 'short.tsx'), 'one\ntwo\n', 'utf8');

@@ -98,6 +98,49 @@ export interface CreateDefaultTransportOptions {
 const DEFAULT_STREAM_SILENT_MS = 60_000;
 const DEFAULT_PRE_RESPONSE_RETRIES = 1;
 const DEFAULT_PRE_RESPONSE_RETRY_BACKOFF_MS = 300;
+const DEFAULT_ENRICHMENT_TIMEOUT_MS = 3_000;
+
+/**
+ * Race the caller-provided signal (if any) against a fixed timeout. Used
+ * by the enrichment fetchers so a hung dev server can't block the user's
+ * prompt — the orchestrator already treats enrichment as best-effort, so
+ * the right failure mode is "abort, return empty, keep going". Pass
+ * `timeoutMs <= 0` to disable the timer; the caller signal is still
+ * propagated. Always call `dispose()` (in a `finally`) to clear the timer
+ * and detach the listener so an in-time response doesn't leak handles.
+ */
+function withEnrichmentTimeout(
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): { readonly signal: AbortSignal | undefined; dispose(): void } {
+  if (timeoutMs <= 0) {
+    return { signal: callerSignal, dispose: () => undefined };
+  }
+  const controller = new AbortController();
+  let onCallerAbort: (() => void) | null = null;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      onCallerAbort = (): void => {
+        controller.abort();
+      };
+      callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+    }
+  }
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    dispose(): void {
+      clearTimeout(timer);
+      if (callerSignal && onCallerAbort) {
+        callerSignal.removeEventListener('abort', onCallerAbort);
+      }
+    },
+  };
+}
 
 /**
  * Thrown by `pumpStream` when no chunk has arrived for longer than the
@@ -215,6 +258,13 @@ export function createDefaultTransport(
         }
       }
     },
+    getClientSessionId(): string {
+      // Expose the tab-scoped id so callers built next to the transport
+      // (the handoff requester) can attach it to their own requests
+      // without re-implementing the load-or-mint dance. Reads the live
+      // `let` binding so a `resetSession()` between calls is observed.
+      return clientSessionId;
+    },
   };
 }
 
@@ -305,6 +355,14 @@ export interface CreateRelatedImportsFetcherOptions {
   readonly pairingToken: string;
   /** Override `globalThis.fetch` (tests). */
   readonly fetch?: typeof fetch;
+  /**
+   * Milliseconds before the internal abort fires when the dev server
+   * stalls on a single related-imports request. Enrichment is best-effort
+   * — a hung dev server must not block the user's prompt. Default
+   * `3000`. Pass `0` to disable the internal timeout (caller signal is
+   * still honoured).
+   */
+  readonly timeoutMs?: number;
 }
 
 const RELATED_IMPORTS_PATH = '/related-imports';
@@ -331,6 +389,7 @@ export function createRelatedImportsFetcher(
 ): RelatedImportsFetcher {
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_ENRICHMENT_TIMEOUT_MS;
 
   return async function fetchRelatedImports(
     file: string,
@@ -338,6 +397,7 @@ export function createRelatedImportsFetcher(
   ): Promise<readonly string[]> {
     if (!file) return [];
     const url = `${baseUrl}${RELATED_IMPORTS_PATH}?file=${encodeURIComponent(file)}`;
+    const guard = withEnrichmentTimeout(signal, timeoutMs);
     try {
       const init: RequestInit = {
         method: 'GET',
@@ -346,7 +406,7 @@ export function createRelatedImportsFetcher(
           accept: 'application/json',
         },
       };
-      if (signal) init.signal = signal;
+      if (guard.signal) init.signal = guard.signal;
       const response = await fetchImpl(url, init);
       if (!response.ok) return [];
       const payload = (await response.json()) as { imports?: unknown };
@@ -358,6 +418,8 @@ export function createRelatedImportsFetcher(
       return imports;
     } catch {
       return [];
+    } finally {
+      guard.dispose();
     }
   };
 }
@@ -369,6 +431,14 @@ export interface CreateSourceSliceFetcherOptions {
   readonly pairingToken: string;
   /** Override `globalThis.fetch` (tests). */
   readonly fetch?: typeof fetch;
+  /**
+   * Milliseconds before the internal abort fires when the dev server
+   * stalls on a single source-slice request. Enrichment is best-effort —
+   * a hung dev server must not block the user's prompt. Default `3000`.
+   * Pass `0` to disable the internal timeout (caller signal is still
+   * honoured).
+   */
+  readonly timeoutMs?: number;
 }
 
 const SOURCE_SLICE_PATH = '/source-slice';
@@ -402,6 +472,7 @@ export function createSourceSliceFetcher(
 ): SourceSliceFetcher {
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_ENRICHMENT_TIMEOUT_MS;
 
   return async function fetchSourceSlice(
     file: string,
@@ -410,6 +481,7 @@ export function createSourceSliceFetcher(
   ): Promise<SourceSlicePayload | null> {
     if (!file || !Number.isFinite(line) || line < 1) return null;
     const url = `${baseUrl}${SOURCE_SLICE_PATH}?file=${encodeURIComponent(file)}&line=${encodeURIComponent(String(Math.floor(line)))}`;
+    const guard = withEnrichmentTimeout(signal, timeoutMs);
     try {
       const init: RequestInit = {
         method: 'GET',
@@ -418,7 +490,7 @@ export function createSourceSliceFetcher(
           accept: 'application/json',
         },
       };
-      if (signal) init.signal = signal;
+      if (guard.signal) init.signal = guard.signal;
       const response = await fetchImpl(url, init);
       if (!response.ok) return null;
       const payload = (await response.json()) as {
@@ -442,6 +514,8 @@ export function createSourceSliceFetcher(
       };
     } catch {
       return null;
+    } finally {
+      guard.dispose();
     }
   };
 }
@@ -453,6 +527,15 @@ export interface CreateHandoffRequesterOptions {
   readonly pairingToken: string;
   /** Override `globalThis.fetch` (tests). */
   readonly fetch?: typeof fetch;
+  /**
+   * Pull the live tab-scoped `clientSessionId` at request time. The
+   * Vite plugin's bootstrap wires this to the transport's
+   * `getClientSessionId` so the server can look up the matching ACP
+   * session id and emit a `--resume <id>` sibling command. Omitting
+   * the option (or returning `undefined`) just suppresses the resume
+   * sibling — the `--append-system-prompt-file` command still works.
+   */
+  readonly getClientSessionId?: () => string | undefined;
 }
 
 const HANDOFF_PATH = '/v1/agent/handoff';
@@ -471,6 +554,7 @@ const HANDOFF_PATH = '/v1/agent/handoff';
 export function createHandoffRequester(options: CreateHandoffRequesterOptions): HandoffRequester {
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const getClientSessionId = options.getClientSessionId;
 
   return async function requestHandoff(request): Promise<HandoffResult> {
     const body: Record<string, unknown> = {
@@ -484,6 +568,15 @@ export function createHandoffRequester(options: CreateHandoffRequesterOptions): 
     }
     if (request.permissionMode !== undefined) {
       body.permissionMode = request.permissionMode;
+    }
+    // Caller-supplied id wins over the bound getter so a future
+    // adapter that wants to drive handoff from outside the transport
+    // (test harness, alternate transport) can still surface
+    // `--resume` without rewriting the option contract.
+    const clientSessionId =
+      request.clientSessionId ?? (getClientSessionId ? getClientSessionId() : undefined);
+    if (clientSessionId !== undefined && clientSessionId.length > 0) {
+      body.clientSessionId = clientSessionId;
     }
     const init: RequestInit = {
       method: 'POST',
@@ -503,11 +596,21 @@ export function createHandoffRequester(options: CreateHandoffRequesterOptions): 
         `agent server responded ${String(response.status)}${detail ? `: ${detail}` : ''}`,
       );
     }
-    const parsed = (await response.json()) as { file?: unknown; command?: unknown };
+    const parsed = (await response.json()) as {
+      file?: unknown;
+      command?: unknown;
+      resumeCommand?: unknown;
+    };
     if (typeof parsed.file !== 'string' || typeof parsed.command !== 'string') {
       throw new Error('agent server returned a malformed handoff artifact');
     }
-    return { file: parsed.file, command: parsed.command };
+    return {
+      file: parsed.file,
+      command: parsed.command,
+      ...(typeof parsed.resumeCommand === 'string' && parsed.resumeCommand.length > 0
+        ? { resumeCommand: parsed.resumeCommand }
+        : {}),
+    };
   };
 }
 

@@ -2,8 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Options as SdkOptions, Query as SdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  CanUseTool,
+  Options as SdkOptions,
+  PermissionResult,
+  PermissionUpdate,
+  Query as SdkQuery,
+} from '@anthropic-ai/claude-agent-sdk';
 import { createSdkProvider } from './sdk.js';
+import type { PermissionPolicy } from './acp.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
 import type { AgentRequestContext } from '../server/app.js';
 
@@ -213,5 +220,119 @@ describe('createSdkProvider', () => {
     const provider = createSdkProvider({ query });
     const out = await collect(provider({ prompt: 'p' }, makeCtx()));
     expect(out).toEqual([{ type: 'acp.error', error: { name: 'Error', message: 'rate limit' } }]);
+  });
+
+  describe('canUseTool wiring', () => {
+    const SAFE_POLICY: PermissionPolicy = {
+      fileEdit: 'auto',
+      bash: 'ask',
+      webFetch: 'ask',
+      mcpTool: 'ask',
+    };
+    const OPEN_POLICY: PermissionPolicy = {
+      fileEdit: 'auto',
+      bash: 'auto',
+      webFetch: 'auto',
+      mcpTool: 'auto',
+    };
+
+    async function captureCanUseTool(
+      ctx: AgentRequestContext,
+      providerOptions: { permissionPolicy?: Partial<PermissionPolicy> } = {},
+    ): Promise<CanUseTool | undefined> {
+      let seen: SdkOptions | undefined;
+      const query = vi.fn((params: { prompt: string; options?: SdkOptions }) => {
+        seen = params.options;
+        return makeQuery([{ type: 'result' }]);
+      });
+      const provider = createSdkProvider({ query, ...providerOptions });
+      await collect(provider({ prompt: 'p' }, ctx));
+      return seen?.canUseTool;
+    }
+
+    const NOOP_OPTIONS = {
+      signal: new AbortController().signal,
+      suggestions: [] as PermissionUpdate[],
+      toolUseID: 'tu-1',
+    };
+
+    it("does NOT install canUseTool when permissionMode is 'bypassPermissions'", async () => {
+      const canUseTool = await captureCanUseTool(makeCtx({ permissionMode: 'bypassPermissions' }));
+      expect(canUseTool).toBeUndefined();
+    });
+
+    it('installs canUseTool for non-bypass modes so per-tool policy can deny', async () => {
+      const canUseTool = await captureCanUseTool(makeCtx({ permissionMode: 'acceptEdits' }));
+      expect(canUseTool).toBeDefined();
+    });
+
+    it('safe-read tools (Read/Glob/Grep) are always allowed regardless of policy', async () => {
+      const canUseTool = await captureCanUseTool(
+        makeCtx({ permissionMode: 'acceptEdits', permissionPolicy: SAFE_POLICY }),
+      );
+      expect(canUseTool).toBeDefined();
+      for (const tool of ['Read', 'Glob', 'Grep', 'WebSearch'] as const) {
+        const result: PermissionResult = await canUseTool!(tool, { path: '/x' }, NOOP_OPTIONS);
+        expect(result.behavior).toBe('allow');
+      }
+    });
+
+    it("file-edit tools allow under safe defaults because fileEdit defaults to 'auto'", async () => {
+      const canUseTool = await captureCanUseTool(
+        makeCtx({ permissionMode: 'acceptEdits', permissionPolicy: SAFE_POLICY }),
+      );
+      const result = await canUseTool!('Edit', { file_path: '/x' }, NOOP_OPTIONS);
+      expect(result.behavior).toBe('allow');
+    });
+
+    it("bash/web-fetch/MCP default to 'ask' under safe defaults — denied without interrupt", async () => {
+      const canUseTool = await captureCanUseTool(
+        makeCtx({ permissionMode: 'acceptEdits', permissionPolicy: SAFE_POLICY }),
+      );
+      for (const tool of ['Bash', 'WebFetch', 'mcp__server__tool'] as const) {
+        const result = await canUseTool!(tool, {}, NOOP_OPTIONS);
+        expect(result.behavior).toBe('deny');
+        if (result.behavior === 'deny') {
+          expect(result.message).toMatch(new RegExp(tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+          expect(result.interrupt).toBeUndefined();
+        }
+      }
+    });
+
+    it("'deny' resolution denies with interrupt=true so the agent halts rather than retrying", async () => {
+      const denyAll: PermissionPolicy = {
+        fileEdit: 'deny',
+        bash: 'deny',
+        webFetch: 'deny',
+        mcpTool: 'deny',
+      };
+      const canUseTool = await captureCanUseTool(
+        makeCtx({ permissionMode: 'acceptEdits', permissionPolicy: denyAll }),
+      );
+      const result = await canUseTool!('Edit', { file_path: '/x' }, NOOP_OPTIONS);
+      expect(result.behavior).toBe('deny');
+      if (result.behavior === 'deny') {
+        expect(result.interrupt).toBe(true);
+      }
+    });
+
+    it('request-scoped permissionPolicy overrides the provider creation-time default', async () => {
+      // Provider was created with safe defaults (bash: 'ask') but the request
+      // context flips to OPEN_POLICY (bash: 'auto'); the override must win.
+      const canUseTool = await captureCanUseTool(
+        makeCtx({ permissionMode: 'acceptEdits', permissionPolicy: OPEN_POLICY }),
+        { permissionPolicy: SAFE_POLICY },
+      );
+      const result = await canUseTool!('Bash', { command: 'ls' }, NOOP_OPTIONS);
+      expect(result.behavior).toBe('allow');
+    });
+
+    it('falls back to safe defaults when neither provider nor request supplies a policy', async () => {
+      const canUseTool = await captureCanUseTool(makeCtx({ permissionMode: 'acceptEdits' }));
+      const bash = await canUseTool!('Bash', { command: 'ls' }, NOOP_OPTIONS);
+      expect(bash.behavior).toBe('deny');
+      const edit = await canUseTool!('Edit', { file_path: '/x' }, NOOP_OPTIONS);
+      expect(edit.behavior).toBe('allow');
+    });
   });
 });

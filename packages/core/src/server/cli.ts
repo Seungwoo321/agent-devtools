@@ -2,6 +2,7 @@ import { createApp, type AgentStreamFactory, type PermissionMode, type ProviderI
 import { generatePairingToken } from './auth.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
 import { createAcpProvider, createSdkProvider } from '../providers/index.js';
+import type { PermissionPolicy } from '../providers/acp.js';
 import { DEFAULT_PORT, PORT_FALLBACK_ATTEMPTS, startServer, type StartedServer } from './server.js';
 
 export interface CliArgs {
@@ -32,6 +33,12 @@ export interface RunCliOptions {
   defaultProvider?: ProviderId;
   /** Permission mode used when the request omits `permissionMode`. Defaults to `'acceptEdits'`. */
   defaultPermissionMode?: PermissionMode;
+  /**
+   * Per-action permission policy used when the request omits
+   * `permissionPolicy`. When unset, the provider's safe-by-default policy
+   * applies (file edits auto, everything else ask).
+   */
+  defaultPermissionPolicy?: PermissionPolicy;
 }
 
 const HELP = `agent-devtools — local dev agent server (127.0.0.1 only)
@@ -149,6 +156,9 @@ export async function runCli(
     providers,
     ...(options.defaultProvider && { defaultProvider: options.defaultProvider }),
     ...(options.defaultPermissionMode && { defaultPermissionMode: options.defaultPermissionMode }),
+    ...(options.defaultPermissionPolicy && {
+      defaultPermissionPolicy: options.defaultPermissionPolicy,
+    }),
   });
   const started = await startServer(handler, {
     port: args.port,

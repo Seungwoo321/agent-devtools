@@ -1,10 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { PickedEvidence } from '../context/types.js';
 import { createStreamRenderer } from './renderer.js';
 import { createMessageStore } from './store.js';
 
 function counterIds(): () => string {
   let n = 0;
   return () => `id-${++n}`;
+}
+
+function makeEvidence(overrides: Partial<PickedEvidence> = {}): PickedEvidence {
+  return {
+    componentName: 'Header',
+    tagName: 'DIV',
+    selector: 'div.header',
+    outerHTML: '<div class="header">Hi</div>',
+    attributes: { class: 'header' },
+    componentChain: [],
+    ...overrides,
+  };
 }
 
 let container: HTMLElement;
@@ -51,11 +64,103 @@ describe('createStreamRenderer', () => {
   it('renders the picked summary chip for user messages', () => {
     const store = createMessageStore({ generateId: counterIds() });
     const handle = createStreamRenderer({ container, store });
-    store.appendUserMessage('what is this?', '<Header>');
+    store.appendUserMessage('what is this?', makeEvidence({ componentName: 'Header' }));
     const [first] = items(handle);
-    expect(first?.textContent).toContain('<Header>');
+    expect(first?.textContent).toContain('Header');
     expect(first?.textContent).toContain('what is this?');
     handle.destroy();
+  });
+
+  describe('picked evidence disclosure on user bubble', () => {
+    function userItem(handle: { element: HTMLElement }): HTMLElement | null {
+      const list = Array.from(
+        handle.element.querySelectorAll<HTMLElement>('[data-agent-devtools-stream-item]'),
+      );
+      return list.find((el) => el.getAttribute('data-kind') === 'user') ?? null;
+    }
+
+    it('defaults to collapsed and exposes a details/summary disclosure', () => {
+      const store = createMessageStore({ generateId: counterIds() });
+      const handle = createStreamRenderer({ container, store });
+      store.appendUserMessage(
+        'inspect',
+        makeEvidence({
+          componentName: 'TodoItem',
+          source: { fileName: 'src/TodoItem.tsx', lineNumber: 23 },
+        }),
+      );
+      const node = userItem(handle);
+      const details = node?.querySelector<HTMLDetailsElement>(
+        '[data-agent-devtools-picked-detail]',
+      );
+      expect(details).not.toBeNull();
+      // The default state is collapsed: the [open] attribute is absent.
+      expect(details?.open).toBe(false);
+      // The summary label shows the component name; the detail panel is
+      // present in the DOM but hidden until the user opens the disclosure.
+      expect(
+        node?.querySelector('[data-agent-devtools-picked-summary]')?.textContent ?? '',
+      ).toContain('TodoItem');
+      handle.destroy();
+    });
+
+    it('exposes the full evidence payload inside the panel', () => {
+      const store = createMessageStore({ generateId: counterIds() });
+      const handle = createStreamRenderer({ container, store });
+      const evidence = makeEvidence({
+        componentName: 'TodoItem',
+        tagName: 'BUTTON',
+        selector: 'button.todo-item',
+        outerHTML: '<button class="todo-item">Buy milk</button>',
+        attributes: { class: 'todo-item', 'data-id': '7' },
+        componentChain: [
+          { componentName: 'TodoItem', source: { fileName: 'src/TodoItem.tsx', lineNumber: 23 } },
+          { componentName: 'TodoList', source: { fileName: 'src/TodoList.tsx', lineNumber: 12 } },
+        ],
+        boundingRect: { x: 10, y: 20, width: 120, height: 32 },
+        propsSnapshot: '{"id":7,"label":"Buy milk"}',
+        relatedImports: ['src/types.ts', 'src/utils.ts'],
+        sourceSlice: {
+          code: 'function TodoItem(props) {\n  return <button />;\n}',
+          startLine: 20,
+          endLine: 24,
+        },
+      });
+      store.appendUserMessage('explain this', evidence);
+      const panel = userItem(handle)?.querySelector<HTMLElement>(
+        '[data-agent-devtools-picked-panel]',
+      );
+      expect(panel).not.toBeNull();
+      const text = panel?.textContent ?? '';
+      // Component chain with source paths.
+      expect(text).toContain('TodoItem');
+      expect(text).toContain('TodoList');
+      expect(text).toContain('src/TodoItem.tsx:23');
+      expect(text).toContain('src/TodoList.tsx:12');
+      // Attributes.
+      expect(text).toContain('class="todo-item"');
+      expect(text).toContain('data-id="7"');
+      // Bounding rect.
+      expect(text).toContain('120×32');
+      // Outer HTML preview.
+      expect(text).toContain('<button class="todo-item">Buy milk</button>');
+      // Related imports and source slice.
+      expect(text).toContain('src/types.ts');
+      expect(text).toContain('src/utils.ts');
+      expect(text).toContain('function TodoItem');
+      expect(text).toContain('lines 20–24');
+      handle.destroy();
+    });
+
+    it('does not render the disclosure when no evidence is attached', () => {
+      const store = createMessageStore({ generateId: counterIds() });
+      const handle = createStreamRenderer({ container, store });
+      store.appendUserMessage('plain message');
+      const node = userItem(handle);
+      expect(node?.querySelector('[data-agent-devtools-picked-detail]')).toBeNull();
+      expect(node?.textContent).toContain('plain message');
+      handle.destroy();
+    });
   });
 
   it('appends assistant text deltas in place under the same id', () => {
@@ -164,7 +269,8 @@ describe('createStreamRenderer', () => {
     const handle = createStreamRenderer({ container, store });
     store.appendUserMessage('a');
     store.appendUserMessage('b');
-    expect(items(handle)).toHaveLength(2);
+    // 2 user messages + 1 pending placeholder behind the latest turn.
+    expect(items(handle)).toHaveLength(3);
     store.clear();
     expect(items(handle)).toHaveLength(0);
     handle.destroy();
@@ -308,6 +414,77 @@ describe('createStreamRenderer', () => {
     handle.destroy();
   });
 
+  it('paints a pending typing indicator immediately after a user turn', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('hello');
+    const [, pendingNode] = items(handle);
+    expect(pendingNode?.getAttribute('data-kind')).toBe('assistant-pending');
+    const dots = pendingNode?.querySelectorAll('[data-agent-devtools-pending-dot]');
+    expect(dots?.length).toBe(3);
+    handle.destroy();
+  });
+
+  it('drops the pending indicator on the first text delta of the turn', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('hello');
+    expect(items(handle).some((n) => n.getAttribute('data-kind') === 'assistant-pending')).toBe(
+      true,
+    );
+    store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'hi' });
+    const kinds = items(handle).map((n) => n.getAttribute('data-kind'));
+    expect(kinds).not.toContain('assistant-pending');
+    expect(kinds).toContain('assistant-text');
+    handle.destroy();
+  });
+
+  it('drops the pending indicator on the first tool-use-start of the turn', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('go');
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'inspect' });
+    const kinds = items(handle).map((n) => n.getAttribute('data-kind'));
+    expect(kinds).not.toContain('assistant-pending');
+    expect(kinds).toContain('tool-use');
+    handle.destroy();
+  });
+
+  it('drops the pending indicator on an error event', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('go');
+    store.applyEvent({ type: 'error', message: 'boom' });
+    const kinds = items(handle).map((n) => n.getAttribute('data-kind'));
+    expect(kinds).not.toContain('assistant-pending');
+    expect(kinds).toContain('error');
+    handle.destroy();
+  });
+
+  it('drops the pending indicator on a done event with no content', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('go');
+    store.applyEvent({ type: 'done' });
+    const kinds = items(handle).map((n) => n.getAttribute('data-kind'));
+    expect(kinds).not.toContain('assistant-pending');
+    handle.destroy();
+  });
+
+  it('injects keyframes for the pending dot animation as a sibling of the root', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    const styleEl = container.querySelector('style[data-agent-devtools-stream-style]');
+    expect(styleEl).not.toBeNull();
+    expect(styleEl?.textContent ?? '').toContain('@keyframes agent-devtools-pending-dot');
+    // The style element must live outside `root` so the renderer's child
+    // pruning never sweeps it away between renders.
+    expect(styleEl?.parentElement).toBe(container);
+    expect(styleEl?.parentElement).not.toBe(handle.element);
+    handle.destroy();
+    expect(container.querySelector('style[data-agent-devtools-stream-style]')).toBeNull();
+  });
+
   it('scrollToBottom re-anchors the list to the latest item', () => {
     const store = createMessageStore({ generateId: counterIds() });
     const handle = createStreamRenderer({ container, store });
@@ -322,5 +499,125 @@ describe('createStreamRenderer', () => {
     handle.scrollToBottom();
     expect(handle.element.scrollTop).toBe(999);
     handle.destroy();
+  });
+
+  describe('smooth assistant-text reveal', () => {
+    // Manual frame stepper: callbacks are queued and only fire when the
+    // test explicitly calls `step()`. This isolates the cadence loop from
+    // jsdom's setTimeout-backed requestAnimationFrame so we can observe
+    // each frame deterministically.
+    function manualScheduler(): {
+      schedule: (cb: () => void) => () => void;
+      step: () => void;
+      pending: () => number;
+    } {
+      const queue: Array<{ cb: () => void; cancelled: boolean }> = [];
+      const schedule = (cb: () => void): (() => void) => {
+        const entry = { cb, cancelled: false };
+        queue.push(entry);
+        return () => {
+          entry.cancelled = true;
+        };
+      };
+      const step = (): void => {
+        const next = queue.shift();
+        if (!next || next.cancelled) return;
+        next.cb();
+      };
+      const pending = (): number => queue.filter((e) => !e.cancelled).length;
+      return { schedule, step, pending };
+    }
+
+    function textOf(handle: { element: HTMLElement }): string {
+      // Markdown rendering wraps text in <p>, which jsdom serialises with
+      // a trailing newline. Strip the streaming cursor glyph and any
+      // surrounding whitespace so length comparisons reflect the actual
+      // revealed slice.
+      const node = items(handle)[0];
+      return (node?.textContent ?? '').replace(/▍/g, '').trim();
+    }
+
+    it('reveals lumpy text-deltas at a steady cadence over multiple frames', () => {
+      const scheduler = manualScheduler();
+      const store = createMessageStore({ generateId: counterIds() });
+      const handle = createStreamRenderer({
+        container,
+        store,
+        frameScheduler: scheduler.schedule,
+      });
+      // 32-char burst → cadence aims to drain over ~16 frames (≥1/frame).
+      const burst = 'abcdefghijklmnopqrstuvwxyz012345';
+      store.applyEvent({ type: 'text-delta', blockId: 'b1', text: burst });
+
+      // Initial paint: nothing revealed yet because streaming + scheduler.
+      expect(textOf(handle).length).toBe(0);
+      expect(scheduler.pending()).toBe(1);
+
+      // Step ten frames; should grow roughly linearly, never overshoot.
+      const lengths: number[] = [];
+      for (let i = 0; i < 10; i += 1) {
+        scheduler.step();
+        lengths.push(textOf(handle).length);
+      }
+      expect(lengths[0]).toBeGreaterThan(0);
+      // Monotonic growth — text only ever grows during reveal.
+      for (let i = 1; i < lengths.length; i += 1) {
+        expect(lengths[i]).toBeGreaterThanOrEqual(lengths[i - 1] ?? 0);
+      }
+      // Never exceeds the store text.
+      expect(lengths[lengths.length - 1]).toBeLessThanOrEqual(burst.length);
+      // Drain the rest of the queue (safety cap prevents an infinite loop
+      // if the reveal logic ever fails to converge).
+      let safety = 1000;
+      while (scheduler.pending() > 0 && safety > 0) {
+        scheduler.step();
+        safety -= 1;
+      }
+      expect(textOf(handle)).toBe(burst);
+      handle.destroy();
+    });
+
+    it('snaps to full text immediately when streaming flips to false', () => {
+      const scheduler = manualScheduler();
+      const store = createMessageStore({ generateId: counterIds() });
+      const handle = createStreamRenderer({
+        container,
+        store,
+        frameScheduler: scheduler.schedule,
+      });
+      store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'abcdefghijklmnop' });
+      // Step a couple frames so only a slice is rendered.
+      scheduler.step();
+      scheduler.step();
+      const midLength = textOf(handle).length;
+      expect(midLength).toBeGreaterThan(0);
+      expect(midLength).toBeLessThan(16);
+
+      store.applyEvent({ type: 'text-stop', blockId: 'b1' });
+      // Without stepping any further frames the rendered text must equal
+      // the full received text and the cursor must be gone.
+      expect(textOf(handle)).toBe('abcdefghijklmnop');
+      const node = items(handle)[0];
+      expect(node?.textContent ?? '').not.toContain('▍');
+      handle.destroy();
+    });
+
+    it('destroy cancels any pending animation frame and clears reveal state', () => {
+      const scheduler = manualScheduler();
+      const store = createMessageStore({ generateId: counterIds() });
+      const handle = createStreamRenderer({
+        container,
+        store,
+        frameScheduler: scheduler.schedule,
+      });
+      store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'hello world' });
+      // A frame is queued.
+      expect(scheduler.pending()).toBe(1);
+      handle.destroy();
+      // After destroy the queued entry is cancelled, so stepping is a no-op.
+      expect(scheduler.pending()).toBe(0);
+      // Stepping the cancelled entry should not throw or render.
+      expect(() => scheduler.step()).not.toThrow();
+    });
   });
 });

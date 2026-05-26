@@ -7,23 +7,35 @@
  * terminal CLI: native tooling, no transport hops, no permission UX
  * gymnastics. Switching usually means losing context — the picked
  * element's evidence, the page state, the prior turns. P4 closes that
- * gap.
+ * gap by emitting up to two paste-ready commands the user can choose
+ * between.
  *
- * Approach: `claude --append-system-prompt-file <md>`
+ * Two continuation paths (the widget shows whichever the server emits):
  *
- *   - Honest about the boundary. The terminal session is a *new*
- *     conversation that *knows about* the prior widget exchange,
- *     not a resume of the same conversation. The two runtimes don't
- *     share session storage (ACP / SDK provider vs. Claude CLI's own
- *     `~/.claude/projects/` session JSONL), and reverse-engineering
- *     the CLI's JSONL schema couples us to undocumented internals
- *     that evolve per release.
- *   - Uses a hidden but stable CLI flag (`--append-system-prompt-file`)
- *     surfaced by `claude --bare`'s help text. The file path argument
- *     means we never have to shell-quote multi-line markdown.
- *   - The markdown is appended (not replaced) so the CLI's normal
- *     system prompt and `--add-dir` / CLAUDE.md autoloads still apply;
- *     our content is supplementary context, not a replacement.
+ *   1. `claude --resume <acpSessionId>` — when the widget conversation
+ *      ran against the ACP provider, the same session ID the runtime
+ *      handed the spawned `@agentclientprotocol/claude-agent-acp` is
+ *      also a first-class Claude CLI `--resume` target (CLI / ACP share
+ *      the on-disk `~/.claude/projects/<cwd>/<sessionId>.jsonl` store).
+ *      Preserves the message structure and the prompt cache, so the
+ *      terminal turn that follows is a true resumption rather than a
+ *      fresh conversation that happens to know the prior context. The
+ *      `AcpSessionStore` keeps the `(cwd, clientSessionId) →
+ *      acpSessionId` mapping the route looks up.
+ *
+ *   2. `claude --append-system-prompt-file <md>` — always emitted.
+ *      Starts a fresh CLI conversation seeded with the widget exchange
+ *      as appended system context. Works regardless of which provider
+ *      ran the widget (SDK, future custom providers), survives session
+ *      storage rotation, and is what the user gets when no ACP session
+ *      ID was recorded for this tab. The markdown is appended (not
+ *      replaced) so the CLI's normal system prompt + `--add-dir` /
+ *      CLAUDE.md autoloads still apply.
+ *
+ * The `--append-system-prompt-file` flag is hidden from the main help
+ * but documented in `claude --bare`'s description and accepted by the
+ * CLI's flag parser. The file argument means we never have to
+ * shell-quote multi-line markdown.
  *
  * Lifecycle of the temp file
  *
@@ -199,8 +211,21 @@ function rewritePreambleHeadings(preamble: string): string {
 export interface HandoffArtifact {
   /** Absolute path to the written markdown file. */
   readonly file: string;
-  /** Shell command the user pastes into their terminal. */
+  /**
+   * `claude --append-system-prompt-file <md>` paste-ready command.
+   * Always present — starts a fresh CLI conversation seeded with the
+   * widget exchange. Works regardless of which provider ran.
+   */
   readonly command: string;
+  /**
+   * `claude --resume <acpSessionId>` paste-ready command. Present only
+   * when the route resolved an ACP session for the widget's current
+   * `clientSessionId` — preserves the message structure and prompt
+   * cache, so the terminal turn that follows is a true resumption.
+   * Omitted when no ACP session was recorded (SDK provider, fresh tab,
+   * pruned session store).
+   */
+  readonly resumeCommand?: string;
 }
 
 export interface WriteHandoffArtifactOptions extends BuildHandoffMarkdownOptions {
@@ -219,6 +244,13 @@ export interface WriteHandoffArtifactOptions extends BuildHandoffMarkdownOptions
    * substitute an in-memory recorder.
    */
   readonly writeFile?: (path: string, contents: string) => Promise<void>;
+  /**
+   * ACP session id resolved for the widget's current `clientSessionId`.
+   * When set, the artifact carries a sibling `resumeCommand` of the
+   * form `cd <ws> && claude --resume <id>` (or the bare `claude
+   * --resume <id>` when `workspaceRoot` is absent).
+   */
+  readonly acpSessionId?: string;
 }
 
 /**
@@ -248,7 +280,12 @@ export async function writeHandoffArtifact(
   const command = options.workspaceRoot
     ? `cd ${shellQuote(options.workspaceRoot)} && ${baseCommand}`
     : baseCommand;
-  return { file, command };
+  if (!options.acpSessionId) return { file, command };
+  const baseResume = `claude --resume ${shellQuote(options.acpSessionId)}`;
+  const resumeCommand = options.workspaceRoot
+    ? `cd ${shellQuote(options.workspaceRoot)} && ${baseResume}`
+    : baseResume;
+  return { file, command, resumeCommand };
 }
 
 async function defaultWriteFile(path: string, contents: string): Promise<void> {

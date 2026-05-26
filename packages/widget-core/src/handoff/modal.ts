@@ -1,7 +1,7 @@
 /**
  * Terminal-handoff modal. Renders an overlay that shows the
- * `claude --append-system-prompt-file …` command the server returned,
- * with a Copy-to-clipboard button. Lives in the same shadow root as the
+ * `claude` paste-ready command(s) the server returned, with
+ * Copy-to-clipboard buttons. Lives in the same shadow root as the
  * composer so it doesn't interact with the host app's CSS / focus.
  *
  * The modal has three observable states:
@@ -10,8 +10,11 @@
  *   - `loading` — request in flight after the user clicked the handoff
  *     button; the overlay is open but the command area shows a spinner
  *     so the user has feedback while the server writes the markdown.
- *   - `ready` — server returned; the command is shown with a Copy
- *     button and the file path under it.
+ *   - `ready` — server returned; the command(s) are shown each with
+ *     its own Copy button, the file path is shown under them. When the
+ *     server also resolved an ACP session id for the tab, a second
+ *     "Resume the same conversation" option appears side-by-side with
+ *     the always-emitted "Start a new session with context" option.
  *   - `error` — the request failed; show the message and a Retry hint.
  *
  * Clipboard write goes through `navigator.clipboard.writeText` with a
@@ -22,15 +25,29 @@
 const MODAL_ROOT_ATTR = 'data-agent-devtools-handoff-modal';
 const BACKDROP_ATTR = 'data-agent-devtools-handoff-backdrop';
 const COMMAND_ATTR = 'data-agent-devtools-handoff-command';
+const RESUME_COMMAND_ATTR = 'data-agent-devtools-handoff-resume-command';
 const COPY_ATTR = 'data-agent-devtools-handoff-copy';
+const RESUME_COPY_ATTR = 'data-agent-devtools-handoff-resume-copy';
 const CLOSE_ATTR = 'data-agent-devtools-handoff-close';
 const STATUS_ATTR = 'data-agent-devtools-handoff-status';
 
 export interface HandoffResult {
   /** Absolute path to the markdown file the server wrote. */
   readonly file: string;
-  /** Shell command for the user to paste into the terminal. */
+  /**
+   * `claude --append-system-prompt-file <md>` paste-ready command. Always
+   * present — starts a fresh CLI conversation seeded with the widget
+   * exchange.
+   */
   readonly command: string;
+  /**
+   * `claude --resume <id>` paste-ready command. Present when the server
+   * resolved an ACP session id for the tab — picks up the exact same
+   * conversation, preserving message structure and prompt cache. Absent
+   * when no ACP session was recorded (SDK provider, fresh tab, pruned
+   * session store).
+   */
+  readonly resumeCommand?: string;
 }
 
 export interface CreateHandoffModalOptions {
@@ -92,28 +109,70 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
 
   const intro = doc.createElement('p');
   intro.textContent =
-    'Paste this into your terminal to continue the conversation with the same context (picked element, page state, prior turns).';
+    'Pick one of the commands below and paste it into your terminal. Both carry the picked element, page state, and prior turns.';
   applyModalIntroStyles(intro);
   body.appendChild(intro);
 
+  // ── Resume section (only shown when the server resolved an ACP session id). ──
+  const resumeSection = doc.createElement('section');
+  applyOptionSectionStyles(resumeSection);
+  resumeSection.style.display = 'none';
+  const resumeHeading = doc.createElement('h3');
+  resumeHeading.textContent = 'Resume the same conversation';
+  applyOptionHeadingStyles(resumeHeading);
+  const resumeCaption = doc.createElement('p');
+  resumeCaption.textContent =
+    'Picks up the exact session the widget was running. Preserves the message structure and the prompt cache.';
+  applyOptionCaptionStyles(resumeCaption);
+  const resumeCommandBox = doc.createElement('pre');
+  resumeCommandBox.setAttribute(RESUME_COMMAND_ATTR, '');
+  applyCommandBoxStyles(resumeCommandBox);
+  const resumeActions = doc.createElement('div');
+  applyActionsStyles(resumeActions);
+  const resumeCopyButton = doc.createElement('button');
+  resumeCopyButton.type = 'button';
+  resumeCopyButton.setAttribute(RESUME_COPY_ATTR, '');
+  resumeCopyButton.textContent = 'Copy resume command';
+  applyCopyButtonStyles(resumeCopyButton);
+  resumeActions.appendChild(resumeCopyButton);
+  resumeSection.appendChild(resumeHeading);
+  resumeSection.appendChild(resumeCaption);
+  resumeSection.appendChild(resumeCommandBox);
+  resumeSection.appendChild(resumeActions);
+  body.appendChild(resumeSection);
+
+  // ── Append-system-prompt section (always shown when ready). ──
+  const appendSection = doc.createElement('section');
+  applyOptionSectionStyles(appendSection);
+  const appendHeading = doc.createElement('h3');
+  appendHeading.textContent = 'Start a new session with context';
+  applyOptionHeadingStyles(appendHeading);
+  const appendCaption = doc.createElement('p');
+  appendCaption.textContent =
+    'Opens a fresh CLI conversation seeded with the widget context. Works regardless of provider and survives session-storage changes.';
+  applyOptionCaptionStyles(appendCaption);
   const commandBox = doc.createElement('pre');
   commandBox.setAttribute(COMMAND_ATTR, '');
   applyCommandBoxStyles(commandBox);
-  body.appendChild(commandBox);
-
   const actions = doc.createElement('div');
   applyActionsStyles(actions);
   const copyButton = doc.createElement('button');
   copyButton.type = 'button';
   copyButton.setAttribute(COPY_ATTR, '');
-  copyButton.textContent = 'Copy';
+  copyButton.textContent = 'Copy command';
   applyCopyButtonStyles(copyButton);
+  actions.appendChild(copyButton);
+  appendSection.appendChild(appendHeading);
+  appendSection.appendChild(appendCaption);
+  appendSection.appendChild(commandBox);
+  appendSection.appendChild(actions);
+  body.appendChild(appendSection);
+
+  // ── Shared status + file label sit below both sections. ──
   const status = doc.createElement('span');
   status.setAttribute(STATUS_ATTR, '');
   applyStatusStyles(status);
-  actions.appendChild(copyButton);
-  actions.appendChild(status);
-  body.appendChild(actions);
+  body.appendChild(status);
 
   const fileLabel = doc.createElement('p');
   applyFileLabelStyles(fileLabel);
@@ -125,6 +184,7 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
   container.appendChild(backdrop);
 
   let currentCommand = '';
+  let currentResumeCommand = '';
   let destroyed = false;
 
   function setStatus(text: string, kind: 'info' | 'error' = 'info'): void {
@@ -135,8 +195,12 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
   function showLoading(): void {
     if (destroyed) return;
     currentCommand = '';
+    currentResumeCommand = '';
     commandBox.textContent = 'Preparing handoff…';
     copyButton.disabled = true;
+    resumeSection.style.display = 'none';
+    resumeCommandBox.textContent = '';
+    resumeCopyButton.disabled = true;
     fileLabel.textContent = '';
     setStatus('');
     backdrop.style.display = 'flex';
@@ -147,6 +211,17 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
     currentCommand = result.command;
     commandBox.textContent = result.command;
     copyButton.disabled = false;
+    if (result.resumeCommand && result.resumeCommand.length > 0) {
+      currentResumeCommand = result.resumeCommand;
+      resumeCommandBox.textContent = result.resumeCommand;
+      resumeCopyButton.disabled = false;
+      resumeSection.style.display = 'flex';
+    } else {
+      currentResumeCommand = '';
+      resumeCommandBox.textContent = '';
+      resumeCopyButton.disabled = true;
+      resumeSection.style.display = 'none';
+    }
     fileLabel.textContent = `File: ${result.file}`;
     setStatus('');
     backdrop.style.display = 'flex';
@@ -155,8 +230,12 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
   function showError(message: string): void {
     if (destroyed) return;
     currentCommand = '';
+    currentResumeCommand = '';
     commandBox.textContent = `Handoff failed: ${message}`;
     copyButton.disabled = true;
+    resumeSection.style.display = 'none';
+    resumeCommandBox.textContent = '';
+    resumeCopyButton.disabled = true;
     fileLabel.textContent = '';
     setStatus('');
     backdrop.style.display = 'flex';
@@ -177,17 +256,24 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
     if (event.target === backdrop) onClose();
   }
 
+  async function copyText(text: string, label: string): Promise<void> {
+    try {
+      await writeClipboard(text);
+      setStatus(`${label} copied`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Copy failed: ${message}`, 'error');
+    }
+  }
+
   function onCopyClick(): void {
     if (!currentCommand) return;
-    void (async (): Promise<void> => {
-      try {
-        await writeClipboard(currentCommand);
-        setStatus('Copied');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setStatus(`Copy failed: ${message}`, 'error');
-      }
-    })();
+    void copyText(currentCommand, 'Command');
+  }
+
+  function onResumeCopyClick(): void {
+    if (!currentResumeCommand) return;
+    void copyText(currentResumeCommand, 'Resume command');
   }
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -200,6 +286,7 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
   closeButton.addEventListener('click', onClose);
   backdrop.addEventListener('click', onBackdropClick);
   copyButton.addEventListener('click', onCopyClick);
+  resumeCopyButton.addEventListener('click', onResumeCopyClick);
   doc.addEventListener('keydown', onKeyDown);
 
   return {
@@ -214,6 +301,7 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
       closeButton.removeEventListener('click', onClose);
       backdrop.removeEventListener('click', onBackdropClick);
       copyButton.removeEventListener('click', onCopyClick);
+      resumeCopyButton.removeEventListener('click', onResumeCopyClick);
       doc.removeEventListener('keydown', onKeyDown);
       backdrop.remove();
     },
@@ -361,4 +449,31 @@ function applyFileLabelStyles(el: HTMLElement): void {
   s.fontSize = '11px';
   s.color = '#6a6a6a';
   s.fontFamily = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
+}
+
+function applyOptionSectionStyles(el: HTMLElement): void {
+  const s = el.style;
+  s.display = 'flex';
+  s.flexDirection = 'column';
+  s.gap = '8px';
+  s.padding = '12px';
+  s.border = '1px solid rgba(0, 0, 0, 0.08)';
+  s.borderRadius = '8px';
+  s.background = '#fafafa';
+}
+
+function applyOptionHeadingStyles(el: HTMLElement): void {
+  const s = el.style;
+  s.margin = '0';
+  s.fontSize = '13px';
+  s.fontWeight = '600';
+  s.color = '#1a1a1a';
+}
+
+function applyOptionCaptionStyles(el: HTMLElement): void {
+  const s = el.style;
+  s.margin = '0';
+  s.fontSize = '12px';
+  s.lineHeight = '1.45';
+  s.color = '#4a4a4a';
 }

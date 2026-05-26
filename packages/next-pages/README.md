@@ -1,6 +1,6 @@
 # @agent-devtools/next-pages
 
-> Next.js Pages Router adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Reuses the React fiber walker + widget shell from `@agent-devtools/react`, and adds dev-only bootstrap hooks for legacy `pages/_app.tsx` hosts.
+> Next.js Pages Router adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Reuses the React fiber walker from `@agent-devtools/react` and the framework-agnostic widget shell from `@agent-devtools/widget-core`, and adds dev-only bootstrap hooks for legacy `pages/_app.tsx` hosts.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/next-pages.svg)](https://www.npmjs.com/package/@agent-devtools/next-pages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
@@ -80,7 +80,7 @@ The wrapper sets the following env entries (omitted in production builds):
 - `AGENT_DEVTOOLS_NEXT_PAGES_BASE_URL` — when `options.baseUrl` is provided.
 - `AGENT_DEVTOOLS_NEXT_PAGES_PAIRING_TOKEN` — when `options.pairingToken` is provided.
 
-In production builds the wrapper also installs a webpack alias that maps `@agent-devtools/{react,core,harness-core}` to `false`, so the widget chain never enters the production graph.
+In production builds the wrapper also installs a webpack alias that maps `@agent-devtools/{react,widget-core,core,harness-core}` to `false`, so the widget chain never enters the production graph.
 
 ### `bootstrapAgentDevtools(options?)`
 

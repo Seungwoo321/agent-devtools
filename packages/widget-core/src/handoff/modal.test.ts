@@ -128,6 +128,99 @@ describe('createHandoffModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('keeps the resume section hidden when the artifact has no resumeCommand', () => {
+    const container = makeContainer();
+    const handle = mountModal({ container });
+    handle.showReady({
+      file: '/tmp/x.md',
+      command: "claude --append-system-prompt-file '/tmp/x.md'",
+    });
+    const resumeSection = handle.element.querySelector(
+      'pre[data-agent-devtools-handoff-resume-command]',
+    )?.parentElement as HTMLElement | null;
+    expect(resumeSection).not.toBeNull();
+    expect(resumeSection!.style.display).toBe('none');
+    const resumeCopy = handle.element.querySelector(
+      'button[data-agent-devtools-handoff-resume-copy]',
+    ) as HTMLButtonElement;
+    expect(resumeCopy.disabled).toBe(true);
+  });
+
+  it('reveals the resume section and enables Copy when the artifact includes resumeCommand', () => {
+    const container = makeContainer();
+    const handle = mountModal({ container });
+    handle.showReady({
+      file: '/tmp/x.md',
+      command: "claude --append-system-prompt-file '/tmp/x.md'",
+      resumeCommand: "cd '/Users/dev/project' && claude --resume 'acp-XYZ'",
+    });
+    const resumeSection = handle.element.querySelector(
+      'pre[data-agent-devtools-handoff-resume-command]',
+    )?.parentElement as HTMLElement | null;
+    expect(resumeSection).not.toBeNull();
+    expect(resumeSection!.style.display).not.toBe('none');
+    const resumeBox = handle.element.querySelector(
+      'pre[data-agent-devtools-handoff-resume-command]',
+    );
+    expect(resumeBox?.textContent ?? '').toContain('claude --resume');
+    const resumeCopy = handle.element.querySelector(
+      'button[data-agent-devtools-handoff-resume-copy]',
+    ) as HTMLButtonElement;
+    expect(resumeCopy.disabled).toBe(false);
+  });
+
+  it('resume copy button writes the resume command and shows "Resume command copied"', async () => {
+    const container = makeContainer();
+    const writeClipboard = vi.fn(async () => undefined);
+    const handle = mountModal({ container, writeClipboard });
+    handle.showReady({
+      file: '/tmp/x.md',
+      command: "claude --append-system-prompt-file '/tmp/x.md'",
+      resumeCommand: "claude --resume 'acp-XYZ'",
+    });
+    const resumeCopy = handle.element.querySelector(
+      'button[data-agent-devtools-handoff-resume-copy]',
+    ) as HTMLButtonElement;
+    resumeCopy.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(writeClipboard).toHaveBeenCalledWith("claude --resume 'acp-XYZ'");
+    const status = handle.element.querySelector('span[data-agent-devtools-handoff-status]');
+    expect(status?.textContent ?? '').toMatch(/resume command copied/i);
+  });
+
+  it('re-hides the resume section when a subsequent showReady has no resumeCommand', () => {
+    const container = makeContainer();
+    const handle = mountModal({ container });
+    handle.showReady({
+      file: '/tmp/x.md',
+      command: 'cmd',
+      resumeCommand: "claude --resume 'acp-XYZ'",
+    });
+    const resumeSection = handle.element.querySelector(
+      'pre[data-agent-devtools-handoff-resume-command]',
+    )?.parentElement as HTMLElement;
+    expect(resumeSection.style.display).not.toBe('none');
+    // Second handoff (e.g. user opened a new tab, no ACP session yet) — should
+    // hide the resume section even though it was previously shown.
+    handle.showReady({ file: '/tmp/y.md', command: 'cmd2' });
+    expect(resumeSection.style.display).toBe('none');
+  });
+
+  it('hides the resume section on showError after a previous resume command was visible', () => {
+    const container = makeContainer();
+    const handle = mountModal({ container });
+    handle.showReady({
+      file: '/tmp/x.md',
+      command: 'cmd',
+      resumeCommand: "claude --resume 'acp-XYZ'",
+    });
+    handle.showError('boom');
+    const resumeSection = handle.element.querySelector(
+      'pre[data-agent-devtools-handoff-resume-command]',
+    )?.parentElement as HTMLElement;
+    expect(resumeSection.style.display).toBe('none');
+  });
+
   it('destroy removes the element and detaches listeners', () => {
     const container = makeContainer();
     const onClose = vi.fn();

@@ -2,7 +2,7 @@
 
 # @agent-devtools/next
 
-> Next.js 15 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Reuses the React fiber walker + widget shell from `@agent-devtools/react`, and adds dev-only bootstrap hooks for the App Router and Pages Router.
+> Next.js 15 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Reuses the React fiber walker from `@agent-devtools/react` and the framework-agnostic widget shell from `@agent-devtools/widget-core`, and adds dev-only bootstrap hooks for the App Router and Pages Router.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/next.svg)](https://www.npmjs.com/package/@agent-devtools/next)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)

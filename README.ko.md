@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  화면 위 어떤 컴포넌트든 픽해서 가리키면, 떠 있는 채팅창 안에서 에이전트가 코드를 읽고 직접 파일을 고친다. IDE 로 메시지를 떠넘기지도, 새 계정을 만들지도 않는다. 본인의 Claude Pro/Max 구독을 그대로 쓴다.
+  화면 위 어떤 컴포넌트든 픽해서 가리키면, 떠 있는 채팅창 안에서 에이전트가 코드를 읽고 직접 파일을 고친다. IDE 로 메시지를 떠넘기지 않고, 새 로그인이나 별도의 벤더 API 키도 만들지 않는다 — 이미 쓰고 있는 Claude Pro/Max 구독을 Claude Code CLI 의 OAuth 로 그대로 재사용한다.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)
 
-위젯 안에서 자연어로 "Counter 제목 글씨 키우고 빨간색으로 바꿔줘" 라고 지시하면 에이전트가 `App.tsx` 와 `styles.css` 를 읽고 `Edit` 으로 수정한다. Vite HMR 이 변경된 CSS 를 즉시 반영해 같은 화면 안에서 결과까지 확인된다.
+위젯에서 비활성화된 "장바구니 담기" 버튼을 픽하고 "사이즈를 골랐는데 왜 계속 disabled 야?" 라고 묻는다. 에이전트는 React fiber 체인을 거슬러 `ProductDetail` 부모까지 따라가고, picker 가 함께 실어 보낸 import 들(`useCart`, `selectors/inventory.ts`)을 따라가며 핸들러와 selector 실제 코드를 읽는다. 그러고 나서 빠져 있는 의존을 설명하거나 곧바로 `Edit` 으로 고친다. "이 리스트가 mutation 후에 왜 갱신 안 돼?", "이 폼이 validation 에러를 삼키는데 어디서 잡고 있어?" 같은 질문도 같은 흐름으로 처리된다 — picker 가 이미 컨텍스트를 패키징했기에 에이전트가 grep 부터 시작하지 않는다.
 
 - 사용자 가이드 (en / ko): <https://agent-devtools-docs.vercel.app/>
 - 작동 원리 (한 장의 다이어그램): <https://agent-devtools-docs.vercel.app/guides/how-it-works/>
@@ -156,7 +156,7 @@ export default {
     transpile: [
       '@agent-devtools/nuxt2',
       '@agent-devtools/vue2',
-      '@agent-devtools/react',
+      '@agent-devtools/widget-core',
       '@agent-devtools/core',
       'marked',
     ],

@@ -4,6 +4,8 @@ import { request, type IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, type AgentStreamFactory, type PermissionMode, type ProviderId } from './app.js';
+import type { PermissionPolicy } from '../providers/acp.js';
+import type { AcpSessionStore } from '../providers/acp-session-store.js';
 import type {
   HandoffArtifact,
   HandoffRequestPayload,
@@ -41,10 +43,12 @@ async function startApp(
     providers?: Partial<Record<ProviderId, AgentStreamFactory>>;
     defaultProvider?: ProviderId;
     defaultPermissionMode?: PermissionMode;
+    defaultPermissionPolicy?: PermissionPolicy;
     writeHandoffArtifact?: (
       payload: HandoffRequestPayload,
       options: WriteHandoffArtifactOptions,
     ) => Promise<HandoffArtifact>;
+    acpSessionStore?: AcpSessionStore;
   } = {},
 ): Promise<StartedServer> {
   // For backwards-compatible test ergonomics: a single `factory` registers
@@ -55,11 +59,17 @@ async function startApp(
     ...(providers && { providers }),
     ...(options.defaultProvider && { defaultProvider: options.defaultProvider }),
     ...(options.defaultPermissionMode && { defaultPermissionMode: options.defaultPermissionMode }),
+    ...(options.defaultPermissionPolicy && {
+      defaultPermissionPolicy: options.defaultPermissionPolicy,
+    }),
     ...(options.maxBodyBytes !== undefined && { maxBodyBytes: options.maxBodyBytes }),
     ...(options.pairingToken !== undefined && { pairingToken: options.pairingToken }),
     ...(options.workspace !== undefined && { workspace: options.workspace }),
     ...(options.writeHandoffArtifact !== undefined && {
       writeHandoffArtifact: options.writeHandoffArtifact,
+    }),
+    ...(options.acpSessionStore !== undefined && {
+      acpSessionStore: options.acpSessionStore,
     }),
   });
   const started = await startServer(handler, { port: 0 });
@@ -243,6 +253,28 @@ describe('createApp', () => {
       expect(denied.status).toBe(401);
       const ok = await getJson(`${app.url}/v1/agent/info`, { token: TOKEN });
       expect(ok.status).toBe(200);
+    });
+
+    it('surfaces defaultPermissionPolicy when configured so the widget mounts in sync', async () => {
+      const policy: PermissionPolicy = {
+        fileEdit: 'auto',
+        bash: 'ask',
+        webFetch: 'ask',
+        mcpTool: 'ask',
+      };
+      const app = await startApp(undefined, { defaultPermissionPolicy: policy });
+      const res = await getJson(`${app.url}/v1/agent/info`);
+      expect(res.status).toBe(200);
+      expect(
+        (res.body as { defaultPermissionPolicy: PermissionPolicy }).defaultPermissionPolicy,
+      ).toEqual(policy);
+    });
+
+    it('omits defaultPermissionPolicy when none is configured (provider falls back to its safe default)', async () => {
+      const app = await startApp();
+      const res = await getJson(`${app.url}/v1/agent/info`);
+      expect(res.status).toBe(200);
+      expect((res.body as Record<string, unknown>).defaultPermissionPolicy).toBeUndefined();
     });
   });
 
@@ -613,6 +645,141 @@ describe('createApp', () => {
     });
   });
 
+  describe('permissionPolicy routing', () => {
+    const SAFE_POLICY: PermissionPolicy = {
+      fileEdit: 'auto',
+      bash: 'ask',
+      webFetch: 'ask',
+      mcpTool: 'ask',
+    };
+    const OPEN_POLICY: PermissionPolicy = {
+      fileEdit: 'auto',
+      bash: 'auto',
+      webFetch: 'auto',
+      mcpTool: 'auto',
+    };
+
+    it('forwards a valid permissionPolicy to the factory context', async () => {
+      let seen: PermissionPolicy | undefined;
+      const factory: AgentStreamFactory = async function* (_req, ctx) {
+        seen = ctx.permissionPolicy;
+        yield { type: 'complete' };
+      };
+      const app = await startApp(factory);
+      const { events, readResponse } = postStream(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        permissionPolicy: OPEN_POLICY,
+      });
+      await readResponse;
+      await events;
+      expect(seen).toEqual(OPEN_POLICY);
+    });
+
+    it('honors defaultPermissionPolicy when the request omits one', async () => {
+      let seen: PermissionPolicy | undefined;
+      const factory: AgentStreamFactory = async function* (_req, ctx) {
+        seen = ctx.permissionPolicy;
+        yield { type: 'complete' };
+      };
+      const app = await startApp(factory, { defaultPermissionPolicy: SAFE_POLICY });
+      const { events, readResponse } = postStream(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+      });
+      await readResponse;
+      await events;
+      expect(seen).toEqual(SAFE_POLICY);
+    });
+
+    it('leaves permissionPolicy undefined on the context when neither default nor request supplies one', async () => {
+      let seen: PermissionPolicy | undefined = SAFE_POLICY;
+      const factory: AgentStreamFactory = async function* (_req, ctx) {
+        seen = ctx.permissionPolicy;
+        yield { type: 'complete' };
+      };
+      const app = await startApp(factory);
+      const { events, readResponse } = postStream(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+      });
+      await readResponse;
+      await events;
+      expect(seen).toBeUndefined();
+    });
+
+    it('lets a request-supplied permissionPolicy override the configured default', async () => {
+      let seen: PermissionPolicy | undefined;
+      const factory: AgentStreamFactory = async function* (_req, ctx) {
+        seen = ctx.permissionPolicy;
+        yield { type: 'complete' };
+      };
+      const app = await startApp(factory, { defaultPermissionPolicy: SAFE_POLICY });
+      const { events, readResponse } = postStream(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        permissionPolicy: OPEN_POLICY,
+      });
+      await readResponse;
+      await events;
+      expect(seen).toEqual(OPEN_POLICY);
+    });
+
+    it('returns 400 when permissionPolicy is not an object', async () => {
+      const factory: AgentStreamFactory = async function* () {
+        yield 'unreachable';
+      };
+      const app = await startApp(factory);
+      const res = await postJson(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        permissionPolicy: 'yolo',
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(/permissionPolicy must be an object/);
+    });
+
+    it('returns 400 when permissionPolicy carries an unknown key', async () => {
+      const factory: AgentStreamFactory = async function* () {
+        yield 'unreachable';
+      };
+      const app = await startApp(factory);
+      const res = await postJson(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        permissionPolicy: { ...SAFE_POLICY, webfetch: 'auto' },
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(
+        /unsupported permissionPolicy key: webfetch/,
+      );
+    });
+
+    it('returns 400 when permissionPolicy carries an unsupported resolution', async () => {
+      const factory: AgentStreamFactory = async function* () {
+        yield 'unreachable';
+      };
+      const app = await startApp(factory);
+      const res = await postJson(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        permissionPolicy: { ...SAFE_POLICY, bash: 'maybe' },
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(
+        /unsupported permissionPolicy.bash: maybe/,
+      );
+    });
+
+    it('returns 400 when permissionPolicy is missing a required key', async () => {
+      const factory: AgentStreamFactory = async function* () {
+        yield 'unreachable';
+      };
+      const app = await startApp(factory);
+      const { mcpTool: _drop, ...partial } = SAFE_POLICY;
+      void _drop;
+      const res = await postJson(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        permissionPolicy: partial,
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(/permissionPolicy.mcpTool is required/);
+    });
+  });
+
   describe('POST /v1/agent/handoff', () => {
     function makeRecorder(): {
       writeHandoffArtifact: (
@@ -798,6 +965,150 @@ describe('createApp', () => {
         { token: TOKEN },
       );
       expect(ok.status).toBe(200);
+    });
+
+    it('looks up an acpSessionId from the store and forwards it to writeArtifact', async () => {
+      const recorder = makeRecorder();
+      // Override the recorder to surface a resumeCommand when the
+      // route forwards an acpSessionId, so the test exercises the
+      // full response shape (including the resumeCommand sibling).
+      const captured: Array<{
+        payload: HandoffRequestPayload;
+        options: WriteHandoffArtifactOptions;
+      }> = [];
+      const workspace = makeTmpWorkspace();
+      const sessionStore = {
+        get: async (cwd: string, clientSessionId: string): Promise<string | undefined> => {
+          if (cwd === workspace.root && clientSessionId === 'tab-1') return 'acp-XYZ';
+          return undefined;
+        },
+        set: async () => undefined,
+        delete: async () => undefined,
+      };
+      const app = await startApp(undefined, {
+        workspace,
+        acpSessionStore: sessionStore,
+        writeHandoffArtifact: async (payload, options) => {
+          captured.push({ payload, options });
+          const artifact: HandoffArtifact = {
+            file: '/tmp/agent-devtools-handoff-fixed.md',
+            command: `cd '${workspace.root}' && claude --append-system-prompt-file '/tmp/agent-devtools-handoff-fixed.md'`,
+            ...(options.acpSessionId !== undefined && {
+              resumeCommand: `cd '${workspace.root}' && claude --resume '${options.acpSessionId}'`,
+            }),
+          };
+          return artifact;
+        },
+      });
+      const res = await postJson(`${app.url}/v1/agent/handoff`, {
+        conversation: [{ role: 'user', text: 'hi' }],
+        clientSessionId: 'tab-1',
+      });
+      expect(res.status).toBe(200);
+      expect(captured[0]!.options.acpSessionId).toBe('acp-XYZ');
+      const body = res.body as { resumeCommand?: string };
+      expect(body.resumeCommand).toBe(`cd '${workspace.root}' && claude --resume 'acp-XYZ'`);
+      // Recorder reference satisfies the linter — the real writer is
+      // the inline override above.
+      void recorder.calls;
+    });
+
+    it('omits resumeCommand when the store has no entry for this clientSessionId', async () => {
+      const workspace = makeTmpWorkspace();
+      const sessionStore = {
+        get: async (): Promise<string | undefined> => undefined,
+        set: async () => undefined,
+        delete: async () => undefined,
+      };
+      const app = await startApp(undefined, {
+        workspace,
+        acpSessionStore: sessionStore,
+        writeHandoffArtifact: async (_payload, options) => ({
+          file: '/tmp/agent-devtools-handoff-fixed.md',
+          command: "claude --append-system-prompt-file '/tmp/agent-devtools-handoff-fixed.md'",
+          ...(options.acpSessionId !== undefined && {
+            resumeCommand: `claude --resume '${options.acpSessionId}'`,
+          }),
+        }),
+      });
+      const res = await postJson(`${app.url}/v1/agent/handoff`, {
+        conversation: [{ role: 'user', text: 'hi' }],
+        clientSessionId: 'tab-unknown',
+      });
+      expect(res.status).toBe(200);
+      const body = res.body as { resumeCommand?: string };
+      expect(body.resumeCommand).toBeUndefined();
+    });
+
+    it('omits resumeCommand when the body has no clientSessionId', async () => {
+      const workspace = makeTmpWorkspace();
+      // The store has an entry — but without a clientSessionId on the
+      // request the route cannot look it up, so resumeCommand must
+      // stay absent.
+      const sessionStore = {
+        get: async (): Promise<string | undefined> => 'acp-XYZ',
+        set: async () => undefined,
+        delete: async () => undefined,
+      };
+      const app = await startApp(undefined, {
+        workspace,
+        acpSessionStore: sessionStore,
+        writeHandoffArtifact: async (_payload, options) => ({
+          file: '/tmp/agent-devtools-handoff-fixed.md',
+          command: "claude --append-system-prompt-file '/tmp/agent-devtools-handoff-fixed.md'",
+          ...(options.acpSessionId !== undefined && {
+            resumeCommand: `claude --resume '${options.acpSessionId}'`,
+          }),
+        }),
+      });
+      const res = await postJson(`${app.url}/v1/agent/handoff`, {
+        conversation: [{ role: 'user', text: 'hi' }],
+      });
+      expect(res.status).toBe(200);
+      const body = res.body as { resumeCommand?: string };
+      expect(body.resumeCommand).toBeUndefined();
+    });
+
+    it('returns 400 when clientSessionId is the wrong type', async () => {
+      const app = await startApp(undefined, {
+        writeHandoffArtifact: makeRecorder().writeHandoffArtifact,
+      });
+      const res = await postJson(`${app.url}/v1/agent/handoff`, {
+        conversation: [],
+        clientSessionId: 42,
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(/clientSessionId/);
+    });
+
+    it('swallows session-store get errors and still returns the append command', async () => {
+      const workspace = makeTmpWorkspace();
+      const sessionStore = {
+        get: async (): Promise<string | undefined> => {
+          throw new Error('store corrupt');
+        },
+        set: async () => undefined,
+        delete: async () => undefined,
+      };
+      const app = await startApp(undefined, {
+        workspace,
+        acpSessionStore: sessionStore,
+        writeHandoffArtifact: async (_payload, options) => ({
+          file: '/tmp/agent-devtools-handoff-fixed.md',
+          command: "claude --append-system-prompt-file '/tmp/agent-devtools-handoff-fixed.md'",
+          ...(options.acpSessionId !== undefined && {
+            resumeCommand: `claude --resume '${options.acpSessionId}'`,
+          }),
+        }),
+      });
+      const res = await postJson(`${app.url}/v1/agent/handoff`, {
+        conversation: [{ role: 'user', text: 'hi' }],
+        clientSessionId: 'tab-1',
+      });
+      expect(res.status).toBe(200);
+      const body = res.body as { resumeCommand?: string; command: string };
+      expect(body.resumeCommand).toBeUndefined();
+      expect(body.command).toContain('claude --append-system-prompt-file');
     });
   });
 });
