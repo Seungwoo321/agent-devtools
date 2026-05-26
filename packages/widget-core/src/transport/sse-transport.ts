@@ -278,6 +278,154 @@ export function createAgentInfoFetcher(
   };
 }
 
+export interface CreateRelatedImportsFetcherOptions {
+  /** Base URL of the agent-devtools server (e.g. `http://127.0.0.1:4317`). */
+  readonly baseUrl: string;
+  /** Pairing token for the `Authorization: Bearer …` header. */
+  readonly pairingToken: string;
+  /** Override `globalThis.fetch` (tests). */
+  readonly fetch?: typeof fetch;
+}
+
+const RELATED_IMPORTS_PATH = '/related-imports';
+
+export type RelatedImportsFetcher = (
+  file: string,
+  signal?: AbortSignal,
+) => Promise<readonly string[]>;
+
+/**
+ * Build a fetcher for the dev server's "what does this file import"
+ * endpoint. Hits `${baseUrl}/related-imports?file=<workspace-path>` with
+ * the pairing token in the `Authorization: Bearer …` header. Returns the
+ * deduped workspace-relative import list on success, an empty array on
+ * any failure (network, non-OK, malformed payload). Non-fatal: the agent
+ * still has the picked evidence without the dependency shortcut.
+ *
+ * The dev server (Vite plugin) decides how to compute the list — usually
+ * by walking `ViteDevServer.moduleGraph`. The widget contract is just
+ * "ask, take what you get, ship the rest."
+ */
+export function createRelatedImportsFetcher(
+  options: CreateRelatedImportsFetcherOptions,
+): RelatedImportsFetcher {
+  const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+
+  return async function fetchRelatedImports(
+    file: string,
+    signal?: AbortSignal,
+  ): Promise<readonly string[]> {
+    if (!file) return [];
+    const url = `${baseUrl}${RELATED_IMPORTS_PATH}?file=${encodeURIComponent(file)}`;
+    try {
+      const init: RequestInit = {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${options.pairingToken}`,
+          accept: 'application/json',
+        },
+      };
+      if (signal) init.signal = signal;
+      const response = await fetchImpl(url, init);
+      if (!response.ok) return [];
+      const payload = (await response.json()) as { imports?: unknown };
+      if (!Array.isArray(payload.imports)) return [];
+      const imports: string[] = [];
+      for (const entry of payload.imports) {
+        if (typeof entry === 'string' && entry.length > 0) imports.push(entry);
+      }
+      return imports;
+    } catch {
+      return [];
+    }
+  };
+}
+
+export interface CreateSourceSliceFetcherOptions {
+  /** Base URL of the agent-devtools server (e.g. `http://127.0.0.1:4317`). */
+  readonly baseUrl: string;
+  /** Pairing token for the `Authorization: Bearer …` header. */
+  readonly pairingToken: string;
+  /** Override `globalThis.fetch` (tests). */
+  readonly fetch?: typeof fetch;
+}
+
+const SOURCE_SLICE_PATH = '/source-slice';
+
+export interface SourceSlicePayload {
+  readonly code: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+export type SourceSliceFetcher = (
+  file: string,
+  line: number,
+  signal?: AbortSignal,
+) => Promise<SourceSlicePayload | null>;
+
+/**
+ * Build a fetcher for the dev server's "show me the source around this
+ * line" endpoint. Hits `${baseUrl}/source-slice?file=<workspace-path>&line=<n>`
+ * with the pairing token in the `Authorization: Bearer …` header.
+ * Returns the slice payload on success, `null` on any failure (network,
+ * non-OK, malformed payload). Non-fatal: the agent still has the picked
+ * evidence without the surrounding code.
+ *
+ * The dev server (Vite plugin) decides the window — typically ten lines
+ * on each side of the picked line, clamped to the file boundaries. The
+ * widget contract is just "ask, take what you get, ship the rest."
+ */
+export function createSourceSliceFetcher(
+  options: CreateSourceSliceFetcherOptions,
+): SourceSliceFetcher {
+  const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+
+  return async function fetchSourceSlice(
+    file: string,
+    line: number,
+    signal?: AbortSignal,
+  ): Promise<SourceSlicePayload | null> {
+    if (!file || !Number.isFinite(line) || line < 1) return null;
+    const url = `${baseUrl}${SOURCE_SLICE_PATH}?file=${encodeURIComponent(file)}&line=${encodeURIComponent(String(Math.floor(line)))}`;
+    try {
+      const init: RequestInit = {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${options.pairingToken}`,
+          accept: 'application/json',
+        },
+      };
+      if (signal) init.signal = signal;
+      const response = await fetchImpl(url, init);
+      if (!response.ok) return null;
+      const payload = (await response.json()) as {
+        code?: unknown;
+        startLine?: unknown;
+        endLine?: unknown;
+      };
+      if (
+        typeof payload.code !== 'string' ||
+        typeof payload.startLine !== 'number' ||
+        typeof payload.endLine !== 'number' ||
+        payload.startLine < 1 ||
+        payload.endLine < payload.startLine
+      ) {
+        return null;
+      }
+      return {
+        code: payload.code,
+        startLine: payload.startLine,
+        endLine: payload.endLine,
+      };
+    } catch {
+      return null;
+    }
+  };
+}
+
 export interface CreateHandoffRequesterOptions {
   /** Base URL of the agent-devtools server (e.g. `http://127.0.0.1:4317`). */
   readonly baseUrl: string;
