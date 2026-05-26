@@ -2,7 +2,7 @@ import {
   mountAgentDevtools,
   type AgentDevtoolsHandle,
   type MountAgentDevtoolsOptions,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';
 import { describePickedVue2 } from '../vnode/picked.js';
 
 export interface MountAgentDevtoolsVue2Options extends Omit<
