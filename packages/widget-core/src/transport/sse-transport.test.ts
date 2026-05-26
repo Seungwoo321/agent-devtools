@@ -457,6 +457,24 @@ describe('createDefaultTransport', () => {
     expect(backing.get('agent-devtools:clientSessionId')).toBe('cs-2');
   });
 
+  it('exposes the live clientSessionId via getClientSessionId() and reflects rotation', async () => {
+    const { fetch: fetchImpl } = makeFetch({ textBody: '' });
+    let counter = 0;
+    const generateSessionId = (): string => `cs-${++counter}`;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      generateSessionId,
+      sessionIdStorage: null,
+    });
+    expect(transport.getClientSessionId?.()).toBe('cs-1');
+    transport.resetSession?.();
+    // The getter reads the live binding, so the rotation is observed
+    // without re-creating the transport.
+    expect(transport.getClientSessionId?.()).toBe('cs-2');
+  });
+
   it('resetSession() tolerates a Storage backend whose setItem throws', async () => {
     const { fetch: fetchImpl, captured } = makeFetch({ textBody: '' });
     let setItemCount = 0;
@@ -1023,5 +1041,101 @@ describe('createHandoffRequester', () => {
     const controller = new AbortController();
     await requestHandoff({ conversation: [], signal: controller.signal });
     expect(captured[0]?.init.signal).toBe(controller.signal);
+  });
+
+  it('attaches the clientSessionId pulled from getClientSessionId() to the body', async () => {
+    const { fetch: fetchImpl, captured } = makeJsonFetch({
+      body: { file: '/tmp/x.md', command: 'cmd' },
+    });
+    const requestHandoff = createHandoffRequester({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getClientSessionId: () => 'cs-from-transport',
+    });
+    await requestHandoff({ conversation: [{ role: 'user', text: 'hi' }] });
+    const body = JSON.parse(captured[0]?.init.body as string) as { clientSessionId?: string };
+    expect(body.clientSessionId).toBe('cs-from-transport');
+  });
+
+  it('prefers the request-supplied clientSessionId over the bound getter', async () => {
+    const { fetch: fetchImpl, captured } = makeJsonFetch({
+      body: { file: '/tmp/x.md', command: 'cmd' },
+    });
+    const requestHandoff = createHandoffRequester({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getClientSessionId: () => 'cs-from-transport',
+    });
+    await requestHandoff({
+      conversation: [{ role: 'user', text: 'hi' }],
+      clientSessionId: 'cs-from-caller',
+    });
+    const body = JSON.parse(captured[0]?.init.body as string) as { clientSessionId?: string };
+    expect(body.clientSessionId).toBe('cs-from-caller');
+  });
+
+  it('omits clientSessionId from the body when neither caller nor getter supplies one', async () => {
+    const { fetch: fetchImpl, captured } = makeJsonFetch({
+      body: { file: '/tmp/x.md', command: 'cmd' },
+    });
+    const requestHandoff = createHandoffRequester({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+    });
+    await requestHandoff({ conversation: [{ role: 'user', text: 'hi' }] });
+    const body = JSON.parse(captured[0]?.init.body as string) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('clientSessionId');
+  });
+
+  it('omits clientSessionId when the getter returns undefined or an empty string', async () => {
+    const { fetch: fetchImpl, captured } = makeJsonFetch({
+      body: { file: '/tmp/x.md', command: 'cmd' },
+    });
+    let toggle = 0;
+    const requestHandoff = createHandoffRequester({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getClientSessionId: () => (toggle++ === 0 ? undefined : ''),
+    });
+    await requestHandoff({ conversation: [] });
+    await requestHandoff({ conversation: [] });
+    for (const r of captured) {
+      const body = JSON.parse(r.init.body as string) as Record<string, unknown>;
+      expect(body).not.toHaveProperty('clientSessionId');
+    }
+  });
+
+  it('returns resumeCommand when the server includes a non-empty string', async () => {
+    const { fetch: fetchImpl } = makeJsonFetch({
+      body: {
+        file: '/tmp/x.md',
+        command: "claude --append-system-prompt-file '/tmp/x.md'",
+        resumeCommand: "cd '/Users/dev/project' && claude --resume 'acp-XYZ'",
+      },
+    });
+    const requestHandoff = createHandoffRequester({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+    });
+    const result = await requestHandoff({ conversation: [{ role: 'user', text: 'hi' }] });
+    expect(result.resumeCommand).toBe("cd '/Users/dev/project' && claude --resume 'acp-XYZ'");
+  });
+
+  it('omits resumeCommand from the result when the server returns it empty or non-string', async () => {
+    const { fetch: fetchImpl } = makeJsonFetch({
+      body: { file: '/tmp/x.md', command: 'cmd', resumeCommand: '' },
+    });
+    const requestHandoff = createHandoffRequester({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+    });
+    const result = await requestHandoff({ conversation: [] });
+    expect(result.resumeCommand).toBeUndefined();
   });
 });
