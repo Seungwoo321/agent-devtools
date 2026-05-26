@@ -5,7 +5,7 @@ description: agent-devtools security boundary — pairing token, 2-layer dev-onl
 
 ## TL;DR
 
-agent-devtools is a **local dev-server-only** tool. Zero bytes of widget code reach a production bundle, and there is no externally-reachable surface. This page documents the four layers that uphold that boundary.
+agent-devtools is a **local dev-server-only** tool. Zero bytes of widget code reach a production bundle, and there is no externally-reachable surface. This page documents the layers that uphold that boundary plus the honest scope of the workspace setting.
 
 ## Pairing Token
 
@@ -54,6 +54,23 @@ The widget UI mounts onto the host page inside a **closed shadow root**.
 - The `AGENT_DEVTOOLS_OPEN_SHADOW=1` environment variable is **Playwright E2E-only**. It flips the shadow root to open so automation can snapshot the widget's internal DOM; the production-default closed isolation is never changed (`packages/vite/src/plugin.ts:103`).
 
 For the full adapter isolation contract, see the "Isolation" section in [`.claude/rules/adapter-discipline.md`](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/adapter-discipline.md).
+
+## Workspace boundary — what it does and does not enforce
+
+The `workspace` option (see [`configuration`](/en/guides/configuration/)) is the canonical `cwd` of the spawned Claude Code child process **and** the boundary that the in-process `FileTools` (used by the picker source-slice preamble) enforces. It is **not** an OS-level sandbox.
+
+What is enforced:
+
+- `Workspace.resolveForRead` / `resolveForWrite` in [`packages/core/src/files/workspace.ts`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/core/src/files/workspace.ts) canonicalise via `realpathSync` and check the result against the canonical root. Any `..` escape, or a symlink whose target escapes the root, throws `PathOutsideWorkspaceError` before any FS call. This applies to **picker preamble reads only** — the source slice the widget attaches to a message so the agent does not have to grep for the picked file (see [`packages/core/src/providers/context-preamble.ts`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/core/src/providers/context-preamble.ts)).
+- The Claude Code child process inherits the workspace root as its `cwd` ([`packages/core/src/providers/sdk.ts`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/core/src/providers/sdk.ts) and [`packages/core/src/providers/acp.ts`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/core/src/providers/acp.ts)). Tools that respect cwd (relative path resolution, working-directory-relative searches) inherit that scope automatically.
+
+What is **not** enforced by agent-devtools:
+
+- The SDK's own tool calls (`Read`, `Edit`, `Bash`, …) run inside the child process with the host user's OS file-system permissions. The same files you can open from a terminal at that cwd are reachable. agent-devtools does not layer an additional FS sandbox, jail, container, or AppArmor profile on top.
+- Claude Code's own workspace-trust prompts and `--allowedTools` flags still apply — those are SDK-side controls, not something agent-devtools adds.
+- The [action-aware permission policy](/en/guides/permission-modes/) is the right knob for limiting what the agent is allowed to _do_. It cancels `bash`, `webFetch`, and `mcpTool` by default, which is what keeps an unattended browser tab safe. It does not narrow the FS surface beyond what the SDK already exposes.
+
+If you need a stricter FS boundary (read-only mode, containerised cwd, etc.), run the dev server inside a container or under an OS user that only has access to the project directory.
 
 ## Automated regression guards
 
