@@ -86,3 +86,4 @@ If either check fails in CI, release is automatically blocked. Any change that b
 - Installation & plugin configuration: [`installation`](/en/guides/installation/), [`configuration`](/en/guides/configuration/)
 - Permission model: [`permission-modes`](/en/guides/permission-modes/)
 - First-run walkthrough: [`first-run`](/en/guides/first-run/)
+- Bring your own provider — the server-side seam every LLM backend runs through: [`byo-provider`](/en/guides/byo-provider/)

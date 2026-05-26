@@ -98,6 +98,11 @@ export default defineConfig({
               translations: { en: 'Widget & page context' },
               slug: 'guides/widget',
             },
+            {
+              label: '어댑터별 컨텍스트 품질',
+              translations: { en: 'Adapter context quality' },
+              slug: 'guides/adapter-context-quality',
+            },
           ],
         },
         {
