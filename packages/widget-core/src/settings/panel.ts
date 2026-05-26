@@ -188,6 +188,24 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
     const target = event.target as HTMLInputElement;
     if (!target.checked) return;
     const value = target.value as PermissionMode;
+    // bypassPermissions disables every safety prompt for the rest of the
+    // session, so the user has to acknowledge it once via a confirm dialog.
+    // Cancelling restores the previous radio without touching the store.
+    if (value === 'bypassPermissions') {
+      const previous = options.store.get().permissionMode;
+      if (previous !== 'bypassPermissions') {
+        const window = doc.defaultView;
+        const confirmed = window
+          ? window.confirm(
+              'Bypass permissions allows EVERYTHING for the rest of this session — file edits, shell, web fetches, MCP calls. Continue?',
+            )
+          : false;
+        if (!confirmed) {
+          permissionRadios[previous].checked = true;
+          return;
+        }
+      }
+    }
     options.store.set({ permissionMode: value });
   }
   function onCloseClick(): void {
