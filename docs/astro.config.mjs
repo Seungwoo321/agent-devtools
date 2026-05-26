@@ -74,9 +74,19 @@ export default defineConfig({
           translations: { en: 'Core concepts' },
           items: [
             {
+              label: '어떻게 동작하나',
+              translations: { en: 'How it works' },
+              slug: 'guides/how-it-works',
+            },
+            {
               label: 'Provider — ACP vs SDK',
               translations: { en: 'Provider — ACP vs SDK' },
               slug: 'guides/providers',
+            },
+            {
+              label: '자기 provider 가져오기',
+              translations: { en: 'Bring your own provider' },
+              slug: 'guides/byo-provider',
             },
             {
               label: '권한 모드',

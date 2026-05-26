@@ -1,6 +1,6 @@
 name: Sync main to develop
 
-# Runs on every push to main, including release-it commits whose messages
+# Runs on every push to main, including release commits whose messages
 # end with `[skip ci]`. The `[skip ci]` guard is intentionally omitted —
 # without that omission the back-merge never fires after a stable release,
 # and develop drifts a version behind main every cycle (the exact bug that
