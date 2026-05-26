@@ -1,4 +1,4 @@
-# Changelog
+# @agent-devtools/next
 
 ## 0.5.0
 
@@ -20,10 +20,4 @@
 
 - Updated dependencies [[`19bd25a`](https://github.com/Seungwoo321/agent-devtools/commit/19bd25acb4a4470d56a5c313e01edbe75ee329bb)]:
   - @agent-devtools/core@0.5.0
-  - @agent-devtools/widget-core@0.5.0
-
-## [0.3.0](https://github.com/Seungwoo321/agent-devtools/compare/react-v0.2.0-beta.2...react-v0.3.0) (2026-05-24)
-
-## [0.2.0](https://github.com/Seungwoo321/agent-devtools/compare/react-v0.2.0-beta.0...react-v0.2.0) (2026-05-23)
-
-## 0.2.0-beta.0 (2026-05-23)
+  - @agent-devtools/react@0.5.0
