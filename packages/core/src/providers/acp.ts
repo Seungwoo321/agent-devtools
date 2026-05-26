@@ -92,7 +92,7 @@ export type PermissionResolution = 'auto' | 'ask' | 'deny';
  *
  * Pure-read kinds (`read | search | think | switch_mode`) are always
  * auto-allowed because the agent cannot make progress without them and
- * they have no external side effects.
+ * they have no write/network/process side effects.
  */
 export interface PermissionPolicy {
   fileEdit: PermissionResolution;
@@ -178,13 +178,18 @@ export function createAcpProvider(options: CreateAcpProviderOptions = {}): Agent
       return;
     }
 
+    // Request-scoped policy (validated by the server) takes precedence over
+    // the provider's creation-time default. This is what lets the widget's
+    // Safe-mode toggle take effect on the next turn rather than requiring
+    // a dev-server restart.
+    const effectivePolicy = context.permissionPolicy ?? permissionPolicy;
     const requestedClientSessionId = readClientSessionId(request);
     const events = runtime.run({
       prompt: request.prompt,
       cwd: context.workspace.root,
       clientSessionId: requestedClientSessionId ?? generateSessionId(),
       permissionMode: context.permissionMode,
-      ...(permissionPolicy !== undefined && { permissionPolicy }),
+      ...(effectivePolicy !== undefined && { permissionPolicy: effectivePolicy }),
       ...(request.context !== undefined && { context: request.context }),
       ...(context.files !== undefined && { files: context.files }),
       signal: context.signal,
