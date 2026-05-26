@@ -59,7 +59,7 @@ export default {
     transpile: [
       '@agent-devtools/nuxt2',
       '@agent-devtools/vue2',
-      '@agent-devtools/react',
+      '@agent-devtools/widget-core',
       '@agent-devtools/core',
       'marked',
     ],
