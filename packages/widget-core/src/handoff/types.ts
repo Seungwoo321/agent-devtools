@@ -26,6 +26,14 @@ export interface HandoffRequest {
   readonly picked?: PickedEvidence | null;
   readonly pageContext?: PageContext | null;
   readonly permissionMode?: PermissionMode;
+  /**
+   * Tab-scoped session id minted by the transport. When the server
+   * knows the matching ACP session id it returns a `--resume <id>`
+   * sibling command in the response so the modal can surface a
+   * "resume the same conversation" option alongside the always-emitted
+   * `--append-system-prompt-file` command.
+   */
+  readonly clientSessionId?: string;
   /** Abort the in-flight fetch (modal close, unmount). */
   readonly signal?: AbortSignal;
 }
