@@ -21,6 +21,9 @@ const BOOTSTRAP_SYMBOLS = [
   'createDefaultTransport',
   'createAgentInfoFetcher',
   'createHandoffRequester',
+  'createRelatedImportsFetcher',
+  'createSourceSliceFetcher',
+  'createPageContextEnricher',
   'createSettingsStore',
 ] as const;
 
