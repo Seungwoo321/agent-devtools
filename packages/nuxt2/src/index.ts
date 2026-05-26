@@ -87,7 +87,10 @@ export type { MountAgentDevtoolsVue2Options } from '@agent-devtools/vue2';
 export { mountAgentDevtoolsVue2 as mountAgentDevtools } from '@agent-devtools/vue2';
 export {
   createDefaultTransport,
+  createRelatedImportsFetcher,
+  createSourceSliceFetcher,
+  createPageContextEnricher,
   createAgentInfoFetcher,
   createHandoffRequester,
   createSettingsStore,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';
