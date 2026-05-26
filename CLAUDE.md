@@ -37,7 +37,7 @@ pnpm e2e                  # Playwright (브라우저 사전 설치: pnpm e2e:ins
 pnpm --filter @agent-devtools/example-react-vite dev   # 예제 dev 서버
 ```
 
-엔진 요구: Node `>=24.0.0`, pnpm `>=11.0.0`. `pnpm@11.1.1` 으로 핀.
+엔진 요구: Node `>=22.12.0` (LTS Jod, Node 24+ 도 동작), pnpm `>=11.0.0`. `pnpm@11.1.1` 으로 핀.
 
 ## 어댑터 작업 규칙
 

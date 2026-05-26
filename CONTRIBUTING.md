@@ -14,13 +14,13 @@
 
 | Tool       | Version            |
 | ---------- | ------------------ |
-| Node.js    | ≥24 (LTS)          |
+| Node.js    | ≥22.12 (LTS Jod)   |
 | pnpm       | ≥11                |
 | TypeScript | 6.x                |
 | ESLint     | 10.x (flat config) |
 | Prettier   | 3.x                |
 
-`.nvmrc` 가 Node 24 를 지정하므로 `nvm use` 한 번이면 충분합니다.
+`.nvmrc` 가 Node 22.12 를 지정하므로 `nvm use` 한 번이면 충분합니다. Node 24+ 에서도 그대로 동작합니다.
 
 ## Setup
 
