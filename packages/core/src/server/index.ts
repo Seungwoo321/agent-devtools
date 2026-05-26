@@ -13,6 +13,8 @@ export type {
   ProviderId,
   PermissionMode,
 } from './app.js';
+export { DEFAULT_PERMISSION_POLICY } from '../providers/acp.js';
+export type { PermissionPolicy, PermissionResolution } from '../providers/acp.js';
 export { createRouter } from './router.js';
 export type { Route, RouteHandler, RouteContext, Method, RouterOptions } from './router.js';
 export { startSse, formatSseEvent, pumpToSse } from './sse.js';
