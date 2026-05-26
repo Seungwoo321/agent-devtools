@@ -73,9 +73,14 @@ function axisGrowsBottom(axis: ResizeAxis): boolean {
   return axis === 'bottom' || axis === 'corner-sw' || axis === 'corner-se';
 }
 
-const PANEL_DEFAULT_WIDTH = 320;
+// Width math: the toolbar packs new-session, pick, safe-mode, settings,
+// terminal-handoff and close into a single row. With the safe-mode pill
+// adding a visible label (not just an icon), 320px clipped the trailing
+// buttons; 360px restores comfortable spacing while staying narrow enough
+// to dock against a code editor on a 1280px display.
+const PANEL_DEFAULT_WIDTH = 360;
 const PANEL_DEFAULT_HEIGHT = 420;
-const PANEL_MIN_WIDTH = 280;
+const PANEL_MIN_WIDTH = 320;
 const PANEL_MIN_HEIGHT = 240;
 const PANEL_SIZE_STORAGE_KEY = 'agent-devtools:panelSize';
 
@@ -359,10 +364,11 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
     chip.setAttribute('role', 'group');
     const tooltipId = `agent-devtools-chip-tooltip-${++chipTooltipSeq}`;
     chip.setAttribute('aria-describedby', tooltipId);
-    // `title` is the lowest-common-denominator a11y fallback — assistive
-    // tech that ignores aria-describedby still picks this up.
+    // The custom role="tooltip" element below carries the same content the
+    // native `title` bubble would, and aria-describedby wires it for assistive
+    // tech. Setting `title` in addition would layer the OS tooltip on top of
+    // our popup on hover.
     const summary = summarizePicked(picked);
-    chip.setAttribute('title', summary.titleText);
 
     const label = doc!.createElement('span');
     label.setAttribute('data-agent-devtools-composer-chip-label', '');
@@ -1045,7 +1051,6 @@ interface PickedSummary {
   readonly source: string | null;
   readonly chain: string | null;
   readonly selector: string | null;
-  readonly titleText: string;
 }
 
 function summarizePicked(picked: PickedEvidence): PickedSummary {
@@ -1059,20 +1064,7 @@ function summarizePicked(picked: PickedEvidence): PickedSummary {
   const selector =
     picked.selector && picked.selector !== picked.tagName.toLowerCase() ? picked.selector : null;
 
-  // Plain-text summary for the `title` attribute (one detail per line keeps
-  // the OS tooltip readable in browsers that respect newlines).
-  const lines = [`${componentName} ${tag}`];
-  if (source) lines.push(`source: ${source}`);
-  if (chain) lines.push(`chain: ${chain}`);
-  if (selector) lines.push(`selector: ${selector}`);
-  return {
-    componentName,
-    tag,
-    source,
-    chain,
-    selector,
-    titleText: lines.join('\n'),
-  };
+  return { componentName, tag, source, chain, selector };
 }
 
 function applyChipTooltipStyles(tooltip: HTMLElement): void {
