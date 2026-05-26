@@ -21,7 +21,7 @@ export default defineNuxtConfig({
 });
 ```
 
-모듈은 `nuxt.options.dev` 를 읽습니다. production 빌드에서는 `addPlugin` 이 호출되기 전에 `setup` 함수가 즉시 return 합니다 — widget chain (`@agent-devtools/vue` → `@agent-devtools/react`) 이 번들러에 의해 resolve 되지 않습니다.
+모듈은 `nuxt.options.dev` 를 읽습니다. production 빌드에서는 `addPlugin` 이 호출되기 전에 `setup` 함수가 즉시 return 합니다 — widget chain (`@agent-devtools/vue` → `@agent-devtools/widget-core` → `@agent-devtools/core`) 이 번들러에 의해 resolve 되지 않습니다.
 
 ## 옵션
 
