@@ -1,16 +1,24 @@
 name: CI
 
-# main is intentionally absent from the push trigger. Every change reaches
-# main through a develop -> main pull request, which already runs this
-# workflow against the merge result. A second post-merge run on main would
-# only duplicate that validation while racing the Publish and Sync workflows
-# on the same push — and because Publish does not depend on CI, a cancelled
-# or failed main-push CI is a misleading "deployment failed" signal that has
-# no bearing on whether the release succeeded. develop keeps the push trigger
-# because it receives direct pushes that never open a pull request.
+# CI validates pull requests only; the Publish and Sync workflows own pushes.
+# This split is the whole trigger model, not a per-branch exception:
+#
+# - Every change reaches main through a develop -> main pull request, and the
+#   pull_request run already validates the merge result. A push trigger adds
+#   nothing the PR run does not already cover.
+# - A push trigger also duplicates work whenever a release PR is open: a push
+#   to develop fires both a push run and the PR's synchronize run for the same
+#   commit, and the two land in different concurrency groups (push keys on
+#   refs/heads/develop, pull_request on refs/pull/N/merge) so neither cancels
+#   the other.
+# - On main a push run additionally races the Publish workflow's version commit
+#   on the same ref; the loser is cancelled, and because Publish does not depend
+#   on CI that cancelled run reads as a misleading "deployment failed" signal
+#   with no bearing on whether the release actually succeeded.
+#
+# The develop beta snapshot still publishes on every develop push via
+# publish.yml, independently of this workflow.
 on:
-  push:
-    branches: [develop]
   pull_request:
     branches: [main, develop]
 
