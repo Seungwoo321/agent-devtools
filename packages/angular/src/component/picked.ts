@@ -4,7 +4,7 @@ import {
   type BuildSelectorOptions,
   type ComponentChainEntry,
   type PickedEvidence,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';
 import { getComponentInstanceForElement } from './dom-bridge.js';
 import { resolveComponentName } from './component-name.js';
 import { resolveInstanceSource } from './source.js';
