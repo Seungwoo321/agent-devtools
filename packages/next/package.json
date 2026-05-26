@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/next",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Next.js 15 adapter for agent-devtools — re-exports the React widget + adds App / Pages router dev-only injection",
   "keywords": [
     "agent-devtools",
@@ -18,7 +18,7 @@
     "url": "https://github.com/Seungwoo321/agent-devtools/issues"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.12.0"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -55,8 +55,8 @@
     "react-dom": ">=19.0.0"
   },
   "dependencies": {
-    "@agent-devtools/core": "workspace:^",
-    "@agent-devtools/react": "workspace:^"
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/react": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",

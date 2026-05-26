@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/nuxt",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Nuxt 3 module for agent-devtools — re-exports the Vue widget + adds dev-only injection through defineNuxtModule",
   "keywords": [
     "agent-devtools",
@@ -19,7 +19,7 @@
     "url": "https://github.com/Seungwoo321/agent-devtools/issues"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.12.0"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -55,9 +55,9 @@
     "vue": ">=3.4.0"
   },
   "dependencies": {
-    "@agent-devtools/core": "workspace:^",
-    "@agent-devtools/react": "workspace:^",
-    "@agent-devtools/vue": "workspace:^",
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/widget-core": "workspace:*",
+    "@agent-devtools/vue": "workspace:*",
     "@nuxt/kit": "^3.13.0"
   },
   "devDependencies": {
