@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "Seungwoo321/agent-devtools" }],
+  "commit": false,
+  "fixed": [["@agent-devtools/*"]],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@agent-devtools/e2e",
+    "@agent-devtools/docs",
+    "@agent-devtools/example-angular-vite",
+    "@agent-devtools/example-next",
+    "@agent-devtools/example-next-pages",
+    "@agent-devtools/example-nuxt",
+    "@agent-devtools/example-nuxt2",
+    "@agent-devtools/example-react-vite",
+    "@agent-devtools/example-svelte-vite",
+    "@agent-devtools/example-sveltekit",
+    "@agent-devtools/example-vue-vite",
+    "@agent-devtools/example-vue2-vite"
+  ]
+}
