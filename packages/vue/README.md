@@ -7,6 +7,17 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vue.svg)](https://www.npmjs.com/package/@agent-devtools/vue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
+## What this adapter provides
+
+- **DOM → component bridge** — `element.__vueParentComponent` (Vue 3.4+). Own-property reads, no proxy traversal.
+- **Ancestor walker** — `walkComponentAncestors` follows the `.parent` chain leaf-first, yields instances with a resolvable identity (`name` / `__name` / `displayName` / `__file`), caps at depth 10.
+- **Source extraction** — `instance.type.__file` injected by `@vitejs/plugin-vue` in dev. Workspace-normalised to a relative path. Line/column comes from the SFC source map post-resolution; today line stays at `1` rather than guess.
+- **Component name** — `instance.type.name` → `instance.type.__name` → basename of `__file` → `'Unknown'`.
+- **Widget UI** — delegates to the framework-agnostic shell in `@agent-devtools/widget-core`. Vue 3 is not loaded into the widget bundle even though the host app uses it.
+- **Reused by** — `@agent-devtools/nuxt` imports this walker directly.
+
+See [picker-strategy.md](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/picker-strategy.md) for the cross-adapter contract.
+
 ## Features
 
 - **`mountAgentDevtoolsVue`** — mounts the floating widget into a closed Shadow DOM and wires the picker to a Vue 3 vnode walker.

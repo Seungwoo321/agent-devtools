@@ -5,6 +5,18 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/nuxt2.svg)](https://www.npmjs.com/package/@agent-devtools/nuxt2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
+## What this adapter provides
+
+- **Walker reuse** — DOM → component via `__vue__`, `$parent` walk, `$options.__file` source extraction is delegated to `@agent-devtools/vue2`. No duplicate walker code lives here.
+- **Module signature** — Nuxt 2 module form (`function (moduleOptions) { this.addPlugin(...) }`). One-line entry in `modules`.
+- **Build-time guard (Layer 1)** — `setup` short-circuits when `this.options.dev === false`. `addPlugin` is never reached during `nuxt build` / `nuxt generate`.
+- **Runtime guard (Layer 2)** — the auto-registered client plugin imports `mountAgentDevtoolsVue2`, which throws on `NODE_ENV === 'production'`.
+- **Client-only registration** — `mode: 'client'` so the widget chain is never evaluated on the SSR bundle.
+- **Webpack 4 transpile** — Nuxt 2 ships webpack 4 with `node_modules` excluded from babel-loader. Hosts must list the widget chain in `build.transpile` (see the example below). Newer Nuxt majors do not need this — only Nuxt 2.
+- **Widget UI** — `@agent-devtools/widget-core` shell.
+
+Peer range: `nuxt >= 2.15`, `vue >= 2.7`.
+
 ## Features
 
 - **Module form** — implements the Nuxt 2 module signature (`function (moduleOptions) { this.addPlugin(...) }`), so adding it is a one-line entry in `modules: ['@agent-devtools/nuxt2']`.
