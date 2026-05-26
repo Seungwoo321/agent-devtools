@@ -17,6 +17,7 @@ import {
   type AgentDevtoolsHandle,
   type MountAgentDevtoolsOptions,
 } from '@agent-devtools/react';
+import { resolveNextPagesRouteFile } from './route.js';
 
 export type MountAgentDevtoolsNextPagesOptions = MountAgentDevtoolsOptions;
 
@@ -32,5 +33,8 @@ export function mountAgentDevtoolsNextPages(
       '@agent-devtools/next-pages: mountAgentDevtoolsNextPages must not run in production. Ensure the bundler strips this import in production builds.',
     );
   }
-  return mountAgentDevtools(options);
+  return mountAgentDevtools({
+    ...options,
+    resolveRouteFile: options.resolveRouteFile ?? resolveNextPagesRouteFile,
+  });
 }

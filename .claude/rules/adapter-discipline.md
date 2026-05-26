@@ -6,7 +6,7 @@
 
 - 이름: `@agent-devtools/<framework>` — npm 공개 스코프 고정.
 - `private` 금지 (publishable). examples 는 예외 (`private: true`).
-- `engines.node`: 최소 `>=24.0.0` — 워크스페이스 루트와 통일.
+- `engines.node`: 최소 `>=22.13.0` (LTS Jod) — 워크스페이스 루트와 통일.
 - `type: "module"` 고정. CJS 산출물 만들지 않는다.
 - 빌드: `tsup` (워크스페이스 통일). 산출물은 `dist/`. `files` 필드에 `dist`, `README.md` 만 포함.
 - `exports` 맵: `.` 가 기본 진입점, 보조 진입점 (예: `./server`, `./app-router`) 만 추가. `main`/`module`/`types` 도 함께 둔다 (구버전 번들러 호환).

@@ -27,14 +27,19 @@
  *
  *   The widget user is not at the terminal, so we cannot surface a UI for
  *   live permission prompts (ACP `session/request_permission`). The runtime
- *   decides each request from the resolved `permissionMode`:
+ *   resolves each request from two inputs:
  *
- *     - `bypassPermissions` / `acceptEdits` / `dontAsk` → pick the first
- *       option whose `kind` allows the action (`allow_once` preferred).
- *     - `plan` / `default` → reject every request (`outcome: cancelled`).
+ *     1. The resolved `permissionMode`. `bypassPermissions` is the only
+ *        mode that unconditionally allows every action — used when the
+ *        operator has explicitly opted out of safe-by-default.
+ *     2. Otherwise, a {@link PermissionPolicy} keyed by action category
+ *        decides per `ToolKind` whether to auto-allow, defer (cancelled),
+ *        or explicitly reject. The default policy auto-allows workspace
+ *        file edits and defers shell / web-fetch / MCP-tool calls so that
+ *        the dev-time widget never silently runs untrusted side effects.
  *
- *   `bypassPermissions` is only ever requested by the widget's settings
- *   panel, not the chat composer; ADT-45 wires that affordance.
+ *   `plan` / `default` modes still cancel every request — `plan` is
+ *   read-only and `default` has no prompt surface in this transport.
  */
 import type { StopReason, Usage } from '@agentclientprotocol/sdk';
 import type { FileTools } from '../files/index.js';
@@ -62,6 +67,48 @@ export interface AcpRuntime {
   run(params: AcpRunParams): AsyncIterable<AcpEvent>;
 }
 
+/**
+ * Resolution strategy for one action category when the agent asks for
+ * permission. The widget has no live UI to prompt the user, so the runtime
+ * collapses `'ask'` into a cancelled outcome — the user can re-issue with a
+ * more permissive `permissionMode` (or by toggling Safe mode in the widget).
+ *
+ *   - `'auto'`  — silently allow (the runtime selects the lowest-scoped
+ *                 allow option).
+ *   - `'ask'`   — cancelled outcome (no UI to ask, so the agent backs off).
+ *   - `'deny'`  — explicit reject (runtime selects a `reject_once` option
+ *                 when offered).
+ */
+export type PermissionResolution = 'auto' | 'ask' | 'deny';
+
+/**
+ * Per-action-category resolution. The four categories collapse the ACP
+ * `ToolKind` enum into the security buckets we care about:
+ *
+ *   - `fileEdit` — `edit | delete | move` (workspace mutations).
+ *   - `bash`     — `execute` (shell side-effects).
+ *   - `webFetch` — `fetch` (outbound network).
+ *   - `mcpTool`  — `other` and any unrecognized kind (third-party tools).
+ *
+ * Pure-read kinds (`read | search | think | switch_mode`) are always
+ * auto-allowed because the agent cannot make progress without them and
+ * they have no external side effects.
+ */
+export interface PermissionPolicy {
+  fileEdit: PermissionResolution;
+  bash: PermissionResolution;
+  webFetch: PermissionResolution;
+  mcpTool: PermissionResolution;
+}
+
+/** Safe-by-default policy: only workspace file edits run unattended. */
+export const DEFAULT_PERMISSION_POLICY: PermissionPolicy = Object.freeze({
+  fileEdit: 'auto',
+  bash: 'ask',
+  webFetch: 'ask',
+  mcpTool: 'ask',
+});
+
 export interface AcpRunParams {
   prompt: string;
   /** Workspace root used as the session `cwd`. Required by ACP `newSession`. */
@@ -74,6 +121,13 @@ export interface AcpRunParams {
   clientSessionId: string;
   /** Forwarded so the runtime can auto-resolve permission requests. */
   permissionMode: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+  /**
+   * Per-action policy applied when `permissionMode` is anything other than
+   * `bypassPermissions`. Missing entries fall back to
+   * {@link DEFAULT_PERMISSION_POLICY}. `bypassPermissions` ignores the
+   * policy entirely and always allows.
+   */
+  permissionPolicy?: Partial<PermissionPolicy>;
   /**
    * Request-scoped context (picked element, page context) the widget
    * sends with each prompt. Rendered into a preamble content block by
@@ -99,11 +153,17 @@ export interface CreateAcpProviderOptions {
    * Defaults to `crypto.randomUUID()`. Tests override to keep IDs stable.
    */
   generateSessionId?: () => string;
+  /**
+   * Override the per-action permission policy applied to every request.
+   * Missing entries fall back to {@link DEFAULT_PERMISSION_POLICY}.
+   */
+  permissionPolicy?: Partial<PermissionPolicy>;
 }
 
 export function createAcpProvider(options: CreateAcpProviderOptions = {}): AgentStreamFactory {
   const runtime = options.runtime ?? createDefaultAcpRuntime();
   const generateSessionId = options.generateSessionId ?? defaultGenerateSessionId;
+  const permissionPolicy = options.permissionPolicy;
 
   return async function* acpProvider(request, context) {
     if (!context.workspace) {
@@ -124,6 +184,7 @@ export function createAcpProvider(options: CreateAcpProviderOptions = {}): Agent
       cwd: context.workspace.root,
       clientSessionId: requestedClientSessionId ?? generateSessionId(),
       permissionMode: context.permissionMode,
+      ...(permissionPolicy !== undefined && { permissionPolicy }),
       ...(request.context !== undefined && { context: request.context }),
       ...(context.files !== undefined && { files: context.files }),
       signal: context.signal,

@@ -14,7 +14,10 @@ export { mountAgentDevtoolsVue, type MountAgentDevtoolsVueOptions } from './orch
 export { mountAgentDevtoolsVue as mountAgentDevtools } from './orchestrator/mount.js';
 export {
   createDefaultTransport,
+  createRelatedImportsFetcher,
+  createSourceSliceFetcher,
+  createPageContextEnricher,
   createAgentInfoFetcher,
   createHandoffRequester,
   createSettingsStore,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';

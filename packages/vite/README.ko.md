@@ -2,7 +2,7 @@
 
 # @agent-devtools/vite
 
-> [agent-devtools](https://github.com/Seungwoo321/agent-devtools) 의 Vite 8 플러그인. 로컬 에이전트 서버를 자동 spawn 하고, dev HTML 에 위젯 부트스트랩을 주입하며, `vite build` 시에는 no-op 으로 동작합니다.
+> [agent-devtools](https://github.com/Seungwoo321/agent-devtools) 의 Vite 플러그인. 로컬 에이전트 서버를 자동 spawn 하고, dev HTML 에 위젯 부트스트랩을 주입하며, `vite build` 시에는 no-op 으로 동작합니다. Vite 5, 6, 7, 8 모두 지원.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vite.svg)](https://www.npmjs.com/package/@agent-devtools/vite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
@@ -23,7 +23,7 @@
 pnpm add -D @agent-devtools/vite @agent-devtools/react @agent-devtools/core
 ```
 
-Peer dependency: `vite >= 8`.
+Peer dependency: `vite >= 5` (Vite 5, 6, 7, 8 모두 검증됨 — 플러그인은 Vite 4 이후 안정적인 `apply`, `configureServer`, `transformIndexHtml({ order, handler })` 표면만 사용합니다).
 
 ## 사용법
 
@@ -86,9 +86,9 @@ agentDevtools({
 
 ## 요구 사항
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - pnpm `>= 11`
-- Vite `>= 8`
+- Vite `>= 5`
 
 ## 관련 링크
 

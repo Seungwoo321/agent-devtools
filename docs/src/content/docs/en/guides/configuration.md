@@ -83,8 +83,14 @@ manages the agent server lifecycle externally.
 
 ### `workspace` (string, default Vite `config.root`)
 
-The workspace root the agent is allowed to read and edit within.
-Defaults to whatever `configureServer` sees as Vite's `config.root`.
+The workspace root the agent server treats as the project. It is the
+canonical `cwd` of the spawned Claude Code child process and the
+boundary the in-process `FileTools` (used by the picker source-slice
+preamble) enforces via `PathOutsideWorkspaceError`. It is **not** an
+OS-level sandbox — the SDK's own tool calls inherit the host user's
+file-system permissions, exactly like running `claude` from a terminal
+in that directory. Defaults to whatever `configureServer` sees as
+Vite's `config.root`.
 
 Path resolution rules:
 

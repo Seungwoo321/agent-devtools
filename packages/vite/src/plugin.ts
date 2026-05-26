@@ -32,7 +32,8 @@
 import type { Plugin, IndexHtmlTransformResult, ViteDevServer, HtmlTagDescriptor } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { request as httpRequest } from 'node:http';
-import { isAbsolute, resolve as resolvePath } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { isAbsolute, relative as relativePath, resolve as resolvePath } from 'node:path';
 import {
   startAgentDevtoolsServer,
   type AgentDevtoolsServerHandle,
@@ -43,6 +44,10 @@ import { resolveImportFrom, type Framework } from './framework.js';
 const DEFAULT_PLUGIN_NAME = 'agent-devtools';
 const CONFIG_GLOBAL = '__AGENT_DEVTOOLS_CONFIG__';
 const PROXY_PATH = '/__agent_devtools';
+const RELATED_IMPORTS_PATH = `${PROXY_PATH}/related-imports`;
+const SOURCE_SLICE_PATH = `${PROXY_PATH}/source-slice`;
+const SOURCE_SLICE_RADIUS = 10;
+const SOURCE_SLICE_MAX_BYTES = 64 * 1024;
 
 export interface AgentDevtoolsPluginOptions {
   /**
@@ -127,6 +132,24 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
     async configureServer(server: ViteDevServer): Promise<void> {
       if (!enabled) return;
       resolvedImportFrom = resolveImportFrom(options, server.config.root);
+      // Related-imports middleware sits BEFORE the proxy so the more-specific
+      // path wins. The module graph only exists inside the Vite process —
+      // the agent server cannot answer this, so we serve it locally.
+      server.middlewares.use(
+        RELATED_IMPORTS_PATH,
+        (req: IncomingMessage, res: ServerResponse): void => {
+          handleRelatedImportsRequest(req, res, server);
+        },
+      );
+      // Source-slice middleware — same locality principle as related-imports:
+      // the file lives on this machine, no need to bounce through the agent
+      // server. Mount before the catch-all proxy.
+      server.middlewares.use(
+        SOURCE_SLICE_PATH,
+        (req: IncomingMessage, res: ServerResponse): void => {
+          handleSourceSliceRequest(req, res, server);
+        },
+      );
       // Install the proxy middleware unconditionally (even before the agent
       // server is spawned) so that the first browser request after Vite is
       // ready doesn't race the spawn — it gets a 503 from us instead of an
@@ -230,6 +253,148 @@ const HOP_BY_HOP = new Set([
   'upgrade',
 ]);
 
+/**
+ * Serve a workspace-relative `?file=` query against the Vite dev server's
+ * module graph. Walks `module.importedModules` once and returns each
+ * importer's path back to the caller as workspace-relative strings.
+ *
+ * Security boundary: the requested file is resolved against
+ * `server.config.root` and only accepted if the resolved absolute path
+ * stays inside that root. Anything outside (`../` escapes, symlink jumps)
+ * returns 403. The same root filter is applied to each returned import.
+ *
+ * Best-effort by contract: a malformed query, an unknown file, or a path
+ * outside the root all return `{ imports: [] }` (or 403 for boundary
+ * violations) rather than an error — the orchestrator treats an empty
+ * list as "no enrichment available" and keeps the base page context.
+ */
+function handleRelatedImportsRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  server: ViteDevServer,
+): void {
+  if (req.method !== 'GET') {
+    res.statusCode = 405;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'method not allowed' }));
+    return;
+  }
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const file = url.searchParams.get('file');
+  if (!file) {
+    res.statusCode = 200;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ imports: [] }));
+    return;
+  }
+  const root = server.config.root;
+  const absolute = isAbsolute(file) ? file : resolvePath(root, file);
+  if (!isInsideRoot(absolute, root)) {
+    res.statusCode = 403;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'file outside workspace root' }));
+    return;
+  }
+  const modules = server.moduleGraph.getModulesByFile(absolute);
+  const imports: string[] = [];
+  const seen = new Set<string>();
+  if (modules) {
+    for (const mod of modules) {
+      for (const imported of mod.importedModules) {
+        const importedFile = imported.file;
+        if (!importedFile || seen.has(importedFile)) continue;
+        seen.add(importedFile);
+        if (!isInsideRoot(importedFile, root)) continue;
+        const rel = toWorkspaceRelative(importedFile, root);
+        if (rel) imports.push(rel);
+      }
+    }
+  }
+  res.statusCode = 200;
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ imports }));
+}
+
+function handleSourceSliceRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  server: ViteDevServer,
+): void {
+  if (req.method !== 'GET') {
+    res.statusCode = 405;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'method not allowed' }));
+    return;
+  }
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const file = url.searchParams.get('file');
+  const lineParam = url.searchParams.get('line');
+  if (!file || !lineParam) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'file and line are required' }));
+    return;
+  }
+  const line = Number.parseInt(lineParam, 10);
+  if (!Number.isFinite(line) || line < 1) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'line must be a positive integer' }));
+    return;
+  }
+  const root = server.config.root;
+  const absolute = isAbsolute(file) ? file : resolvePath(root, file);
+  if (!isInsideRoot(absolute, root)) {
+    res.statusCode = 403;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'file outside workspace root' }));
+    return;
+  }
+  void (async (): Promise<void> => {
+    try {
+      const stats = await stat(absolute);
+      if (!stats.isFile()) {
+        res.statusCode = 404;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'not a regular file' }));
+        return;
+      }
+      if (stats.size > SOURCE_SLICE_MAX_BYTES) {
+        res.statusCode = 413;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'file too large for slice' }));
+        return;
+      }
+      const text = await readFile(absolute, 'utf8');
+      const lines = text.split(/\r?\n/);
+      const startLine = Math.max(1, line - SOURCE_SLICE_RADIUS);
+      const endLine = Math.min(lines.length, line + SOURCE_SLICE_RADIUS);
+      const code = lines.slice(startLine - 1, endLine).join('\n');
+      res.statusCode = 200;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ code, startLine, endLine }));
+    } catch {
+      res.statusCode = 404;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ error: 'file not readable' }));
+    }
+  })();
+}
+
+function isInsideRoot(absolute: string, root: string): boolean {
+  const rel = relativePath(root, absolute);
+  if (rel === '') return true;
+  if (rel.startsWith('..')) return false;
+  if (isAbsolute(rel)) return false;
+  return true;
+}
+
+function toWorkspaceRelative(absolute: string, root: string): string | undefined {
+  const rel = relativePath(root, absolute);
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return undefined;
+  return rel.split('\\').join('/');
+}
+
 function proxyToAgentServer(
   req: IncomingMessage,
   res: ServerResponse,
@@ -330,7 +495,7 @@ function buildBootstrap(importFrom: string, hasConfig: boolean, shadowOpen: bool
   // fetcher is bound to the same config so the panel knows the workspace
   // root + registered providers without a second source of truth.
   return [
-    `import { mountAgentDevtools, createDefaultTransport, createAgentInfoFetcher, createHandoffRequester, createSettingsStore } from ${spec};`,
+    `import { mountAgentDevtools, createDefaultTransport, createAgentInfoFetcher, createHandoffRequester, createRelatedImportsFetcher, createSourceSliceFetcher, createPageContextEnricher, createSettingsStore } from ${spec};`,
     `if (!window.__AGENT_DEVTOOLS_MOUNTED__) {`,
     `  window.__AGENT_DEVTOOLS_MOUNTED__ = true;`,
     `  var __cfg = window.${CONFIG_GLOBAL};`,
@@ -338,10 +503,12 @@ function buildBootstrap(importFrom: string, hasConfig: boolean, shadowOpen: bool
     `  var __transport = __cfg ? createDefaultTransport(Object.assign({}, __cfg, { getSettings: function () { return __settings.get(); } })) : undefined;`,
     `  var __getServerInfo = __cfg ? createAgentInfoFetcher(__cfg) : undefined;`,
     `  var __requestHandoff = __cfg ? createHandoffRequester(__cfg) : undefined;`,
+    `  var __enrich = __cfg ? createPageContextEnricher({ fetchRelatedImports: createRelatedImportsFetcher(__cfg), fetchSourceSlice: createSourceSliceFetcher(__cfg) }) : undefined;`,
     `  var __opts = { settingsStore: __settings };`,
     `  if (__transport) __opts.transport = __transport;`,
     `  if (__getServerInfo) __opts.getServerInfo = __getServerInfo;`,
     `  if (__requestHandoff) __opts.requestHandoff = __requestHandoff;`,
+    `  if (__enrich) __opts.enrichPageContext = __enrich;`,
     shadowOpen ? `  __opts.shadowOpen = true;` : `  /* shadow closed (default) */`,
     `  mountAgentDevtools(__opts);`,
     `}`,

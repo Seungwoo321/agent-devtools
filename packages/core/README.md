@@ -76,7 +76,7 @@ All endpoints require `Authorization: Bearer <pairing-token>`. Requests are acce
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - A Claude Pro/Max session via the local `claude` CLI, **or** an `ANTHROPIC_API_KEY`.
 
 ## Links

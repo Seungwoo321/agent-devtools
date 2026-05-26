@@ -80,6 +80,7 @@ nuxt2Module.meta = { name: '@agent-devtools/nuxt2' };
 export default nuxt2Module;
 
 export type { MountAgentDevtoolsVue2Options } from '@agent-devtools/vue2';
+export { resolveNuxt2RouteFile } from './runtime/plugin.js';
 // Framework-uniform aliases. The vite plugin's injected bootstrap imports
 // these names verbatim from whichever adapter package the host project
 // resolves to, so every adapter must surface the same symbols. Nuxt 2
@@ -87,7 +88,10 @@ export type { MountAgentDevtoolsVue2Options } from '@agent-devtools/vue2';
 export { mountAgentDevtoolsVue2 as mountAgentDevtools } from '@agent-devtools/vue2';
 export {
   createDefaultTransport,
+  createRelatedImportsFetcher,
+  createSourceSliceFetcher,
+  createPageContextEnricher,
   createAgentInfoFetcher,
   createHandoffRequester,
   createSettingsStore,
-} from '@agent-devtools/react';
+} from '@agent-devtools/widget-core';

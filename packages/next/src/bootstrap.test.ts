@@ -38,6 +38,11 @@ describe('bootstrapAgentDevtools', () => {
       pairingToken: 'tok-1',
     });
     expect(mountSpy).toHaveBeenCalledTimes(1);
+    const mountArgs = mountSpy.mock.calls[0]?.[0] as
+      | { resolveRouteFile?: (pathname: string) => string | undefined }
+      | undefined;
+    expect(typeof mountArgs?.resolveRouteFile).toBe('function');
+    expect(mountArgs?.resolveRouteFile?.('/dashboard')).toBe('app/dashboard/page.tsx');
   });
 
   it('skips mounting in production even when the env flag is set', async () => {

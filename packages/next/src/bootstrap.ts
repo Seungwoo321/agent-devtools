@@ -24,6 +24,7 @@
  * symbols regression-checked by examples/next/scripts/check-no-leak.mjs.
  */
 import { mountAgentDevtools, createDefaultTransport } from '@agent-devtools/react';
+import { resolveNextAppRouterRouteFile } from './route.js';
 
 export interface AgentDevtoolsBootstrapOptions {
   /** Override the base URL injected by withAgentDevtools (next.config). */
@@ -48,6 +49,7 @@ export function bootstrapAgentDevtools(options: AgentDevtoolsBootstrapOptions = 
   mounted = true;
   mountAgentDevtools({
     transport: createDefaultTransport({ baseUrl, pairingToken }),
+    resolveRouteFile: resolveNextAppRouterRouteFile,
   });
 }
 

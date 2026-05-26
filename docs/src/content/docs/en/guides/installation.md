@@ -19,13 +19,19 @@ You need the following two things ready before continuing.
    claude /login
    ```
    You're done as soon as an OAuth session file appears under `~/.claude/`.
-2. **Node.js 24 LTS or newer.**
+2. **Node.js 22.12 LTS (Jod) or newer.** Node 24+ also works.
    Verify with `node --version`.
 
 > agent-devtools never asks for an Anthropic API key. It reuses the OAuth
 > session that the CLI already maintains.
 
 ## 1. Pick your stack
+
+> **Not sure which to pick? Start with React + Vite.** It is the canonical
+> first-run path — the shortest dev loop, the most heavily covered adapter,
+> and the stack every other example in the docs is calibrated against. You
+> can revisit this page once you have seen the widget edit a file on a stack
+> you already know.
 
 Each adapter ships a runnable example under
 [`examples/`](https://github.com/Seungwoo321/agent-devtools/tree/main/examples)
@@ -289,6 +295,16 @@ console emits logs similar to the following.
 [agent-devtools] pairing token (memory-only, rotates per CLI start)
 [agent-devtools] provider: acp (default) — connecting to local Claude Code
 ```
+
+## Security note
+
+The `workspace` option is the spawned Claude Code child process's canonical
+`cwd` and the boundary that the picker preamble's source-slice reads enforce —
+**not** an OS-level sandbox. The SDK's own tool calls run with the host user's
+file-system permissions, exactly like running `claude` from a terminal in that
+directory. See the
+[security model](/en/guides/security/#workspace-boundary--what-it-does-and-does-not-enforce)
+for the honest scope.
 
 ## 3. Next steps
 

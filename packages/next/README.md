@@ -7,6 +7,17 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/next.svg)](https://www.npmjs.com/package/@agent-devtools/next)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
+## What this adapter provides
+
+- **Walker reuse** — DOM → fiber → source goes through `@agent-devtools/react`. The walker (`__reactFiber$<nonce>`, `walkComponentAncestors`, React 19 `_debugStack` parse) is imported directly, not duplicated.
+- **App Router boundary** — `bootstrapAgentDevtools` runs inside a `"use client"` component imported from `app/layout.tsx`. The dev server emits an env flag the bootstrap reads; production builds drop the env flag entirely.
+- **Pages Router boundary** — same `bootstrapAgentDevtools` invoked from `_app.tsx`. The Pages Router never has the App Router's RSC payload but the client fiber tree is identical.
+- **Webpack alias on production** — `withAgentDevtools` rewrites `next.config` so the production client build aliases the widget chain (`@agent-devtools/{react,core,harness-core,widget-core}`) to `false`. Any accidental static import becomes a zero-byte module after webpack resolves the alias.
+- **Server components** — RSC components live on the server and never enter the client fiber tree. The widget shows the nearest client-component ancestor in their place rather than guessing a server identity.
+- **Widget UI** — `@agent-devtools/widget-core` shell, the same shadow root the React adapter uses.
+
+Peer range: `next >= 15`, `react >= 19`, `react-dom >= 19`.
+
 ## Features
 
 - **`withAgentDevtools`** — wraps `next.config.{js,mjs,ts}` so the dev server propagates the pairing token + base URL via environment variables. The wrapper is a no-op in production builds (Layer 1 of the dev-only guard).
@@ -136,7 +147,7 @@ Same options as `mountAgentDevtools` from `@agent-devtools/react`. Use this when
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - Next.js `>= 15`, React `>= 19`
 
 ## Links

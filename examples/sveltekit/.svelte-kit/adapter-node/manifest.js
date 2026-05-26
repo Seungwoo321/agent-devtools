@@ -1,55 +1,43 @@
 export const manifest = (() => {
-  function __memo(fn) {
-    let value;
-    return () => (value ??= value = fn());
-  }
+function __memo(fn) {
+	let value;
+	return () => value ??= (value = fn());
+}
 
-  return {
-    appDir: '_app',
-    appPath: '_app',
-    assets: new Set([]),
-    mimeTypes: {},
-    _: {
-      client: {
-        start: '_app/immutable/entry/start.W-9kjwB2.js',
-        app: '_app/immutable/entry/app.aIaAJuC6.js',
-        imports: [
-          '_app/immutable/entry/start.W-9kjwB2.js',
-          '_app/immutable/chunks/Bb-pn1ur.js',
-          '_app/immutable/chunks/eYpR7Yn_.js',
-          '_app/immutable/entry/app.aIaAJuC6.js',
-          '_app/immutable/chunks/eYpR7Yn_.js',
-          '_app/immutable/chunks/Dj6f-nJM.js',
-          '_app/immutable/chunks/DEDqjojZ.js',
-        ],
-        stylesheets: [],
-        fonts: [],
-        uses_env_dynamic_public: false,
-      },
-      nodes: [
-        __memo(() => import('./nodes/0.js')),
-        __memo(() => import('./nodes/1.js')),
-        __memo(() => import('./nodes/2.js')),
-      ],
-      remotes: {},
-      routes: [
-        {
-          id: '/',
-          pattern: /^\/$/,
-          params: [],
-          page: { layouts: [0], errors: [1], leaf: 2 },
-          endpoint: null,
-        },
-      ],
-      prerendered_routes: new Set([]),
-      matchers: async () => {
-        return {};
-      },
-      server_assets: {},
-    },
-  };
+return {
+	appDir: "_app",
+	appPath: "_app",
+	assets: new Set([]),
+	mimeTypes: {},
+	_: {
+		client: {start:"_app/immutable/entry/start.B8UkIJ1d.js",app:"_app/immutable/entry/app.B2fJAcVA.js",imports:["_app/immutable/entry/start.B8UkIJ1d.js","_app/immutable/chunks/vnSdLwjz.js","_app/immutable/chunks/DvTkoxpS.js","_app/immutable/entry/app.B2fJAcVA.js","_app/immutable/chunks/DvTkoxpS.js","_app/immutable/chunks/kNaey6uv.js","_app/immutable/chunks/xihTtKlq.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+		nodes: [
+			__memo(() => import('./nodes/0.js')),
+			__memo(() => import('./nodes/1.js')),
+			__memo(() => import('./nodes/2.js'))
+		],
+		remotes: {
+			
+		},
+		routes: [
+			{
+				id: "/",
+				pattern: /^\/$/,
+				params: [],
+				page: { layouts: [0,], errors: [1,], leaf: 2 },
+				endpoint: null
+			}
+		],
+		prerendered_routes: new Set([]),
+		matchers: async () => {
+			
+			return {  };
+		},
+		server_assets: {}
+	}
+}
 })();
 
 export const prerendered = new Set([]);
 
-export const base = '';
+export const base = "";

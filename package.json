@@ -12,7 +12,7 @@
     "url": "https://github.com/Seungwoo321/agent-devtools.git"
   },
   "engines": {
-    "node": ">=24.0.0",
+    "node": ">=22.13.0",
     "pnpm": ">=11.0.0"
   },
   "packageManager": "pnpm@11.1.1",
@@ -30,12 +30,17 @@
     "e2e": "pnpm --filter @agent-devtools/e2e test",
     "e2e:install": "pnpm --filter @agent-devtools/e2e install:browsers",
     "clean": "pnpm -r exec rm -rf dist .turbo node_modules/.cache",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish",
+    "release:beta": "pnpm build && changeset version --snapshot beta && changeset publish --no-git-tag --snapshot --tag beta",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.5.0",
+    "@changesets/cli": "^2.27.9",
     "@eslint-react/eslint-plugin": "^5.7.7",
     "@eslint/js": "^10.0.1",
-    "@release-it/conventional-changelog": "^11.0.0",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -43,7 +48,6 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.4",
     "prettier": "^3.8.3",
-    "release-it": "^20.0.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.3"
   },

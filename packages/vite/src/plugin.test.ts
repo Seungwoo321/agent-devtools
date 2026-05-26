@@ -48,7 +48,9 @@ interface FakeServerSetup {
   readonly middlewares: CapturedMiddleware[];
 }
 
-function makeFakeViteServer(opts: { workspace?: string } = {}): FakeServerSetup {
+function makeFakeViteServer(
+  opts: { workspace?: string; moduleGraph?: unknown } = {},
+): FakeServerSetup {
   const httpServer = new EventEmitter();
   const close = vi.fn(async () => undefined);
   const middlewares: CapturedMiddleware[] = [];
@@ -62,6 +64,7 @@ function makeFakeViteServer(opts: { workspace?: string } = {}): FakeServerSetup 
     config: { root: opts.workspace ?? '/fake/root' },
     httpServer,
     middlewares: { use },
+    ...(opts.moduleGraph !== undefined && { moduleGraph: opts.moduleGraph }),
   } as unknown as ViteDevServer;
   return { close, httpServer, viteServer, middlewares };
 }
@@ -462,8 +465,13 @@ describe('agentDevtools() — same-origin proxy middleware', () => {
     const plugin = buildPlugin({ startServer: start });
     const { viteServer, middlewares } = makeFakeViteServer();
     await runConfigureServer(plugin, viteServer);
-    expect(middlewares).toHaveLength(1);
-    expect(middlewares[0]!.path).toBe('/__agent_devtools');
+    // More-specific paths are mounted first so the catch-all proxy at
+    // /__agent_devtools doesn't shadow them: related-imports, then
+    // source-slice, then the agent server proxy.
+    expect(middlewares).toHaveLength(3);
+    expect(middlewares[0]!.path).toBe('/__agent_devtools/related-imports');
+    expect(middlewares[1]!.path).toBe('/__agent_devtools/source-slice');
+    expect(middlewares[2]!.path).toBe('/__agent_devtools');
   });
 
   it('installs the proxy middleware even when spawnServer: false (embedder owns upstream)', async () => {
@@ -471,7 +479,7 @@ describe('agentDevtools() — same-origin proxy middleware', () => {
     const plugin = buildPlugin({ startServer: start, spawnServer: false });
     const { viteServer, middlewares } = makeFakeViteServer();
     await runConfigureServer(plugin, viteServer);
-    expect(middlewares).toHaveLength(1);
+    expect(middlewares).toHaveLength(3);
   });
 
   it('does NOT install the proxy when enabled: false', async () => {
@@ -553,7 +561,9 @@ describe('agentDevtools() — same-origin proxy middleware', () => {
           return dest;
         },
       } as unknown as IncomingMessage;
-      middlewares[0]!.handler(req, res);
+      // middlewares[2] is the proxy; middlewares[0]/[1] are the
+      // related-imports and source-slice handlers (more-specific paths).
+      middlewares[2]!.handler(req, res);
 
       // Drive the optional data/end emitters so listeners installed by the
       // middleware (if any) still receive their notifications. The actual
@@ -609,7 +619,9 @@ describe('agentDevtools() — same-origin proxy middleware', () => {
     await runConfigureServer(plugin, viteServer);
     const { res, chunks, statusCode, ended, isEnded } = makeFakeRes();
     const req = { method: 'POST', url: '/v1/agent/stream', headers: {} } as IncomingMessage;
-    middlewares[0]!.handler(req, res);
+    // middlewares[2] is the proxy; middlewares[0]/[1] are the
+    // related-imports and source-slice handlers (more-specific paths).
+    middlewares[2]!.handler(req, res);
     await Promise.race([
       ended(),
       new Promise((_, reject) =>
@@ -620,5 +632,465 @@ describe('agentDevtools() — same-origin proxy middleware', () => {
     expect(isEnded()).toBe(true);
     const body = Buffer.concat(chunks).toString('utf8');
     expect(body).toContain('"error":"agent server not ready"');
+  });
+});
+
+describe('agentDevtools() — related-imports middleware', () => {
+  interface FakeModule {
+    file?: string;
+    importedModules: Iterable<FakeModule>;
+  }
+
+  function makeModuleGraph(entries: Record<string, FakeModule[]>): {
+    getModulesByFile(file: string): Set<FakeModule> | undefined;
+  } {
+    return {
+      getModulesByFile(file: string): Set<FakeModule> | undefined {
+        const mods = entries[file];
+        return mods ? new Set(mods) : undefined;
+      },
+    };
+  }
+
+  function makeJsonRes(): {
+    res: ServerResponse;
+    body: () => string;
+    status: () => number;
+    ended: () => Promise<void>;
+  } {
+    const chunks: Buffer[] = [];
+    let statusCode = 200;
+    let resolveEnded: () => void;
+    const endedPromise = new Promise<void>((r) => {
+      resolveEnded = r;
+    });
+    const res = new Writable({
+      write(chunk: Buffer | string, _enc, cb: () => void) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        cb();
+      },
+      final(cb: () => void) {
+        resolveEnded();
+        cb();
+      },
+    }) as unknown as ServerResponse;
+    Object.defineProperty(res, 'statusCode', {
+      get: (): number => statusCode,
+      set: (v: number) => {
+        statusCode = v;
+      },
+    });
+    res.setHeader = function setHeader(): unknown {
+      return res;
+    } as typeof res.setHeader;
+    return {
+      res,
+      body: (): string => Buffer.concat(chunks).toString('utf8'),
+      status: (): number => statusCode,
+      ended: (): Promise<void> => endedPromise,
+    };
+  }
+
+  it('returns workspace-relative imports for a known file', async () => {
+    const root = '/repo/root';
+    const moduleGraph = makeModuleGraph({
+      [`${root}/src/Picked.tsx`]: [
+        {
+          file: `${root}/src/Picked.tsx`,
+          importedModules: [
+            { file: `${root}/src/App.tsx`, importedModules: [] },
+            { file: `${root}/src/util.ts`, importedModules: [] },
+          ],
+        },
+      ],
+    });
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: '/?file=src%2FPicked.tsx',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(200);
+    expect(JSON.parse(body())).toEqual({ imports: ['src/App.tsx', 'src/util.ts'] });
+  });
+
+  it('rejects files outside the workspace root with 403', async () => {
+    const root = '/repo/root';
+    const moduleGraph = makeModuleGraph({});
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: `/?file=${encodeURIComponent('../../etc/passwd')}`,
+      headers: {},
+    } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(403);
+    expect(JSON.parse(body())).toEqual({ error: 'file outside workspace root' });
+  });
+
+  it('returns empty imports when the file is unknown to the module graph', async () => {
+    const root = '/repo/root';
+    const moduleGraph = makeModuleGraph({});
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: '/?file=src%2FMissing.tsx',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(200);
+    expect(JSON.parse(body())).toEqual({ imports: [] });
+  });
+
+  it('returns empty imports when ?file is missing', async () => {
+    const root = '/repo/root';
+    const moduleGraph = makeModuleGraph({});
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = { method: 'GET', url: '/', headers: {} } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(200);
+    expect(JSON.parse(body())).toEqual({ imports: [] });
+  });
+
+  it('rejects non-GET requests with 405', async () => {
+    const root = '/repo/root';
+    const moduleGraph = makeModuleGraph({});
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, status, ended } = makeJsonRes();
+    const req = {
+      method: 'POST',
+      url: '/?file=src%2FPicked.tsx',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(405);
+  });
+
+  it('drops imports without a resolved file and dedupes repeats', async () => {
+    const root = '/repo/root';
+    const dup = { file: `${root}/src/Shared.ts`, importedModules: [] };
+    const moduleGraph = makeModuleGraph({
+      [`${root}/src/Picked.tsx`]: [
+        {
+          file: `${root}/src/Picked.tsx`,
+          importedModules: [
+            { importedModules: [] }, // no file — skipped
+            dup,
+            dup, // exact same module — deduped
+            { file: `${root}/src/Other.ts`, importedModules: [] },
+          ],
+        },
+      ],
+    });
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: '/?file=src%2FPicked.tsx',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(200);
+    expect(JSON.parse(body())).toEqual({ imports: ['src/Shared.ts', 'src/Other.ts'] });
+  });
+
+  it('filters imports whose paths resolve outside the workspace root', async () => {
+    const root = '/repo/root';
+    const moduleGraph = makeModuleGraph({
+      [`${root}/src/Picked.tsx`]: [
+        {
+          file: `${root}/src/Picked.tsx`,
+          importedModules: [
+            { file: `${root}/src/InsideOK.ts`, importedModules: [] },
+            { file: '/elsewhere/leak.ts', importedModules: [] },
+          ],
+        },
+      ],
+    });
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root, moduleGraph });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: '/?file=src%2FPicked.tsx',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[0]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(200);
+    expect(JSON.parse(body())).toEqual({ imports: ['src/InsideOK.ts'] });
+  });
+});
+
+describe('agentDevtools() — source-slice middleware', () => {
+  // Reuse the JSON-collecting writable from the related-imports tests by
+  // re-declaring it locally — kept inline so this describe block stands on
+  // its own next to the source-slice production code.
+  function makeJsonRes(): {
+    res: ServerResponse;
+    body: () => string;
+    status: () => number;
+    ended: () => Promise<void>;
+  } {
+    const chunks: Buffer[] = [];
+    let statusCode = 200;
+    let resolveEnded: () => void;
+    const endedPromise = new Promise<void>((r) => {
+      resolveEnded = r;
+    });
+    const res = new Writable({
+      write(chunk: Buffer | string, _enc, cb: () => void) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        cb();
+      },
+      final(cb: () => void) {
+        resolveEnded();
+        cb();
+      },
+    }) as unknown as ServerResponse;
+    Object.defineProperty(res, 'statusCode', {
+      get: (): number => statusCode,
+      set: (v: number) => {
+        statusCode = v;
+      },
+    });
+    res.setHeader = function setHeader(): unknown {
+      return res;
+    } as typeof res.setHeader;
+    return {
+      res,
+      body: (): string => Buffer.concat(chunks).toString('utf8'),
+      status: (): number => statusCode,
+      ended: (): Promise<void> => endedPromise,
+    };
+  }
+
+  async function withTempWorkspace<T>(
+    files: Record<string, string | Buffer>,
+    body: (root: string) => Promise<T>,
+  ): Promise<T> {
+    const { mkdtemp, writeFile, mkdir, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { dirname, join } = await import('node:path');
+    const root = await mkdtemp(join(tmpdir(), 'agent-devtools-slice-'));
+    try {
+      for (const [rel, content] of Object.entries(files)) {
+        const abs = join(root, rel);
+        await mkdir(dirname(abs), { recursive: true });
+        await writeFile(abs, content);
+      }
+      return await body(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  it('returns a ±10-line slice clamped to file boundaries (happy path)', async () => {
+    const file = Array.from({ length: 30 }, (_, i) => `line${String(i + 1)}`).join('\n');
+    await withTempWorkspace({ 'src/Picked.tsx': file }, async (root) => {
+      const { start } = makeStartServerStub();
+      const plugin = buildPlugin({ startServer: start, spawnServer: false });
+      const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+      await runConfigureServer(plugin, viteServer);
+      const { res, body, status, ended } = makeJsonRes();
+      const req = {
+        method: 'GET',
+        url: '/?file=src%2FPicked.tsx&line=15',
+        headers: {},
+      } as IncomingMessage;
+      middlewares[1]!.handler(req, res);
+      await ended();
+      expect(status()).toBe(200);
+      const payload = JSON.parse(body()) as {
+        code: string;
+        startLine: number;
+        endLine: number;
+      };
+      expect(payload.startLine).toBe(5);
+      expect(payload.endLine).toBe(25);
+      expect(payload.code.split('\n')[0]).toBe('line5');
+      expect(payload.code.split('\n').at(-1)).toBe('line25');
+    });
+  });
+
+  it('clamps the window when the picked line is near the file start', async () => {
+    const file = Array.from({ length: 30 }, (_, i) => `line${String(i + 1)}`).join('\n');
+    await withTempWorkspace({ 'src/Edge.tsx': file }, async (root) => {
+      const { start } = makeStartServerStub();
+      const plugin = buildPlugin({ startServer: start, spawnServer: false });
+      const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+      await runConfigureServer(plugin, viteServer);
+      const { res, body, status, ended } = makeJsonRes();
+      const req = {
+        method: 'GET',
+        url: '/?file=src%2FEdge.tsx&line=2',
+        headers: {},
+      } as IncomingMessage;
+      middlewares[1]!.handler(req, res);
+      await ended();
+      expect(status()).toBe(200);
+      const payload = JSON.parse(body()) as {
+        code: string;
+        startLine: number;
+        endLine: number;
+      };
+      expect(payload.startLine).toBe(1);
+      expect(payload.endLine).toBe(12);
+    });
+  });
+
+  it('returns 400 when ?file or ?line is missing', async () => {
+    const root = '/repo/root';
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+    await runConfigureServer(plugin, viteServer);
+    const { res, status, ended } = makeJsonRes();
+    const req = { method: 'GET', url: '/?file=src%2FX.tsx', headers: {} } as IncomingMessage;
+    middlewares[1]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(400);
+  });
+
+  it('returns 400 when ?line is not a positive integer', async () => {
+    const root = '/repo/root';
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+    await runConfigureServer(plugin, viteServer);
+    const { res, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: '/?file=src%2FX.tsx&line=zero',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[1]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(400);
+  });
+
+  it('returns 403 when the file resolves outside the workspace root', async () => {
+    const root = '/repo/root';
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+    await runConfigureServer(plugin, viteServer);
+    const { res, body, status, ended } = makeJsonRes();
+    const req = {
+      method: 'GET',
+      url: `/?file=${encodeURIComponent('../../etc/passwd')}&line=1`,
+      headers: {},
+    } as IncomingMessage;
+    middlewares[1]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(403);
+    expect(JSON.parse(body())).toEqual({ error: 'file outside workspace root' });
+  });
+
+  it('rejects non-GET requests with 405', async () => {
+    const root = '/repo/root';
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start, spawnServer: false });
+    const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+    await runConfigureServer(plugin, viteServer);
+    const { res, status, ended } = makeJsonRes();
+    const req = {
+      method: 'POST',
+      url: '/?file=src%2FX.tsx&line=1',
+      headers: {},
+    } as IncomingMessage;
+    middlewares[1]!.handler(req, res);
+    await ended();
+    expect(status()).toBe(405);
+  });
+
+  it('returns 404 when the resolved path is not a regular file', async () => {
+    await withTempWorkspace({}, async (root) => {
+      const { mkdir } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+      await mkdir(join(root, 'src'), { recursive: true });
+      const { start } = makeStartServerStub();
+      const plugin = buildPlugin({ startServer: start, spawnServer: false });
+      const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+      await runConfigureServer(plugin, viteServer);
+      const { res, status, ended } = makeJsonRes();
+      const req = {
+        method: 'GET',
+        url: '/?file=src&line=1',
+        headers: {},
+      } as IncomingMessage;
+      middlewares[1]!.handler(req, res);
+      await ended();
+      expect(status()).toBe(404);
+    });
+  });
+
+  it('returns 413 when the file exceeds the configured byte cap', async () => {
+    // 64KB + 1 to exceed SOURCE_SLICE_MAX_BYTES.
+    const big = 'x'.repeat(64 * 1024 + 1);
+    await withTempWorkspace({ 'src/Big.tsx': big }, async (root) => {
+      const { start } = makeStartServerStub();
+      const plugin = buildPlugin({ startServer: start, spawnServer: false });
+      const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+      await runConfigureServer(plugin, viteServer);
+      const { res, status, ended } = makeJsonRes();
+      const req = {
+        method: 'GET',
+        url: '/?file=src%2FBig.tsx&line=1',
+        headers: {},
+      } as IncomingMessage;
+      middlewares[1]!.handler(req, res);
+      await ended();
+      expect(status()).toBe(413);
+    });
+  });
+
+  it('returns 404 when the file does not exist on disk', async () => {
+    await withTempWorkspace({}, async (root) => {
+      const { start } = makeStartServerStub();
+      const plugin = buildPlugin({ startServer: start, spawnServer: false });
+      const { viteServer, middlewares } = makeFakeViteServer({ workspace: root });
+      await runConfigureServer(plugin, viteServer);
+      const { res, status, ended } = makeJsonRes();
+      const req = {
+        method: 'GET',
+        url: '/?file=src%2FGhost.tsx&line=1',
+        headers: {},
+      } as IncomingMessage;
+      middlewares[1]!.handler(req, res);
+      await ended();
+      expect(status()).toBe(404);
+    });
   });
 });

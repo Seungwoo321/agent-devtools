@@ -2,7 +2,7 @@
 
 # @agent-devtools/vite
 
-> Vite 8 plugin for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Auto-spawns the local agent server, injects the widget bootstrap into the dev HTML, and is a no-op during `vite build`.
+> Vite plugin for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Auto-spawns the local agent server, injects the widget bootstrap into the dev HTML, and is a no-op during `vite build`. Compatible with Vite 5, 6, 7, and 8.
 
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vite.svg)](https://www.npmjs.com/package/@agent-devtools/vite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
@@ -23,7 +23,7 @@
 pnpm add -D @agent-devtools/vite @agent-devtools/react @agent-devtools/core
 ```
 
-Peer dependency: `vite >= 8`.
+Peer dependency: `vite >= 5` (tested against Vite 5, 6, 7, and 8 — the plugin uses only the stable `apply`, `configureServer`, and `transformIndexHtml({ order, handler })` surfaces that have been unchanged since Vite 4).
 
 ## Usage
 
@@ -86,9 +86,9 @@ agentDevtools({
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - pnpm `>= 11`
-- Vite `>= 8`
+- Vite `>= 5`
 
 ## Links
 

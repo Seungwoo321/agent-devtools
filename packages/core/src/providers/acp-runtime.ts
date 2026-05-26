@@ -40,7 +40,13 @@ import {
   type RequestPermissionResponse,
   type SessionNotification,
 } from '@agentclientprotocol/sdk';
-import type { AcpEvent, AcpRunParams, AcpRuntime } from './acp.js';
+import {
+  DEFAULT_PERMISSION_POLICY,
+  type AcpEvent,
+  type AcpRunParams,
+  type AcpRuntime,
+  type PermissionPolicy,
+} from './acp.js';
 import { createDefaultAcpSessionStore, type AcpSessionStore } from './acp-session-store.js';
 import { formatContextPreamble } from './context-preamble.js';
 
@@ -177,6 +183,7 @@ class AcpSessionPool {
 interface RunState {
   queue: EventQueue<AcpEvent>;
   permissionMode: AcpRunParams['permissionMode'];
+  permissionPolicy: PermissionPolicy;
 }
 
 interface SessionEntry {
@@ -233,8 +240,10 @@ class AcpChild {
       },
       async requestPermission(req: RequestPermissionRequest): Promise<RequestPermissionResponse> {
         const self = ref.value;
-        const mode = self?.bySessionId.get(req.sessionId)?.current?.permissionMode ?? 'default';
-        return decidePermission(req, mode);
+        const state = self?.bySessionId.get(req.sessionId)?.current;
+        const mode = state?.permissionMode ?? 'default';
+        const policy = state?.permissionPolicy ?? DEFAULT_PERMISSION_POLICY;
+        return decidePermission(req, mode, policy);
       },
     };
     const conn = new ClientSideConnection(() => client, stream);
@@ -283,7 +292,11 @@ class AcpChild {
       }
 
       const queue = new EventQueue<AcpEvent>();
-      entry.current = { queue, permissionMode: params.permissionMode };
+      entry.current = {
+        queue,
+        permissionMode: params.permissionMode,
+        permissionPolicy: { ...DEFAULT_PERMISSION_POLICY, ...(params.permissionPolicy ?? {}) },
+      };
 
       const onAbort = (): void => {
         // Cancel the in-flight prompt, but leave the queue open so the
@@ -423,34 +436,93 @@ export async function buildPromptContent(params: AcpRunParams): Promise<ContentB
 }
 
 /**
- * Resolve a `requestPermission` call automatically. The widget user is not
- * at the terminal, so the policy is dictated by `permissionMode`:
+ * Resolve a `requestPermission` call automatically. The widget has no live
+ * UI for permission prompts, so the runtime decides each request from two
+ * inputs:
  *
- *   - `bypassPermissions` / `acceptEdits` / `dontAsk` — pick the lowest-
- *     scoped allow option (`allow_once` first, then `allow_always`).
- *     `dontAsk` semantically means "don't surface a prompt, deny if not
- *     pre-approved" in the SDK, but in our setup pre-approval is implicit
- *     for routine edits — we map it to the same allow path.
- *   - `acceptEdits` is the default and intentionally permissive: routine
- *     edits inside the workspace boundary are pre-approved (workspace
- *     boundary is enforced by `FileTools`).
- *   - `plan` / `default` — reject. Plan mode is read-only; `default` lacks
- *     a prompt surface in this transport.
+ *   1. `permissionMode` — operator-level kill switch. `bypassPermissions`
+ *      unconditionally allows. `plan` / `default` unconditionally cancel
+ *      (plan is read-only; default lacks a prompt surface). Other modes
+ *      defer to the policy.
+ *   2. `policy` — per-action-category resolution. The ACP `ToolKind` of
+ *      the inbound `toolCall` is collapsed into one of four buckets
+ *      (`fileEdit`, `bash`, `webFetch`, `mcpTool`) and the matching
+ *      {@link PermissionResolution} drives the outcome:
+ *
+ *        - `'auto'` → select the lowest-scoped allow option.
+ *        - `'ask'`  → cancelled outcome (no UI to ask).
+ *        - `'deny'` → select a reject option when offered, else cancel.
+ *
+ * Pure-read kinds (`read | search | think | switch_mode`) are always
+ * auto-allowed regardless of policy — the agent cannot make progress
+ * without them and they have no external side effects.
  */
 export function decidePermission(
   request: RequestPermissionRequest,
   permissionMode: AcpRunParams['permissionMode'],
+  policy: PermissionPolicy = DEFAULT_PERMISSION_POLICY,
 ): RequestPermissionResponse {
-  const allow =
-    permissionMode === 'bypassPermissions' ||
-    permissionMode === 'acceptEdits' ||
-    permissionMode === 'dontAsk';
-
-  if (!allow) {
+  if (permissionMode === 'bypassPermissions') {
+    return allowResponse(request.options);
+  }
+  if (permissionMode !== 'acceptEdits' && permissionMode !== 'dontAsk') {
+    // `plan` and `default` — no decision surface for this transport.
     return { outcome: { outcome: 'cancelled' } };
   }
 
-  const option = pickAllowOption(request.options);
+  const category = categorizeToolKind(request.toolCall.kind ?? null);
+  if (category === 'safeRead') {
+    return allowResponse(request.options);
+  }
+
+  switch (policy[category]) {
+    case 'auto':
+      return allowResponse(request.options);
+    case 'deny':
+      return rejectResponse(request.options);
+    case 'ask':
+    default:
+      return { outcome: { outcome: 'cancelled' } };
+  }
+}
+
+type PermissionCategory = keyof PermissionPolicy | 'safeRead';
+
+function categorizeToolKind(kind: string | null | undefined): PermissionCategory {
+  switch (kind) {
+    case 'edit':
+    case 'delete':
+    case 'move':
+      return 'fileEdit';
+    case 'execute':
+      return 'bash';
+    case 'fetch':
+      return 'webFetch';
+    case 'read':
+    case 'search':
+    case 'think':
+    case 'switch_mode':
+      return 'safeRead';
+    case 'other':
+    default:
+      // Unknown / null / unrecognized kinds bucket into `mcpTool` so they
+      // inherit the conservative MCP default ('ask') rather than silently
+      // running. ACP can extend `ToolKind`, so this default also future-
+      // proofs against new kinds added in newer SDK releases.
+      return 'mcpTool';
+  }
+}
+
+function allowResponse(options: readonly PermissionOption[]): RequestPermissionResponse {
+  const option = pickAllowOption(options);
+  if (!option) {
+    return { outcome: { outcome: 'cancelled' } };
+  }
+  return { outcome: { outcome: 'selected', optionId: option.optionId } };
+}
+
+function rejectResponse(options: readonly PermissionOption[]): RequestPermissionResponse {
+  const option = pickRejectOption(options);
   if (!option) {
     return { outcome: { outcome: 'cancelled' } };
   }
@@ -460,6 +532,12 @@ export function decidePermission(
 function pickAllowOption(options: readonly PermissionOption[]): PermissionOption | undefined {
   return (
     options.find((o) => o.kind === 'allow_once') ?? options.find((o) => o.kind === 'allow_always')
+  );
+}
+
+function pickRejectOption(options: readonly PermissionOption[]): PermissionOption | undefined {
+  return (
+    options.find((o) => o.kind === 'reject_once') ?? options.find((o) => o.kind === 'reject_always')
   );
 }
 

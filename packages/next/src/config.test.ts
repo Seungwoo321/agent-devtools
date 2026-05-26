@@ -10,6 +10,7 @@ type ConfigWithWebpack = {
 
 const STRIPPED_MODULES = [
   '@agent-devtools/react',
+  '@agent-devtools/widget-core',
   '@agent-devtools/core',
   '@agent-devtools/harness-core',
 ];

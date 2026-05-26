@@ -74,9 +74,19 @@ export default defineConfig({
           translations: { en: 'Core concepts' },
           items: [
             {
+              label: '어떻게 동작하나',
+              translations: { en: 'How it works' },
+              slug: 'guides/how-it-works',
+            },
+            {
               label: 'Provider — ACP vs SDK',
               translations: { en: 'Provider — ACP vs SDK' },
               slug: 'guides/providers',
+            },
+            {
+              label: '자기 provider 가져오기',
+              translations: { en: 'Bring your own provider' },
+              slug: 'guides/byo-provider',
             },
             {
               label: '권한 모드',
@@ -87,6 +97,11 @@ export default defineConfig({
               label: '위젯과 페이지 컨텍스트',
               translations: { en: 'Widget & page context' },
               slug: 'guides/widget',
+            },
+            {
+              label: '어댑터별 컨텍스트 품질',
+              translations: { en: 'Adapter context quality' },
+              slug: 'guides/adapter-context-quality',
             },
           ],
         },

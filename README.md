@@ -5,14 +5,28 @@
 <h1 align="center">agent-devtools</h1>
 
 <p align="center">
-  OSS in-page agent devtools for React/Vue/Next/Nuxt — bring your own LLM subscription.
+  <strong>Claude Code, inside your running app.</strong>
+</p>
+
+<p align="center">
+  A floating chat that picks any component, reads the code, and edits files itself — right there in the browser. No IDE forwarding, no extra account. Bring your own Claude Pro/Max subscription.
 </p>
 
 <p align="center">
   <strong>English</strong> · <a href="./README.ko.md">한국어</a>
 </p>
 
-A floating chat window pinned to the page you are developing. Ask in natural language to change UI or behavior, and the agent reads and edits the code **inside that same chat window**. No separate IDE required.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@agent-devtools/core"><img src="https://img.shields.io/npm/v/@agent-devtools/core?label=npm&color=cb3837" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@agent-devtools/core"><img src="https://img.shields.io/node/v/@agent-devtools/core?color=339933" alt="Node engine" /></a>
+  <a href="https://github.com/Seungwoo321/agent-devtools/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Seungwoo321/agent-devtools/ci.yml?branch=main&label=ci" alt="ci" /></a>
+  <a href="https://agent-devtools-docs.vercel.app/en/guides/security/#dev-only-guard-2-layer"><img src="https://img.shields.io/badge/production-no--leak%20verified-2ea44f" alt="production no-leak verified" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Seungwoo321/agent-devtools" alt="license" /></a>
+</p>
+
+<p align="center">
+  <sub>The <strong>production no-leak</strong> badge reflects the <a href="https://agent-devtools-docs.vercel.app/en/guides/security/#dev-only-guard-2-layer">2-layer dev-only guard</a> — build-time exclusion from production graphs plus a runtime <code>NODE_ENV</code> check. Every example carries a symbol scanner (<a href="./scripts/check-no-leak.mjs"><code>scripts/check-no-leak.mjs</code></a>) that the CI matrix runs against the real <code>dist/</code>, <code>.next/</code>, and <code>.output/</code> output on every push.</sub>
+</p>
 
 ## Demo
 
@@ -21,7 +35,23 @@ A floating chat window pinned to the page you are developing. Ask in natural lan
 Inside the widget, type something like "make the Counter title bigger and red" and the agent reads `App.tsx` and `styles.css` and applies an `Edit`. Vite HMR reflects the new CSS instantly so you confirm the result without leaving the page.
 
 - User guide (en / ko): <https://agent-devtools-docs.vercel.app/>
+- How it works (single-diagram walk-through): <https://agent-devtools-docs.vercel.app/en/guides/how-it-works/>
 - Context and scope: [`CONTEXT.md`](./CONTEXT.md)
+
+## Where this sits in the category
+
+A factual placement next to the closest neighbors — these tools all do something useful, the axes are just different.
+
+| Axis                            | agent-devtools                                                                                                       | In-page → IDE forwarder (e.g. Stagewise)        | Browser devtools extension (e.g. React DevTools) | In-app feedback widget (e.g. ProductLift, Pastel) |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| Who edits the code              | The agent, inside the browser tab                                                                                    | A separate editor / IDE agent receives the ping | Nobody — read-only inspection                    | Nobody — captured as a backlog item               |
+| IDE required                    | No                                                                                                                   | Yes (Cursor / VS Code / similar)                | No (browser only)                                | No                                                |
+| Picked context shipped to agent | `PickedEvidence` (component chain, source path, selector, outerHTML — extending to source slice and related imports) | URL + screenshot + selected element             | N/A                                              | Screenshot + page URL                             |
+| Subscription model              | BYO Claude Pro/Max (reuses CLI OAuth)                                                                                | BYO model API key                               | None                                             | Vendor subscription                               |
+| Production-bundle bytes         | Zero (2-layer dev-only guard)                                                                                        | Varies                                          | Zero (extension only)                            | Embedded SDK in production                        |
+| Permission boundary             | Action-typed policy (`bash`/`webFetch`/`mcpTool` default to ask)                                                     | Inherits the host editor's permission model     | Read-only                                        | N/A (no code execution)                           |
+
+If a row reads "the agent edits inside the page, no IDE involved, no extra subscription", that is the cell agent-devtools is built to occupy. Other rows are honest neighbors, not enemies.
 
 ## Quick Start
 
@@ -213,21 +243,24 @@ In every case, running `pnpm dev`:
 
 ## Packages
 
-| Package                                                   | Version | Description                                                  |
-| --------------------------------------------------------- | ------- | ------------------------------------------------------------ |
-| [`@agent-devtools/core`](./packages/core)                 | `0.1.0` | Framework-agnostic core (server, agent engine, widget shell) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | `0.1.0` | Domain-agnostic loop strategy + LLM provider abstraction     |
-| [`@agent-devtools/react`](./packages/react)               | `0.1.0` | React 19 fiber walker + DOM picker + auto context            |
-| [`@agent-devtools/vue`](./packages/vue)                   | `0.1.0` | Vue 3 vnode walker + DOM picker + closed shadow widget       |
-| [`@agent-devtools/vue2`](./packages/vue2)                 | `0.1.0` | Vue 2.7 component-tree walker + picker + widget              |
-| [`@agent-devtools/angular`](./packages/angular)           | `0.1.0` | Angular Ivy walker + picker + widget                         |
-| [`@agent-devtools/svelte`](./packages/svelte)             | `0.1.0` | Svelte 4/5 `__svelte_meta` resolver + picker + widget        |
-| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | `0.1.0` | SvelteKit layout mount + server `handle` binding             |
-| [`@agent-devtools/next`](./packages/next)                 | `0.1.0` | Next.js 15 App Router wrapper — webpack alias + bootstrap    |
-| [`@agent-devtools/next-pages`](./packages/next-pages)     | `0.1.0` | Next.js Pages Router wrapper — same wrapper for `>= 12`      |
-| [`@agent-devtools/nuxt`](./packages/nuxt)                 | `0.1.0` | Nuxt 3 module — dev-only plugin auto-injection               |
-| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | `0.1.0` | Nuxt 2 module — dev-only client plugin auto-injection        |
-| [`@agent-devtools/vite`](./packages/vite)                 | `0.1.0` | Vite 8 plugin — auto-inject widget + dev-only guard          |
+All `@agent-devtools/*` packages publish on a single shared version line — the npm badge above always reflects the current release.
+
+| Package                                                   | Description                                               |
+| --------------------------------------------------------- | --------------------------------------------------------- |
+| [`@agent-devtools/core`](./packages/core)                 | Framework-agnostic core (server, agent engine, transport) |
+| [`@agent-devtools/widget-core`](./packages/widget-core)   | Framework-agnostic widget shell (closed Shadow DOM mount) |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | Domain-agnostic loop strategy + LLM provider abstraction  |
+| [`@agent-devtools/react`](./packages/react)               | React 19 fiber walker + DOM picker + auto context         |
+| [`@agent-devtools/vue`](./packages/vue)                   | Vue 3 vnode walker + DOM picker + closed shadow widget    |
+| [`@agent-devtools/vue2`](./packages/vue2)                 | Vue 2.7 component-tree walker + picker + widget           |
+| [`@agent-devtools/angular`](./packages/angular)           | Angular Ivy walker + picker + widget                      |
+| [`@agent-devtools/svelte`](./packages/svelte)             | Svelte 4/5 `__svelte_meta` resolver + picker + widget     |
+| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | SvelteKit layout mount + server `handle` binding          |
+| [`@agent-devtools/next`](./packages/next)                 | Next.js 15 App Router wrapper — webpack alias + bootstrap |
+| [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — same wrapper for `>= 12`   |
+| [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin auto-injection            |
+| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin auto-injection     |
+| [`@agent-devtools/vite`](./packages/vite)                 | Vite plugin (5–8) — auto-inject widget + dev-only guard   |
 
 ## Security defaults
 
@@ -236,10 +269,12 @@ In every case, running `pnpm dev`:
 - **127.0.0.1 binding** — the local agent server binds loopback only. No external network exposure. If the port is taken, falls back sequentially.
 - **Pairing token** — rotated on every CLI start, memory only, never persisted to disk, never embedded in a URL. Delivered only via the `Authorization: Bearer …` header.
 - **Closed Shadow DOM** — isolates the widget from host app CSS / DOM / state. A separate React 19 (or Vue 3) module instance gives a dual-tree boundary against the host.
+- **Action-aware permission policy** — the runtime resolves each agent permission request by ACP `ToolKind`. With the default policy, `fileEdit` (`edit` / `delete` / `move`) auto-allows while `bash`, `webFetch`, and `mcpTool` are cancelled unless the operator explicitly switches the widget to `bypassPermissions`. See the [permission-modes guide](https://agent-devtools-docs.vercel.app/en/guides/permission-modes/) for the full mode × category matrix.
+- **Workspace boundary (scope is honest)** — the `workspace` option is the canonical `cwd` of the spawned Claude Code child process and the boundary that the in-process `FileTools` (used by the picker source-slice preamble) enforces via `PathOutsideWorkspaceError`. It is **not** an OS-level sandbox: the SDK's own tool calls inherit the host user's file-system permissions, exactly like running `claude` from a terminal in that directory. See the [security model](https://agent-devtools-docs.vercel.app/en/guides/security/#workspace-boundary--what-it-does-and-does-not-enforce) for the full scope.
 
 ## Requirements
 
-- Node.js **≥24** (LTS Krypton)
+- Node.js **≥22.13** (LTS Jod) — also runs on Node 24+
 - pnpm **≥11**
 - (To actually run) an active Claude Pro/Max subscription (includes Agent SDK Credit from 2026-06-15)
 
@@ -249,7 +284,7 @@ In every case, running `pnpm dev`:
 pnpm install
 pnpm typecheck
 pnpm test
-pnpm build:examples  # builds all four examples and runs the no-leak smoke
+pnpm build:examples  # builds every adapter example and runs the no-leak smoke
 ```
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full developer guide.

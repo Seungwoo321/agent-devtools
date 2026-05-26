@@ -31,6 +31,9 @@ export {
 export {
   mountAgentDevtoolsSvelte as mountAgentDevtools,
   createDefaultTransport,
+  createRelatedImportsFetcher,
+  createSourceSliceFetcher,
+  createPageContextEnricher,
   createAgentInfoFetcher,
   createHandoffRequester,
   createSettingsStore,

@@ -33,19 +33,32 @@ OSS, 거의 같은 컨셉의 floating widget + 요소 picker (https://stagewise.
 ```
 agent-devtools/
 ├── packages/
-│   ├── core/              → @agent-devtools/core           (server + widget shell + CLI bin, 프레임워크 무관)
+│   ├── core/              → @agent-devtools/core           (server + agent engine + transport, 프레임워크 무관)
+│   ├── widget-core/       → @agent-devtools/widget-core    (closed Shadow DOM widget shell, 프레임워크 무관)
 │   ├── harness-core/      → @agent-devtools/harness-core   (LLM provider 추상화 + loop 전략, 도메인 무관)
 │   ├── react/             → @agent-devtools/react          (React 19 fiber walker + DOM picker + widget UI)
-│   ├── vue/               → @agent-devtools/vue            (Vue 3 component walker + DOM picker + widget UI)
-│   ├── vite/              → @agent-devtools/vite           (Vite 8 plugin — auto-inject + dev-only 게이트, 어댑터-aware)
-│   ├── next/              → @agent-devtools/next           (Next.js 15 config wrapper + App/Pages Router bootstrap shim)
-│   ├── nuxt/              → @agent-devtools/nuxt           (Nuxt 3 module, dev-only client plugin 등록)
+│   ├── vue/               → @agent-devtools/vue            (Vue 3 vnode walker + DOM picker + widget UI)
+│   ├── vue2/              → @agent-devtools/vue2           (Vue 2.7 컴포넌트 트리 walker + picker + widget)
+│   ├── angular/           → @agent-devtools/angular        (Angular Ivy walker + picker + widget)
+│   ├── svelte/            → @agent-devtools/svelte         (Svelte 4/5 `__svelte_meta` resolver + picker + widget)
+│   ├── sveltekit/         → @agent-devtools/sveltekit      (SvelteKit layout mount + server `handle` 바인딩)
+│   ├── next/              → @agent-devtools/next           (Next.js 15 App Router config wrapper + bootstrap shim)
+│   ├── next-pages/        → @agent-devtools/next-pages     (Next.js Pages Router wrapper, `>= 12` 호환)
+│   ├── nuxt/              → @agent-devtools/nuxt           (Nuxt 3 module, dev-only client plugin 자동 주입)
+│   ├── nuxt2/             → @agent-devtools/nuxt2          (Nuxt 2 module, dev-only client plugin 자동 주입)
+│   ├── vite/              → @agent-devtools/vite           (Vite 5–8 plugin — auto-inject + dev-only 게이트, 어댑터-aware)
 │   └── e2e/               → @agent-devtools/e2e            (Playwright E2E, private)
 ├── examples/
 │   ├── react-vite/        → React + Vite 종단 샘플
 │   ├── vue-vite/          → Vue 3 + Vite 종단 샘플
-│   ├── next/              → Next.js 15 종단 샘플 (App + Pages Router)
-│   └── nuxt/              → Nuxt 3 종단 샘플
+│   ├── vue2-vite/         → Vue 2 + Vite 종단 샘플
+│   ├── angular-vite/      → Angular + Vite 종단 샘플
+│   ├── svelte-vite/       → Svelte + Vite 종단 샘플
+│   ├── sveltekit/         → SvelteKit 종단 샘플
+│   ├── next/              → Next.js 15 App Router 종단 샘플
+│   ├── next-pages/        → Next.js Pages Router 종단 샘플
+│   ├── nuxt/              → Nuxt 3 종단 샘플
+│   └── nuxt2/             → Nuxt 2 종단 샘플
 ├── docs/                  → 사용자 가이드 사이트 (Astro Starlight, ko/en)
 ├── assets/brand/          → 로고 / favicon SSoT
 ├── CONTEXT.md             ← this file
@@ -53,23 +66,29 @@ agent-devtools/
 └── package.json
 ```
 
-TanStack Query 가 동일 패턴 (`@tanstack/query-core` + `@tanstack/react-query` + `@tanstack/vue-query` ...) 으로 검증한 구조. **공통 코어 + 프레임워크 어댑터 N 개**. 페이지 컨텍스트 수집 (React fiber `_debugSource` / `_debugStack`, Vue `ComponentInternalInstance.__file`) 은 프레임워크별로 API 가 달라 어댑터 분리가 강제되지만, 나머지 (widget shell / server / agent engine) 는 무관. Next 는 React 어댑터의 fiber walker 를 그대로 재사용하고, Nuxt 는 Vue 어댑터의 vnode walker 를 그대로 재사용 — 두 메타 어댑터는 widget chain 코드를 복제하지 않고 workspace dependency 로만 끌어다 쓴다.
+TanStack Query 가 동일 패턴 (`@tanstack/query-core` + `@tanstack/react-query` + `@tanstack/vue-query` ...) 으로 검증한 구조. **공통 코어 + 프레임워크 어댑터 N 개**. 페이지 컨텍스트 수집 (React fiber `_debugSource` / `_debugStack`, Vue `ComponentInternalInstance.__file`, Svelte `__svelte_meta`, Angular Ivy 디버그 메타) 은 프레임워크별로 API 가 달라 어댑터 분리가 강제되지만, 나머지 (widget shell / server / agent engine) 는 무관. Next 는 React 어댑터의 fiber walker 를 그대로 재사용하고, Nuxt 는 Vue 어댑터의 vnode walker 를 그대로 재사용 — 메타 어댑터들은 widget chain 코드를 복제하지 않고 workspace dependency 로만 끌어다 쓴다.
 
 ## 지원 범위 (snapshot)
 
 **현재 지원 스택**:
 
-| 스택         | 어댑터 패키지                                                                | 번들러 통합                                               | Example               |
-| ------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------- |
-| React + Vite | `@agent-devtools/react`                                                      | `@agent-devtools/vite`                                    | `examples/react-vite` |
-| Vue 3 + Vite | `@agent-devtools/vue`                                                        | `@agent-devtools/vite`                                    | `examples/vue-vite`   |
-| Next.js 15   | `@agent-devtools/react` + `@agent-devtools/next` (App Router + Pages Router) | `@agent-devtools/next` `withAgentDevtools` config wrapper | `examples/next`       |
-| Nuxt 3       | `@agent-devtools/vue` + `@agent-devtools/nuxt`                               | `@agent-devtools/nuxt` Nuxt module                        | `examples/nuxt`       |
+| 스택             | 어댑터 패키지                                          | 번들러 통합                                               | Example                 |
+| ---------------- | ------------------------------------------------------ | --------------------------------------------------------- | ----------------------- |
+| React + Vite     | `@agent-devtools/react`                                | `@agent-devtools/vite`                                    | `examples/react-vite`   |
+| Vue 3 + Vite     | `@agent-devtools/vue`                                  | `@agent-devtools/vite`                                    | `examples/vue-vite`     |
+| Vue 2 + Vite     | `@agent-devtools/vue2`                                 | `@agent-devtools/vite`                                    | `examples/vue2-vite`    |
+| Angular + Vite   | `@agent-devtools/angular`                              | `@agent-devtools/vite`                                    | `examples/angular-vite` |
+| Svelte + Vite    | `@agent-devtools/svelte`                               | `@agent-devtools/vite`                                    | `examples/svelte-vite`  |
+| SvelteKit        | `@agent-devtools/sveltekit`                            | `@agent-devtools/vite`                                    | `examples/sveltekit`    |
+| Next.js 15 (App) | `@agent-devtools/react` + `@agent-devtools/next`       | `@agent-devtools/next` `withAgentDevtools` config wrapper | `examples/next`         |
+| Next.js (Pages)  | `@agent-devtools/react` + `@agent-devtools/next-pages` | `@agent-devtools/next-pages` `withAgentDevtools` wrapper  | `examples/next-pages`   |
+| Nuxt 3           | `@agent-devtools/vue` + `@agent-devtools/nuxt`         | `@agent-devtools/nuxt` Nuxt module                        | `examples/nuxt`         |
+| Nuxt 2           | `@agent-devtools/vue2` + `@agent-devtools/nuxt2`       | `@agent-devtools/nuxt2` Nuxt module                       | `examples/nuxt2`        |
 
 **Provider (LLM 통신)**:
 
 - Claude Agent SDK provider — 사용자 본인의 Claude Pro/Max 구독 → Agent SDK Credit 으로 직접 호출 (2026-06-15 시행).
-- ACP provider — 로컬 Claude Code CLI 와 stdio JSON-RPC 로 연결, 사용자의 `~/.claude` OAuth 세션 재사용. 두 provider 모두 네 어댑터에서 동일하게 동작 (provider 추상화는 `@agent-devtools/core` 안에 있고 어댑터는 widget UI / picker / walker 만 담당).
+- ACP provider — 로컬 Claude Code CLI 와 stdio JSON-RPC 로 연결, 사용자의 `~/.claude` OAuth 세션 재사용. 두 provider 모두 모든 어댑터에서 동일하게 동작 (provider 추상화는 `@agent-devtools/core` 안에 있고 어댑터는 widget UI / picker / walker 만 담당).
 
 **보안 디폴트** (모든 스택 공통, 영구 고정):
 
@@ -77,13 +96,6 @@ TanStack Query 가 동일 패턴 (`@tanstack/query-core` + `@tanstack/react-quer
 - `127.0.0.1` 루프백 bind — 외부 네트워크 노출 차단.
 - 페어링 토큰 — CLI 시작마다 회전, 메모리 only, URL embed 금지.
 - production 사용 시나리오 — 영구 OUT.
-
-**현재 스코프 밖 (후속 milestone)**:
-
-- BYOK API 키 provider.
-- Ollama / LM Studio 등 로컬 LLM provider.
-- 조직 차원의 인증 SaaS 경유 mode (post-MVP).
-- 추가 어댑터 (Vue 2 / Angular / Svelte+SvelteKit / Next.js Pages Router 의 별도 어댑터 / Nuxt 2 등) — 별도 plan 으로 트래킹.
 
 ## 자동 컨텍스트 수집 (이 도구의 가장 중요한 가치)
 
@@ -118,22 +130,6 @@ TanStack Query 가 동일 패턴 (`@tanstack/query-core` + `@tanstack/react-quer
 - 마크 = **Inspect Bracket** (devtools picker 프레임 + 진행 화살표).
 - accent = `#4f46e5` (indigo-600).
 - SSoT = `assets/brand/` (`logo.svg` / `logo-mono.svg` / `favicon.svg`).
-
-## 결정 로그
-
-| 결정                                                             | 근거                                                                                                                                                                                                                                                                                                            |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OSS, BYO subscription 모델                                       | API 키 운영 부담 없이 사용자 본인 자원으로 동작. 운영자가 LLM 비용을 떠안지 않는 단일 사용자 도구.                                                                                                                                                                                                              |
-| 1 repo, N 패키지 (TanStack 패턴)                                 | 페이지 컨텍스트 수집은 프레임워크 종속 (React fiber vs Vue component tree vs ...). 나머지(widget shell / server / engine) 는 무관 — 공통 코어 + 어댑터 N 개로 갈라야 다언어 지원에 마찰이 없음.                                                                                                                 |
-| 첫 타겟 = React + Vite + Claude Pro                              | OSS React 생태계에서 가장 일반적인 빌드 스택. Claude Pro 구독 재사용은 키 발급 부담 0.                                                                                                                                                                                                                          |
-| Stagewise 와 차별화 = 자체 에이전트                              | IDE 종속 없이 브라우저에서 응답까지. devtools 카테고리 정체성 강화.                                                                                                                                                                                                                                             |
-| 보안 디폴트 = dev-only, 127.0.0.1, 페어링 토큰                   | OSS 라 사용자 디시플린에 의존 불가. production 누출 0 이 디폴트여야 함.                                                                                                                                                                                                                                         |
-| npm scope = `@agent-devtools/*`                                  | GitHub org 동명 선점 완료. 개인 scope 보다 프로젝트 정체성 우위.                                                                                                                                                                                                                                                |
-| Claude 통신 = **Claude Agent SDK + 사용자 구독 credit**          | 2026-06-15 부 Anthropic 정책으로 Pro/Max 구독에 Agent SDK Credit 이 포함되어 SDK 가 구독 자원으로 직접 동작 (Pro $20 / Max 5x $100 / Max 20x $200, 월 비-rollover, API 단가 기준). default 모드: 사용자 OAuth → 본인 구독 토큰 → SDK 직접 호출. post-MVP: 별도 인증 SaaS 경유 모드 (현재 스코프 외). SDK = MIT. |
-| License = **MIT**                                                | OSS 표준, npm 배포·외부 기여 마찰 최소.                                                                                                                                                                                                                                                                         |
-| CI = **GitHub Actions**                                          | repo 가 GitHub. 추가 인프라 0.                                                                                                                                                                                                                                                                                  |
-| 페어링 토큰 = **CLI 시작마다 회전, 메모리 only, URL embed 금지** | 디스크 저장 시 누출 위험. 세션·PC 단위는 만료 미보장. URL embed 는 브라우저 히스토리·서버 로그·Referer 헤더로 누출.                                                                                                                                                                                             |
-| widget 스택 = **React 19 in closed Shadow DOM**                  | 호스트 앱과 별도 React 모듈 인스턴스 + closed Shadow DOM 으로 CSS/DOM·상태 이중 격리. preact/compat 우회는 react-markdown / shiki-react / @floating-ui/react / framer-motion / react-aria 등 React 19 기능 의존 라이브러리 호환성을 깎음. Tailwind v4 PostCSS 빌드 결과는 Shadow 내부에만 주입.                 |
 
 ## 참고
 

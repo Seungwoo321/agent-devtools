@@ -71,6 +71,7 @@ const PAIRING_TOKEN_ENV = 'AGENT_DEVTOOLS_NEXT_PAGES_PAIRING_TOKEN';
 // stand.
 const STRIPPED_MODULES = [
   '@agent-devtools/react',
+  '@agent-devtools/widget-core',
   '@agent-devtools/core',
   '@agent-devtools/harness-core',
 ];

@@ -37,10 +37,11 @@ agent-devtools merges the two worlds.
 - **Developers who already use their own Claude Pro / Max subscription.**
   agent-devtools does not require a new API billing relationship. It reuses
   the `~/.claude` OAuth session of your local Claude Code CLI as-is.
-- **Product teams building on React, Vue, Next, or Nuxt.**
-  Official adapters ship for React + Vite, Vue 3 + Vite, Next.js 15 (App
-  Router + Pages Router), and Nuxt 3. Each one carries a CI-enforced
-  production-leak guard against the real build output.
+- **Product teams building on React, Vue, Next, Nuxt, Angular, or Svelte.**
+  Official adapters ship for React + Vite, Vue 3 + Vite, Vue 2 + Vite,
+  Angular + Vite, Svelte + Vite, SvelteKit, Next.js 15 (App Router),
+  Next.js (Pages Router), Nuxt 3, and Nuxt 2 — ten in total. Each one carries
+  a CI-enforced production-leak guard against the real build output.
 - **People who want a tool that only turns on in the local dev environment.**
   agent-devtools is not included in production builds. It is designed to mount
   only in dev mode (via `import.meta.env.DEV` and equivalents).
@@ -58,6 +59,12 @@ This tool is explicitly **not**:
   requires explicit approval.
 - **Not a new billing model.** It uses your existing Claude subscription. No
   additional payment is involved.
+- **Not an OS-level sandbox.** The `workspace` option scopes the picker
+  preamble's source-slice reads, but the SDK's own tool calls run with the host
+  user's file-system permissions — exactly like running `claude` from a
+  terminal in that directory. See
+  [Security](/en/guides/security/#workspace-boundary--what-it-does-and-does-not-enforce)
+  for the honest scope.
 
 ## What to read next
 

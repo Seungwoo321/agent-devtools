@@ -5,7 +5,7 @@ description: Frequently asked questions — supported stacks, production use, te
 
 ## Q. Which framework stacks are supported?
 
-**A.** Four adapters are available today: **React + Vite**, **Vue 3 + Vite**, **Next.js 15** (App Router + Pages Router), and **Nuxt 3**.
+**A.** Ten adapters are available today: **React + Vite**, **Vue 3 + Vite**, **Vue 2 + Vite**, **Angular + Vite**, **Svelte + Vite**, **SvelteKit**, **Next.js 15** (App Router), **Next.js** (Pages Router), **Nuxt 3**, and **Nuxt 2**.
 
 Each adapter ships with a runnable example under [`examples/`](https://github.com/Seungwoo321/agent-devtools/tree/main/examples) and a CI-enforced `smoke:no-leak` regression scanner that walks the production output (`dist/`, `.next/`, `.output/`) and rejects any widget-chain symbol leaking into the bundle. See the [installation guide](/en/guides/installation/) for per-stack wiring and the README Packages table for the full list.
 

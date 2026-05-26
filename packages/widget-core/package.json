@@ -1,0 +1,64 @@
+{
+  "name": "@agent-devtools/widget-core",
+  "version": "0.4.0",
+  "description": "Framework-agnostic widget shell for agent-devtools — closed Shadow DOM mount, composer, picker overlay, SSE transport",
+  "keywords": [
+    "agent-devtools",
+    "devtools",
+    "widget",
+    "shadow-dom",
+    "framework-agnostic",
+    "dev-only"
+  ],
+  "license": "MIT",
+  "author": "Seungwoo Lee <seungwoo321@gmail.com>",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/widget-core#readme",
+  "bugs": {
+    "url": "https://github.com/Seungwoo321/agent-devtools/issues"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agent-devtools/core": "workspace:*",
+    "dompurify": "^3.2.7",
+    "marked": "^16.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "happy-dom": "^20.9.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seungwoo321/agent-devtools.git",
+    "directory": "packages/widget-core"
+  }
+}

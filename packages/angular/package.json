@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/angular",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Angular adapter for agent-devtools — Ivy component walker + DOM picker + closed Shadow DOM widget",
   "keywords": [
     "agent-devtools",
@@ -18,7 +18,7 @@
     "url": "https://github.com/Seungwoo321/agent-devtools/issues"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.13.0"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -46,8 +46,8 @@
     "@angular/core": ">=17.0.0"
   },
   "dependencies": {
-    "@agent-devtools/core": "workspace:^",
-    "@agent-devtools/react": "workspace:^"
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/widget-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",

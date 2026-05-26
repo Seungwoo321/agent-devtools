@@ -138,8 +138,9 @@ ACP without the CLI, so set the widget settings panel to `SDK` up front.
 A. Once a stream is up, throughput is essentially identical. Only the very
 first request is slower under ACP because of the ~200 ms spawn cost.
 
-**Q. Do both providers work in Vue / Next / Nuxt?**
-A. Yes — all four adapters (React + Vite, Vue 3 + Vite, Next.js 15, Nuxt 3)
-support both providers identically. The provider abstraction lives in
-`@agent-devtools/core`, and adapters only own the widget UI / picker / walker,
-so they do not participate in provider behavior at all.
+**Q. Do both providers work in Vue / Next / Nuxt / Angular / Svelte?**
+A. Yes — all ten adapters (React + Vite, Vue 3 + Vite, Vue 2 + Vite,
+Angular + Vite, Svelte + Vite, SvelteKit, Next.js 15 App Router, Next.js
+Pages Router, Nuxt 3, Nuxt 2) support both providers identically. The provider
+abstraction lives in `@agent-devtools/core`, and adapters only own the widget
+UI / picker / walker, so they do not participate in provider behavior at all.

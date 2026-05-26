@@ -76,7 +76,7 @@ await handle.close();
 
 ## 요구 사항
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 - 로컬 `claude` CLI 의 Claude Pro/Max 세션, **또는** `ANTHROPIC_API_KEY`.
 
 ## 관련 링크

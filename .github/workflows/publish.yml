@@ -4,19 +4,8 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - "packages/core/**"
-      - "packages/harness-core/**"
-      - "packages/react/**"
-      - "packages/vue/**"
-      - "packages/vue2/**"
-      - "packages/next/**"
-      - "packages/next-pages/**"
-      - "packages/nuxt/**"
-      - "packages/nuxt2/**"
-      - "packages/angular/**"
-      - "packages/svelte/**"
-      - "packages/sveltekit/**"
-      - "packages/vite/**"
+      - "packages/**"
+      - ".changeset/**"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
 
@@ -30,47 +19,10 @@ permissions:
   pull-requests: write
 
 jobs:
-  detect:
+  release:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      packages: ${{ steps.changes.outputs.changes }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed packages
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            core: 'packages/core/**'
-            harness-core: 'packages/harness-core/**'
-            react: 'packages/react/**'
-            vue: 'packages/vue/**'
-            vue2: 'packages/vue2/**'
-            next: 'packages/next/**'
-            next-pages: 'packages/next-pages/**'
-            nuxt: 'packages/nuxt/**'
-            nuxt2: 'packages/nuxt2/**'
-            angular: 'packages/angular/**'
-            svelte: 'packages/svelte/**'
-            sveltekit: 'packages/sveltekit/**'
-            vite: 'packages/vite/**'
-
-  publish:
-    needs: detect
-    if: ${{ needs.detect.outputs.packages != '[]' && needs.detect.outputs.packages != '' }}
-    runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        package: ${{ fromJSON(needs.detect.outputs.packages) }}
 
     steps:
       - name: Checkout
@@ -94,8 +46,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build workspace dependencies
-        run: pnpm -r build
+      - name: Build packages
+        run: pnpm --filter "./packages/**" build
 
       - name: Configure Git
         run: |
@@ -110,15 +62,23 @@ jobs:
       - name: Publish Beta (develop branch)
         if: github.ref == 'refs/heads/develop'
         env:
-          NPM_DIST_TAG: beta
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: packages/${{ matrix.package }}
-        run: pnpm exec release-it --preRelease=beta --ci
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          pnpm exec changeset version --snapshot beta
+          pnpm exec changeset publish --no-git-tag --tag beta
 
       - name: Publish Release (main branch)
         if: github.ref == 'refs/heads/main'
         env:
-          NPM_DIST_TAG: latest
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: packages/${{ matrix.package }}
-        run: pnpm exec release-it --ci
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          if [ -n "$(ls .changeset/*.md 2>/dev/null | grep -v README.md || true)" ]; then
+            pnpm exec changeset version
+            git add -A
+            git commit -m "chore: release agent-devtools packages [skip ci]"
+            git push origin "${GITHUB_REF_NAME}"
+          fi
+          pnpm exec changeset publish
+          git push --follow-tags origin "${GITHUB_REF_NAME}"

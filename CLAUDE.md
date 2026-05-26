@@ -14,7 +14,7 @@ agent-devtools/
 │   ├── core/          @agent-devtools/core         (server + widget shell, framework-agnostic, CLI bin)
 │   ├── harness-core/  @agent-devtools/harness-core (LLM provider 추상화 + loop, optional)
 │   ├── react/         @agent-devtools/react        (React 19 fiber walker + DOM picker + widget UI)
-│   ├── vite/          @agent-devtools/vite         (Vite 8 plugin, dev-only 주입 + 서버 spawn)
+│   ├── vite/          @agent-devtools/vite         (Vite 5–8 plugin, dev-only 주입 + 서버 spawn)
 │   └── e2e/           @agent-devtools/e2e          (Playwright E2E, private)
 ├── examples/
 │   └── react-vite/    @agent-devtools/example-react-vite (Phase 0 종단 검증 샘플)
@@ -23,7 +23,7 @@ agent-devtools/
 └── CONTEXT.md         프로젝트 정체성 스냅샷 (덮어쓰기 정책)
 ```
 
-향후 추가 예정 (PLAN-01KS4Q6E9EVSJVDMRFV55XFTEJ): `packages/vue`, `packages/next`, `packages/nuxt`, `examples/vue-vite`, `examples/next`, `examples/nuxt`.
+추가 어댑터: `packages/widget-core` (framework-agnostic widget shell), `packages/vue`, `packages/vue2`, `packages/next`, `packages/next-pages`, `packages/nuxt`, `packages/nuxt2`, `packages/angular`, `packages/svelte`, `packages/sveltekit` 가 함께 published. examples 는 각 어댑터별 종단 검증 샘플을 동봉.
 
 ## 작업 명령
 
@@ -37,7 +37,7 @@ pnpm e2e                  # Playwright (브라우저 사전 설치: pnpm e2e:ins
 pnpm --filter @agent-devtools/example-react-vite dev   # 예제 dev 서버
 ```
 
-엔진 요구: Node `>=24.0.0`, pnpm `>=11.0.0`. `pnpm@11.1.1` 으로 핀.
+엔진 요구: Node `>=22.13.0` (LTS Jod, Node 24+ 도 동작), pnpm `>=11.0.0`. `pnpm@11.1.1` 으로 핀.
 
 ## 어댑터 작업 규칙
 
@@ -61,12 +61,3 @@ pnpm --filter @agent-devtools/example-react-vite dev   # 예제 dev 서버
 ## 커밋 규칙
 
 **Claude 는 커밋/푸시하지 않는다.** Seungwoo321 Org wrapper 의 글로벌 규칙 (`~/dev/repository/github/Seungwoo321/CLAUDE.md`) 을 그대로 상속. 사용자가 직접 수행.
-
-현재 git 상태: `git init` 만 된 상태, remote 미연결, 최초 커밋 없음. GitHub 레포 (`Seungwoo321/agent-devtools`) 생성 + remote 추가 + 초기 커밋은 사용자 작업 영역.
-
-## 관련 Plan / 작업 컨테이너
-
-- `PLAN-01KS4Q6E9EVSJVDMRFV55XFTEJ` (draft) — 멀티 프레임워크 어댑터 확장 (Vue/Next/Nuxt). U-META + U0~U4, 25 tasks.
-- `PLAN-01KS4BRHGEW9W96J4F2B6EM2AW` (draft) — README 비교표 정리 + CLAUDE.local.md 사적 분석.
-- `PLAN-01KRZ62S73X6V2ZNCHBEPG79ZP` — Counter 스타일 원복 + Playwright GIF 데모 (진행 중).
-- `PLAN-01KS4WT91PPB669NWNK5RPB60A` — 이 가이드 정비 작업 (현재 active).

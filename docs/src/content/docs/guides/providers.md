@@ -128,8 +128,9 @@ provider 를 `SDK` 로 바꿔두는 게 좋다.
 A. 정상 응답 streaming 속도는 거의 같다. 첫 요청만 ACP 가 spawn 비용
 (~200ms) 만큼 느리다.
 
-**Q. Vue / Next / Nuxt 에서도 두 provider 다 되나?**
-A. 네 가지 어댑터 (React + Vite, Vue 3 + Vite, Next.js 15, Nuxt 3) 전부에서 두
-provider 다 동일하게 동작한다. provider 추상화는 `@agent-devtools/core` 안에
-있고, 어댑터는 widget UI / picker / walker 만 담당하므로 provider 동작에는
-관여하지 않는다.
+**Q. Vue / Next / Nuxt / Angular / Svelte 에서도 두 provider 다 되나?**
+A. 열 가지 어댑터 (React + Vite, Vue 3 + Vite, Vue 2 + Vite, Angular + Vite,
+Svelte + Vite, SvelteKit, Next.js 15 App Router, Next.js Pages Router, Nuxt 3,
+Nuxt 2) 전부에서 두 provider 다 동일하게 동작한다. provider 추상화는
+`@agent-devtools/core` 안에 있고, 어댑터는 widget UI / picker / walker 만
+담당하므로 provider 동작에는 관여하지 않는다.

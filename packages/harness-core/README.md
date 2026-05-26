@@ -97,7 +97,7 @@ Each provider exposes a curated list of supported model identifiers (`FREE_MODEL
 
 ## Requirements
 
-- Node.js `>= 24.0.0`
+- Node.js `>= 22.13.0`
 
 ## Links
 
