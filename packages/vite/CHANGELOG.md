@@ -1,5 +1,12 @@
 # @agent-devtools/vite
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`9e0acd0`](https://github.com/Seungwoo321/agent-devtools/commit/9e0acd0213161d04437d3f990c9ad6bf1a756cb1)]:
+  - @agent-devtools/core@1.0.0
+
 ## 1.0.0-beta.1
 
 ### Patch Changes
