@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acme Planner · Home</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+      body {
+        margin: 0;
+        color: #1a1a2e;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 2rem;
+        border-bottom: 1px solid #e5e5ef;
+      }
+      nav a {
+        margin-left: 1.5rem;
+        color: #4a4a6a;
+        text-decoration: none;
+      }
+      .hero {
+        padding: 4rem 2rem;
+        text-align: center;
+        background: linear-gradient(180deg, #f5f5ff, #ffffff);
+      }
+      .hero h1 {
+        font-size: 2.5rem;
+        margin: 0 0 0.5rem;
+      }
+      .cta {
+        margin-top: 1.5rem;
+        padding: 0.75rem 1.75rem;
+        font-size: 1rem;
+        color: #fff;
+        background: #5b5bd6;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+        padding: 3rem 2rem;
+      }
+      .card {
+        padding: 1.5rem;
+        border: 1px solid #e5e5ef;
+        border-radius: 12px;
+      }
+      footer {
+        padding: 2rem;
+        text-align: center;
+        color: #8a8aa6;
+        border-top: 1px solid #e5e5ef;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong class="brand">Acme Planner</strong>
+      <nav>
+        <a href="/index.html">Home</a>
+        <a href="/about.html">About</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h1>Plan pages, not pipelines</h1>
+      <p>A plain static sketch you can shape in natural language.</p>
+      <button class="cta" type="button">Get started</button>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <h3>Fast</h3>
+        <p>No build step. Just HTML you can read at a glance.</p>
+      </article>
+      <article class="card">
+        <h3>Isolated</h3>
+        <p>The editing widget runs only on your machine, never shipped.</p>
+      </article>
+      <article class="card">
+        <h3>Direct</h3>
+        <p>Pick an element, describe the change, see it applied.</p>
+      </article>
+    </section>
+
+    <footer>© Acme — sample page for the plain HTML runner.</footer>
+  </body>
+</html>

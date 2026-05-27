@@ -11,6 +11,7 @@
     "@agent-devtools/e2e",
     "@agent-devtools/docs",
     "@agent-devtools/example-angular-vite",
+    "@agent-devtools/example-html",
     "@agent-devtools/example-next",
     "@agent-devtools/example-next-pages",
     "@agent-devtools/example-nuxt",

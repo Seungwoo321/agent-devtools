@@ -1,19 +1,19 @@
 {
-  "name": "@agent-devtools/react",
+  "name": "@agent-devtools/html",
   "version": "0.7.0-beta.0",
-  "description": "React 19 adapter for agent-devtools — fiber walker + DOM picker + closed Shadow DOM widget",
+  "description": "npx runner for agent-devtools — serve a plain HTML folder with the dev-only widget injected, no framework, no config",
   "keywords": [
     "agent-devtools",
     "devtools",
-    "react",
-    "react-devtools",
-    "claude",
-    "llm",
+    "html",
+    "vanilla",
+    "npx",
+    "vite",
     "dev-only"
   ],
   "license": "MIT",
   "author": "Seungwoo Lee <seungwoo321@gmail.com>",
-  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/react#readme",
+  "homepage": "https://github.com/Seungwoo321/agent-devtools/tree/main/packages/html#readme",
   "bugs": {
     "url": "https://github.com/Seungwoo321/agent-devtools/issues"
   },
@@ -30,32 +30,28 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "agent-devtools-html": "./bin/agent-devtools-html.mjs"
+  },
   "files": [
+    "bin",
     "dist",
-    "README.md",
-    "README.ko.md"
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "clean": "rm -rf dist"
   },
-  "peerDependencies": {
-    "react": ">=19.0.0",
-    "react-dom": ">=19.0.0"
-  },
   "dependencies": {
-    "@agent-devtools/core": "workspace:*",
-    "@agent-devtools/widget-core": "workspace:*"
+    "@agent-devtools/vite": "workspace:*",
+    "@agent-devtools/widget-core": "workspace:*",
+    "vite": "^8.0.12"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",
-    "happy-dom": "^20.9.0",
-    "tsup": "^8.5.1",
-    "vitest": "^4.1.6"
+    "tsup": "^8.5.1"
   },
   "publishConfig": {
     "access": "public"
@@ -63,6 +59,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Seungwoo321/agent-devtools.git",
-    "directory": "packages/react"
+    "directory": "packages/html"
   }
 }

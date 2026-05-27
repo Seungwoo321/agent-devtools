@@ -101,14 +101,14 @@ jobs:
       - name: Build + no-leak smoke (examples)
         run: pnpm build:examples
 
-      # Dev-injection smoke — boots every adapter example's dev server in
-      # parallel batches, asserts the served bytes contain the dev-injected
-      # bootstrap reference, then tears the server down. Paired with the
-      # build step above to cover both halves of the dev-only guard
-      # contract (Layer 1 OFF in production, Layer 1 ON in development) for
-      # all ten adapter+example pairs in the same CI job. Fail-fast on the
-      # first regression with the pair name in the log.
-      - name: Integration smoke (dev injection across ten pairs)
+      # Dev-injection smoke — boots every example's dev server in parallel
+      # batches, asserts the served bytes contain the dev-injected bootstrap
+      # reference, then tears the server down. Paired with the build step
+      # above to cover both halves of the dev-only guard contract (Layer 1 OFF
+      # in production, Layer 1 ON in development) for all examples in the same
+      # CI job: the ten framework-adapter examples plus the plain-HTML runner
+      # example. Fail-fast on the first regression with the pair name in the log.
+      - name: Integration smoke (dev injection across all examples)
         run: pnpm smoke:integration
         timeout-minutes: 10
 
@@ -124,6 +124,7 @@ jobs:
           for pkg in \
             packages/core \
             packages/harness-core \
+            packages/widget-core \
             packages/react \
             packages/vue \
             packages/vue2 \
@@ -134,7 +135,8 @@ jobs:
             packages/angular \
             packages/svelte \
             packages/sveltekit \
-            packages/vite; do
+            packages/vite \
+            packages/html; do
             (cd "$pkg" && pnpm pack --pack-destination "${GITHUB_WORKSPACE}/.pack-out")
           done
           ls -la .pack-out

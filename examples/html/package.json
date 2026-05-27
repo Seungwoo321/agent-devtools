@@ -1,0 +1,15 @@
+{
+  "name": "@agent-devtools/example-html",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "agent-devtools-html . --port 3210",
+    "build:check": "node scripts/check-no-leak.mjs",
+    "smoke:no-leak": "node scripts/check-no-leak.mjs",
+    "smoke": "node scripts/smoke-inject.mjs"
+  },
+  "devDependencies": {
+    "@agent-devtools/html": "workspace:*"
+  }
+}
