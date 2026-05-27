@@ -1,5 +1,13 @@
 # @agent-devtools/html
 
+## 1.0.0-beta.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/vite@1.0.0-beta.1
+  - @agent-devtools/widget-core@1.0.0-beta.1
+
 ## 0.7.0-beta.0
 
 ### Minor Changes

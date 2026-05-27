@@ -32,6 +32,7 @@
     "@agent-devtools/widget-core": "0.6.0"
   },
   "changesets": [
-    "add-html-runner"
+    "add-html-runner",
+    "release-1-0-stable"
   ]
 }

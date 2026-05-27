@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/sveltekit",
-  "version": "0.7.0-beta.0",
+  "version": "1.0.0-beta.1",
   "description": "SvelteKit adapter for agent-devtools — dev-only handle hook + Svelte adapter mount",
   "keywords": [
     "agent-devtools",

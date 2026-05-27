@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/vite",
-  "version": "0.7.0-beta.0",
+  "version": "1.0.0-beta.1",
   "description": "Vite plugin for agent-devtools — auto-spawn agent server + dev-only widget injection (Vite 5+)",
   "keywords": [
     "agent-devtools",

@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/vue2",
-  "version": "0.7.0-beta.0",
+  "version": "1.0.0-beta.1",
   "description": "Vue 2 adapter for agent-devtools — Vue 2.7 component walker + DOM picker + closed Shadow DOM widget",
   "keywords": [
     "agent-devtools",
