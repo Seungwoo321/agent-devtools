@@ -1,28 +1,41 @@
 name: Publish packages
 
+# Monorepo variant of the user's standard publish workflow
+# (_toolkits/private-toolkit/workflows/publish.yml). Single workflow handles
+# both develop→beta and main→stable, plus the post-release back-merge to
+# develop, exactly like the single-package release-it template. The only
+# difference is the publish command: agent-devtools is a 14-package
+# changesets fixed-mode monorepo, so release-it is replaced with the
+# `changeset version → commit → changeset publish` sequence. The branch
+# split, OIDC permissions, [skip ci] guards, and trailing sync step are
+# identical to the canonical template.
+
 on:
   push:
     branches: [main, develop]
-    paths:
-      - "packages/**"
-      - ".changeset/**"
-      - ".github/workflows/publish.yml"
   workflow_dispatch:
 
+# Two publish runs against the same branch must not interleave: the second
+# would see a half-applied version commit and fight the first on tag push.
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-  id-token: write
-  pull-requests: write
-
 jobs:
-  release:
+  publish:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write # OIDC token for npm Trusted Publishing
+      pull-requests: write
+    env:
+      # The CI runner is not a developer machine — local pre-commit hooks
+      # (lint-staged, prettier) re-formatting a `chore: version …` commit
+      # against staged release-bookkeeping files is noise at best and a race
+      # with the version commit at worst. Skip husky entirely in CI.
+      HUSKY: "0"
 
     steps:
       - name: Checkout
@@ -40,6 +53,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
+      # Trusted Publishing requires npm >= 11.5.1; what Node bundles is older.
       - name: Update npm for trusted publishing
         run: npm install -g npm@latest
 
@@ -54,46 +68,43 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync with remote
-        run: |
-          git fetch origin "${GITHUB_REF_NAME}"
-          git reset --hard "origin/${GITHUB_REF_NAME}"
-
       - name: Publish Beta (develop branch)
         if: github.ref == 'refs/heads/develop'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
-          # Real prerelease versions (X.Y.Z-beta.N) via changesets pre mode, not
-          # the ephemeral 0.0.0-beta-<timestamp> that `--snapshot` produced (no
-          # `snapshot` block in config means the snapshot base is 0.0.0). Pre mode
-          # carries its state in .changeset/pre.json, which is committed on
-          # develop. A stable release deletes pre.json on main and the back-merge
-          # removes it from develop too, so it is normally absent right after a
-          # release — re-enter whenever it is missing (the mode!=pre arm is a
-          # defensive catch for a stray mode=exit file).
-          if [ ! -f .changeset/pre.json ] || [ "$(node -p "require('./.changeset/pre.json').mode")" != "pre" ]; then
+          # Real prerelease versions (X.Y.Z-beta.N) via changesets pre mode.
+          # pre.json carries the mode + tag and lives on develop between runs;
+          # a stable release on main deletes it, the sync step removes it from
+          # develop, so the next develop push re-enters pre mode here.
+          if [ ! -f .changeset/pre.json ]; then
             pnpm exec changeset pre enter beta
           fi
-          # Apply pending changesets onto the committed beta version. In pre mode
-          # the .md files persist (pre.json tracks which are applied), so this is
-          # idempotent when nothing new landed. Commit the bump back to develop
-          # ONLY when the tree actually changed — the committed beta.N is what the
-          # next run increments from, and republishing the same beta.N would have
-          # npm reject the duplicate. The [skip ci] keeps this commit from
-          # re-triggering the workflow (see the job-level guard).
+
+          # Apply pending changesets onto the committed beta version. In pre
+          # mode the .md files persist (pre.json tracks which are applied), so
+          # this is idempotent when nothing new landed.
           pnpm exec changeset version
+
+          # Commit + push the version bump immediately so the next run's
+          # `changeset publish` sees the same tree the npm registry will see.
+          # [skip ci] prevents this commit from re-triggering the workflow.
           if [ -n "$(git status --porcelain)" ]; then
             git add -A
             git commit -m "chore: version agent-devtools beta prerelease [skip ci]"
+            git push origin "${GITHUB_REF_NAME}"
           fi
-          # changeset publish creates an annotated git tag per published package
-          # (pkg@X.Y.Z-beta.N — annotated so --follow-tags carries it) and points
-          # the npm beta dist-tag at it. Push the version commit and those tags
-          # together, matching the stable release step. An idempotent run
-          # publishes nothing, so there is nothing new to tag or push.
-          pnpm exec changeset publish --tag beta
+
+          # Pre mode publish: DO NOT pass --tag here. Changesets routes
+          # prerelease versions to the tag recorded in .changeset/pre.json
+          # automatically (cli/src/.../publishPackages.ts: getReleaseTag
+          # returns preState.tag), and rejects any explicit --tag with
+          # "Releasing under custom tag is not allowed in pre mode"
+          # (cli/.../run.ts pre-mode guard). Idempotent when nothing new
+          # versioned; annotated per-package tags are created and pushed
+          # together with --follow-tags.
+          pnpm exec changeset publish
           git push --follow-tags origin "${GITHUB_REF_NAME}"
 
       - name: Publish Release (main branch)
@@ -102,14 +113,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
-          if [ -n "$(ls .changeset/*.md 2>/dev/null | grep -v README.md || true)" ]; then
+          if [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)" ]; then
             # Leave changesets pre mode (carried in from develop) so the stable
             # release aggregates to a clean X.Y.Z rather than another beta.N.
-            # changeset version computes the bump from pre.json initialVersions +
-            # the accumulated changesets, so the intermediate beta.N in
-            # package.json is overwritten with the final stable version. The .md
-            # files persist through pre mode and are consumed (deleted) here — the
-            # guard above stays valid precisely because they survive until now.
+            # changeset version computes the bump from pre.json initialVersions
+            # + the accumulated changesets, so the intermediate beta.N in
+            # package.json is overwritten with the final stable version, and
+            # the consumed .md files are deleted along with pre.json itself.
             if [ -f .changeset/pre.json ]; then
               pnpm exec changeset pre exit
             fi
@@ -120,3 +130,35 @@ jobs:
           fi
           pnpm exec changeset publish
           git push --follow-tags origin "${GITHUB_REF_NAME}"
+
+      - name: Sync main to develop
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Single-workflow back-merge — mirrors the canonical template's
+          # closing step. After a stable release main owns the release
+          # bookkeeping (package versions, CHANGELOGs, pre-mode state). Take
+          # main's side on conflicts; develop re-enters pre mode on its next
+          # push. The normal back-merge is conflict-free; the --theirs block
+          # only fires on a race (a develop push overlapping the release).
+          git fetch origin develop
+          git checkout develop
+          if ! git merge --no-ff main -m "chore: sync main into develop after stable release [skip ci]"; then
+            git checkout --theirs packages/*/package.json packages/*/CHANGELOG.md 2>/dev/null || true
+            git add packages/*/package.json packages/*/CHANGELOG.md 2>/dev/null || true
+            # The stable release deletes the changesets pre-mode bookkeeping
+            # on main: pre.json is removed once `changeset version` finalises
+            # the exit, and every applied .md is consumed. These surface as
+            # modify/delete conflicts (no "theirs" blob to check out), so
+            # accept the deletions — develop re-enters pre mode and recreates
+            # pre.json on its next push.
+            for f in $(git diff --name-only --diff-filter=U -- '.changeset/pre.json' '.changeset/*.md'); do
+              git rm -f "$f" 2>/dev/null || true
+            done
+            if [ -n "$(git ls-files -u)" ]; then
+              echo "Non-version conflicts detected. Manual intervention required."
+              git merge --abort
+              exit 1
+            fi
+            git commit --no-edit
+          fi
+          git push origin develop
