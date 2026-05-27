@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /* eslint-disable no-console -- CLI smoke status output goes to stdout/stderr by design */
-// Integration smoke: boots every adapter example's dev server in parallel
-// batches, asserts the served bytes contain the dev-injected bootstrap
-// reference (Layer 1 dev guard inverse — the symbols MUST appear in dev),
-// and tears the server down cleanly. The companion CI step `pnpm
-// build:examples` already covers the Layer 1 production no-leak side for
-// the same ten adapter+example pairs, so the two adjacent steps together
-// validate both halves of the dev-only guard contract for every pair in a
+// Integration smoke: boots every example's dev server in parallel batches,
+// asserts the served bytes contain the dev-injected bootstrap reference
+// (Layer 1 dev guard inverse — the symbols MUST appear in dev), and tears the
+// server down cleanly. The set is the ten framework-adapter examples plus the
+// plain-HTML runner example (@agent-devtools/html). The companion CI step
+// `pnpm build:examples` already covers the Layer 1 production no-leak side for
+// the same set — for the adapter examples by scanning the production bundle,
+// and for the plain-HTML example by scanning the source HTML (which is what
+// ships, since there is no build step) — so the two adjacent steps together
+// validate both halves of the dev-only guard contract for every example in a
 // single CI job. Fails fast on the first regression and prints which pair
 // broke so the matrix expansion stays diagnosable.
 //
@@ -98,6 +101,20 @@ const EXAMPLES = [
     port: 3301,
     paths: ['/_nuxt/app.js', '/'],
     expect: 'mountAgentDevtoolsVue',
+  },
+  // Plain HTML via the @agent-devtools/html runner — not a framework adapter.
+  // The served page carries only the inline config script plus a
+  // `<script type="module" src="/index.html?html-proxy…">` reference; Vite
+  // externalizes the bootstrap (with the mountAgentDevtools call) into that
+  // proxied module. So `/` does not contain `mountAgentDevtools`, but fetching
+  // `/` first registers the proxy, and the subsequent proxy fetch resolves it —
+  // the paths are tried in order within one retry pass, so this self-sequences.
+  {
+    name: 'html',
+    filter: '@agent-devtools/example-html',
+    port: 3210,
+    paths: ['/', '/index.html?html-proxy&index=0.js'],
+    expect: 'mountAgentDevtools',
   },
 ];
 
@@ -256,5 +273,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `\nIntegration smoke OK: ${EXAMPLES.length} adapter+example pairs verified for dev injection.`,
+  `\nIntegration smoke OK: ${EXAMPLES.length} example dev servers verified for dev injection.`,
 );

@@ -121,6 +121,12 @@ importers:
         specifier: ^8.0.12
         version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.90.0)(terser@5.48.0)(yaml@2.9.0)
 
+  examples/html:
+    devDependencies:
+      '@agent-devtools/html':
+        specifier: workspace:*
+        version: link:../../packages/html
+
   examples/next:
     dependencies:
       next:
@@ -479,6 +485,25 @@ importers:
       vitest:
         specifier: ^4.1.6
         version: 4.1.7(@types/node@25.9.1)(happy-dom@20.9.0)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.90.0)(terser@5.48.0)(yaml@2.9.0))
+
+  packages/html:
+    dependencies:
+      '@agent-devtools/vite':
+        specifier: workspace:*
+        version: link:../vite
+      '@agent-devtools/widget-core':
+        specifier: workspace:*
+        version: link:../widget-core
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.90.0)(terser@5.48.0)(yaml@2.9.0)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.7.0
+        version: 25.9.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(typescript@6.0.3)(yaml@2.9.0)
 
   packages/next:
     dependencies:
