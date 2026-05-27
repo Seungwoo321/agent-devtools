@@ -40,8 +40,27 @@ jobs:
         run: |
           git fetch origin main
           if ! git merge --no-ff origin/main -m "chore: sync main into develop after stable release [skip ci]"; then
+            # After a stable release main is authoritative for release
+            # bookkeeping: package versions, changelogs, and the changesets
+            # pre-mode state (pre.json flips to mode=exit, consumed .md are
+            # deleted). Take main's side; develop re-enters pre mode on its next
+            # push. The normal back-merge is already conflict-free — develop does
+            # not touch these files between the develop -> main PR and this sync —
+            # so this block only fires on a race (a develop push overlapping the
+            # release), where re-deriving the beta state from main's base is
+            # correct.
             git checkout --theirs packages/*/package.json packages/*/CHANGELOG.md 2>/dev/null || true
             git add packages/*/package.json packages/*/CHANGELOG.md 2>/dev/null || true
+            # The stable release deletes the changesets pre-mode bookkeeping on
+            # main: pre.json is removed once `changeset version` finalises the
+            # exit, and every applied .md is consumed. These surface as
+            # modify/delete conflicts (no "theirs" blob to check out), so accept
+            # the deletions — develop re-enters pre mode and recreates pre.json on
+            # its next push. Changesets that exist only on develop did not change
+            # on main and do not conflict, so they survive untouched.
+            for f in $(git diff --name-only --diff-filter=U -- '.changeset/pre.json' '.changeset/*.md'); do
+              git rm -f "$f" 2>/dev/null || true
+            done
             if [ -n "$(git ls-files -u)" ]; then
               echo "Non-version conflicts detected. Manual intervention required."
               git merge --abort
