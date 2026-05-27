@@ -1,5 +1,13 @@
 # @agent-devtools/angular
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/core@0.7.0
+  - @agent-devtools/widget-core@0.7.0
+
 ## 0.7.0-beta.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @agent-devtools/vite
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/core@0.7.0
+
 ## 0.7.0-beta.0
 
 ### Patch Changes
