@@ -31,5 +31,7 @@
     "@agent-devtools/vue2": "0.6.0",
     "@agent-devtools/widget-core": "0.6.0"
   },
-  "changesets": []
+  "changesets": [
+    "add-html-runner"
+  ]
 }

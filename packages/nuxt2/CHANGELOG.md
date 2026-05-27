@@ -1,5 +1,14 @@
 # @agent-devtools/nuxt2
 
+## 0.7.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/core@0.7.0-beta.0
+  - @agent-devtools/vue2@0.7.0-beta.0
+  - @agent-devtools/widget-core@0.7.0-beta.0
+
 ## 0.6.0
 
 ### Minor Changes
