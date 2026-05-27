@@ -28,6 +28,10 @@
   <sub><strong>production no-leak</strong> 배지는 <a href="https://agent-devtools-docs.vercel.app/guides/security/#dev-only-guard-2-layer">2-layer dev-only guard</a> 의 결과다 — 빌드 시점에 production 그래프에서 위젯 chain 을 배제하고, 런타임에 <code>NODE_ENV</code> 를 한 번 더 검사한다. 모든 example 은 심볼 스캐너 (<a href="./scripts/check-no-leak.mjs"><code>scripts/check-no-leak.mjs</code></a>) 를 갖추며 CI 매트릭스가 실제 <code>dist/</code>, <code>.next/</code>, <code>.output/</code> 산출물을 매 push 마다 검사한다.</sub>
 </p>
 
+<p align="center">
+  <sub><strong>1.0 정식 출시.</strong> React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, plain HTML 어댑터가 같은 fixed major 트랙으로 출시되어, Vite 플러그인 · framework-agnostic 위젯 코어 · 모든 어댑터의 버전이 구조적으로 정렬된다.</sub>
+</p>
+
 ## Demo
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)

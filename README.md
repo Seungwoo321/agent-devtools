@@ -28,6 +28,10 @@
   <sub>The <strong>production no-leak</strong> badge reflects the <a href="https://agent-devtools-docs.vercel.app/en/guides/security/#dev-only-guard-2-layer">2-layer dev-only guard</a> — build-time exclusion from production graphs plus a runtime <code>NODE_ENV</code> check. Every example carries a symbol scanner (<a href="./scripts/check-no-leak.mjs"><code>scripts/check-no-leak.mjs</code></a>) that the CI matrix runs against the real <code>dist/</code>, <code>.next/</code>, and <code>.output/</code> output on every push.</sub>
 </p>
 
+<p align="center">
+  <sub><strong>1.0 — generally available.</strong> Adapters for React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, and plain HTML all ship from the same fixed major track, so the Vite plugin, the framework-agnostic widget core, and every framework adapter stay version-aligned by construction.</sub>
+</p>
+
 ## Demo
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)
