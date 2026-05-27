@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/core",
-  "version": "0.7.0",
+  "version": "1.0.0-beta.1",
   "description": "Framework-agnostic core for agent-devtools — server, agent engine, widget shell",
   "keywords": [
     "agent-devtools",

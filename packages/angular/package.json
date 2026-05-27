@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/angular",
-  "version": "0.7.0",
+  "version": "1.0.0-beta.1",
   "description": "Angular adapter for agent-devtools — Ivy component walker + DOM picker + closed Shadow DOM widget",
   "keywords": [
     "agent-devtools",

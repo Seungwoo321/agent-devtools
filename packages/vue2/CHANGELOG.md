@@ -1,12 +1,12 @@
 # @agent-devtools/vue2
 
-## 0.7.0
+## 1.0.0-beta.1
 
 ### Patch Changes
 
-- Updated dependencies []:
-  - @agent-devtools/core@0.7.0
-  - @agent-devtools/widget-core@0.7.0
+- Updated dependencies [[`9e0acd0`](https://github.com/Seungwoo321/agent-devtools/commit/9e0acd0213161d04437d3f990c9ad6bf1a756cb1)]:
+  - @agent-devtools/core@1.0.0-beta.1
+  - @agent-devtools/widget-core@1.0.0-beta.1
 
 ## 0.7.0-beta.0
 
