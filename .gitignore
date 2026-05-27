@@ -9,6 +9,16 @@ out/
 *.tsbuildinfo
 .turbo/
 
+# framework-generated output (examples + docs) — never version-controlled
+.svelte-kit/
+.next/
+.nuxt/
+.output/
+.angular/
+.astro/
+.vercel/
+.netlify/
+
 # logs
 *.log
 npm-debug.log*
