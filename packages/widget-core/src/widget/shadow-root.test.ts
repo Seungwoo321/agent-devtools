@@ -48,6 +48,36 @@ describe('createShadowWidgetRoot', () => {
     root.destroy();
   });
 
+  it('declares a light color-scheme baseline and reads text from a fallback token', () => {
+    const root = createShadowWidgetRoot({ openMode: true });
+    const text = root.shadowRoot.querySelector('style')?.textContent ?? '';
+    // Light is the *absence* of dark tokens — the base only pins the scheme
+    // and reads the primary text colour through a literal fallback.
+    expect(text).toContain('color-scheme: light;');
+    expect(text).toContain('color: var(--adt-text, #1a1a1a);');
+    // No light token block exists; the only `--adt-surface` definition is the
+    // dark override.
+    expect(text).not.toContain('--adt-surface: #ffffff');
+  });
+
+  it('defines the dark palette once and applies it to explicit dark + auto-dark', () => {
+    const root = createShadowWidgetRoot({ openMode: true });
+    const text = root.shadowRoot.querySelector('style')?.textContent ?? '';
+    expect(text).toContain(':host([data-theme="dark"])');
+    expect(text).toContain('--adt-surface: #1e1e1e;');
+    expect(text).toContain('--adt-text: #e8e8ea;');
+    // The picked-element chip fill reads `--adt-chip-bg`; it must stay an
+    // opaque hex in dark too so the conversation stream cannot bleed through.
+    expect(text).toContain('--adt-chip-bg: #2f2f33;');
+    expect(text).toContain('@media (prefers-color-scheme: dark)');
+    expect(text).toContain(':host([data-theme="auto"])');
+    // The dark palette is interpolated in both selectors, so its tokens
+    // appear twice — once for explicit dark, once for auto-follows-OS.
+    const occurrences = text.split('--adt-surface: #1e1e1e;').length - 1;
+    expect(occurrences).toBe(2);
+    root.destroy();
+  });
+
   it('appends extraStyles after base styles', () => {
     const root = createShadowWidgetRoot({
       openMode: true,
