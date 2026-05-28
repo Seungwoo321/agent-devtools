@@ -3,10 +3,10 @@
  * verify nothing related to the widget reaches the output bundle.
  *
  * Two layers are tested here:
- *   1. The PLUGIN guarantee (ADT-25 / `apply: 'serve'`) — even when the
+ *   1. The PLUGIN guarantee (`apply: 'serve'`) — even when the
  *      plugin is wired into a Vite config, a production build emits zero
  *      bootstrap.
- *   2. The USER PATTERN guarantee (ADT-29) — the recommended
+ *   2. The USER PATTERN guarantee — the recommended
  *      `if (import.meta.env.DEV) { await import('@agent-devtools/react') }`
  *      gate around the widget tree-shakes out of production. The fixture
  *      uses a local stub module with a unique sentinel identifier so the
