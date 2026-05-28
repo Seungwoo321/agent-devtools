@@ -46,6 +46,9 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
   const listeners = new Set<() => void>();
   const blockIndex = new Map<string, number>();
   const generateId = options.generateId ?? defaultIdGenerator();
+  // True between `appendUserMessage` and the turn's `done` / `error`. Gates the
+  // working indicator: it only ever shows while a turn is actually in flight.
+  let turnActive = false;
 
   function flush(): void {
     if (!persist) return;
@@ -79,12 +82,23 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
     return it && it.kind === 'tool-use' ? it : null;
   }
 
-  // Pending placeholders are only ever pushed at the end of `items` (right
-  // after the latest user message) and only ever dropped from the end (on
-  // the first concrete assistant content event or before the next user
-  // turn). Because indexed items — assistant-text and tool-use, tracked in
-  // `blockIndex` — always sit before any in-flight pending placeholder,
-  // removing pending entries never shifts an indexed item's position.
+  // The working indicator (`assistant-pending`) is a derived view of one fact:
+  // a turn is in flight and the assistant is between visible actions, about to
+  // incur latency worth telegraphing. It lives at the tail — and only the tail
+  // — and is (re)created whenever the conversation rests on a state that
+  // precedes a real wait:
+  //   - right after the user submits (waiting for the first content),
+  //   - after a tool-use finishes streaming its input (the tool is executing),
+  //   - after a tool-result (the model round-trips on it).
+  // It is dropped the moment the assistant resumes emitting (text / tool-input
+  // streaming) and when the turn ends (done / error). It is deliberately NOT
+  // shown after a finished text block: a turn that ends on text emits `done`
+  // immediately afterwards, so a dot there would only flash.
+  //
+  // Because every indexed item (assistant-text / tool-use, tracked in
+  // `blockIndex`) is appended only after `clearPending` has dropped any
+  // trailing placeholder, the placeholder never sits before an indexed item
+  // and removing it never shifts an indexed position.
   function clearPending(): boolean {
     let changed = false;
     const next = items.filter((item) => {
@@ -96,6 +110,15 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
     });
     if (changed) items = next;
     return changed;
+  }
+
+  // Append exactly one pending placeholder at the tail while a turn is active.
+  // No-op when the turn is over or the tail is already a placeholder.
+  function ensurePending(): void {
+    if (!turnActive) return;
+    const tail = items[items.length - 1];
+    if (tail && tail.kind === 'assistant-pending') return;
+    items = [...items, { kind: 'assistant-pending', id: generateId() }];
   }
 
   function applyEvent(event: StreamEvent): void {
@@ -162,10 +185,16 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
         const prev = items[idx];
         if (!prev || prev.kind !== 'tool-use') return;
         replaceAt(idx, { ...prev, streaming: false });
+        // Input fully streamed — the tool is now executing. Telegraph the wait.
+        ensurePending();
         notify();
         return;
       }
       case 'tool-result': {
+        // Drop the "tool executing" indicator before recording the result so
+        // the result lands at the true tail, then re-show it: the model still
+        // has to round-trip on this result.
+        clearPending();
         const linked = findToolUseByBlockId(event.toolUseId);
         const id = generateId();
         pushItem({
@@ -175,10 +204,12 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
           content: event.content,
           isError: event.isError === true,
         });
+        ensurePending();
         notify();
         return;
       }
       case 'error': {
+        turnActive = false;
         clearPending();
         const id = generateId();
         pushItem({ kind: 'error', id, message: event.message });
@@ -186,9 +217,10 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
         return;
       }
       case 'done': {
-        // Mark all streaming items finalized so the renderer can drop the
-        // cursor / pulsing indicator, and drop any in-flight pending
+        // The turn is over: stop telegraphing work, finalize streaming items
+        // so the renderer can drop the cursor, and drop any in-flight pending
         // placeholder (degenerate case: model returned no content blocks).
+        turnActive = false;
         let changed = clearPending();
         items = items.map((item) => {
           if (item.kind === 'assistant-text' && item.streaming) {
@@ -228,16 +260,17 @@ export function createMessageStore(options: CreateStoreOptions = {}): MessageSto
         text,
         ...(pickedEvidence !== undefined && { pickedEvidence }),
       });
-      pushItem({
-        kind: 'assistant-pending',
-        id: generateId(),
-      });
+      // A fresh turn is in flight — show the working indicator until the first
+      // concrete assistant event arrives.
+      turnActive = true;
+      ensurePending();
       notify();
       return id;
     },
     applyEvent,
     clear(): void {
       if (items.length === 0 && blockIndex.size === 0) return;
+      turnActive = false;
       items = [];
       blockIndex.clear();
       notify();

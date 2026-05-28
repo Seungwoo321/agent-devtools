@@ -119,6 +119,91 @@ describe('createMessageStore', () => {
     expect(pendings).toHaveLength(1);
   });
 
+  it('keeps the working indicator up while a tool executes (input finished streaming)', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('do it');
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'bash' });
+    // While the tool input streams, the streaming tool bubble is the signal —
+    // no separate indicator.
+    expect(store.getItems().some((it) => it.kind === 'assistant-pending')).toBe(false);
+    store.applyEvent({ type: 'tool-use-stop', blockId: 'tu1' });
+    // Input done → the tool is now executing → indicator returns at the tail.
+    const items = store.getItems();
+    expect(items[items.length - 1]?.kind).toBe('assistant-pending');
+  });
+
+  it('shows the working indicator after a tool result while the model round-trips', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('do it');
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'bash' });
+    store.applyEvent({ type: 'tool-use-stop', blockId: 'tu1' });
+    store.applyEvent({ type: 'tool-result', toolUseId: 'tu1', content: 'ok' });
+    const items = store.getItems();
+    // Exactly one indicator, and it sits AFTER the tool-result (the model is
+    // about to be called again with the result in hand).
+    const pendings = items.filter((it) => it.kind === 'assistant-pending');
+    expect(pendings).toHaveLength(1);
+    const resultIdx = items.findIndex((it) => it.kind === 'tool-result');
+    const pendingIdx = items.findIndex((it) => it.kind === 'assistant-pending');
+    expect(pendingIdx).toBeGreaterThan(resultIdx);
+  });
+
+  it('drops the working indicator when the model resumes with text after a tool result', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('do it');
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'bash' });
+    store.applyEvent({ type: 'tool-use-stop', blockId: 'tu1' });
+    store.applyEvent({ type: 'tool-result', toolUseId: 'tu1', content: 'ok' });
+    store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'Done' });
+    expect(store.getItems().some((it) => it.kind === 'assistant-pending')).toBe(false);
+  });
+
+  it('does not show the working indicator after a finished text block', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    store.appendUserMessage('hi');
+    store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'Hello' });
+    store.applyEvent({ type: 'text-stop', blockId: 'b1' });
+    // A turn that ends on text emits `done` immediately afterwards, so a dot
+    // here would only flash — it stays hidden.
+    expect(store.getItems().some((it) => it.kind === 'assistant-pending')).toBe(false);
+  });
+
+  it('never shows the working indicator outside an active turn', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    // Tool events with no turn in flight (replay / defensive) must not conjure
+    // an indicator.
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'bash' });
+    store.applyEvent({ type: 'tool-use-stop', blockId: 'tu1' });
+    store.applyEvent({ type: 'tool-result', toolUseId: 'tu1', content: 'ok' });
+    expect(store.getItems().some((it) => it.kind === 'assistant-pending')).toBe(false);
+  });
+
+  it('keeps a working indicator through every idle gap of a multi-step turn', () => {
+    const store = createMessageStore({ generateId: counterIds(), persist: false });
+    const pending = (): boolean => store.getItems().some((it) => it.kind === 'assistant-pending');
+
+    store.appendUserMessage('refactor this');
+    expect(pending()).toBe(true); // warming up
+
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'read' });
+    expect(pending()).toBe(false); // streaming tool input
+
+    store.applyEvent({ type: 'tool-use-stop', blockId: 'tu1' });
+    expect(pending()).toBe(true); // tool executing
+
+    store.applyEvent({ type: 'tool-result', toolUseId: 'tu1', content: 'file' });
+    expect(pending()).toBe(true); // model round-trip
+
+    store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'On it' });
+    expect(pending()).toBe(false); // streaming text
+
+    store.applyEvent({ type: 'text-stop', blockId: 'b1' });
+    expect(pending()).toBe(false); // finished text, done imminent
+
+    store.applyEvent({ type: 'done' });
+    expect(pending()).toBe(false); // turn over
+  });
+
   it('accumulates assistant text deltas by blockId', () => {
     const store = createMessageStore({ generateId: counterIds(), persist: false });
     store.applyEvent({ type: 'text-delta', blockId: 'b1', text: 'Hel' });
