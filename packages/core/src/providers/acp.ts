@@ -141,6 +141,15 @@ export interface AcpRunParams {
    * follow-up Read tool call. Omitted when no workspace is configured.
    */
   files?: FileTools;
+  /**
+   * Model to run this turn on, e.g. an alias (`'opus'`, `'sonnet'`,
+   * `'haiku'`) or a full model id. The runtime applies it with
+   * `session/set_model` before the prompt; the agent resolves aliases to
+   * canonical ids. Omitted means "keep the session's current model" — for a
+   * fresh session that is the agent's default, matching the widget's
+   * `Default` choice.
+   */
+  model?: string;
   /** Aborts when the HTTP client disconnects. The runtime must propagate this. */
   signal: AbortSignal;
 }
@@ -192,6 +201,7 @@ export function createAcpProvider(options: CreateAcpProviderOptions = {}): Agent
       ...(effectivePolicy !== undefined && { permissionPolicy: effectivePolicy }),
       ...(request.context !== undefined && { context: request.context }),
       ...(context.files !== undefined && { files: context.files }),
+      ...(context.model !== undefined && { model: context.model }),
       signal: context.signal,
     });
 

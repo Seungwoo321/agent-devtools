@@ -9,6 +9,27 @@ export type ProviderId = 'acp' | 'sdk';
 
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
 
+/**
+ * Widget colour scheme. `auto` follows the host OS `prefers-color-scheme`;
+ * `light` / `dark` pin the scheme regardless of the OS preference.
+ */
+export type ThemeMode = 'auto' | 'light' | 'dark';
+
+/**
+ * Model selection for the next prompt. These are the same aliases the Claude
+ * Code terminal's `/model` menu exposes — both the ACP agent and the Agent
+ * SDK resolve them against the account's real models through the shared SDK
+ * resolver, so the widget needs no live model-discovery round-trip. `default`
+ * is the sentinel for "send no model": the chosen provider then falls back to
+ * its own default, matching the terminal with no `/model` override.
+ *
+ * The wire field this maps to is intentionally open (the server validates
+ * only that it is a non-empty string), so a future full date-pinned id or a
+ * new tier can be threaded through without a protocol change — this closed
+ * union is just the widget's curated menu.
+ */
+export type ModelId = 'default' | 'opus' | 'sonnet' | 'haiku';
+
 export interface Settings {
   /** Which runtime backend services the next prompt. */
   readonly provider: ProviderId;
@@ -18,6 +39,18 @@ export interface Settings {
    * because it disables every safety prompt for the rest of the session.
    */
   readonly permissionMode: PermissionMode;
+  /**
+   * Widget colour scheme. Persisted alongside `provider` so a reload keeps
+   * the user's chosen appearance. `auto` defers to the host OS preference.
+   */
+  readonly theme: ThemeMode;
+  /**
+   * Model the next prompt runs on. `default` sends no model on the wire and
+   * lets the provider use its own default; the other values are forwarded as
+   * aliases the provider resolves. Persisted alongside `provider` so a reload
+   * keeps the user's chosen model.
+   */
+  readonly model: ModelId;
   /**
    * Header-level safety switch. When `true` the widget asks the agent to
    * prompt for `bash`, `webFetch`, and `mcpTool` actions while keeping
@@ -38,6 +71,10 @@ export const PERMISSION_MODES: readonly PermissionMode[] = [
   'dontAsk',
 ];
 
+export const THEME_MODES: readonly ThemeMode[] = ['auto', 'light', 'dark'];
+
+export const MODEL_IDS: readonly ModelId[] = ['default', 'opus', 'sonnet', 'haiku'];
+
 /**
  * Match the server's defaults so a fresh widget mounted with no localStorage
  * doesn't accidentally diverge from the dev-server's behaviour.
@@ -45,6 +82,8 @@ export const PERMISSION_MODES: readonly PermissionMode[] = [
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'acp',
   permissionMode: 'acceptEdits',
+  theme: 'auto',
+  model: 'default',
   safeMode: true,
 };
 
@@ -70,4 +109,12 @@ export function isProviderId(value: unknown): value is ProviderId {
 
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);
+}
+
+export function isThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === 'string' && (THEME_MODES as readonly string[]).includes(value);
+}
+
+export function isModelId(value: unknown): value is ModelId {
+  return typeof value === 'string' && (MODEL_IDS as readonly string[]).includes(value);
 }

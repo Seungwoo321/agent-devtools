@@ -192,6 +192,13 @@ interface SessionEntry {
   current: RunState | null;
   /** Resolves when the previous prompt on this session finishes, so the next can start. */
   lastDone: Promise<void>;
+  /**
+   * Last model applied to this session via `session/set_model`, or undefined
+   * if none has been applied (the session runs on the agent's default). Used
+   * to skip a redundant `set_model` round-trip when the requested model is
+   * unchanged across turns.
+   */
+  appliedModel?: string;
 }
 
 /**
@@ -289,6 +296,25 @@ class AcpChild {
       if (params.signal.aborted) {
         yield { kind: 'error', error: { name: 'AbortError', message: 'aborted before start' } };
         return;
+      }
+
+      // Apply the requested model before the prompt. `session/set_model`
+      // mutates shared session state, so it runs inside the per-session
+      // serialization (after `await previous`) and only when the model
+      // actually changes, to avoid a redundant round-trip every turn. The
+      // agent resolves aliases like `opus` to canonical ids. A failure is
+      // surfaced rather than silently running the prompt on the wrong model.
+      if (params.model !== undefined && params.model !== entry.appliedModel) {
+        try {
+          await this.conn.unstable_setSessionModel({
+            sessionId: entry.acpSessionId,
+            modelId: params.model,
+          });
+          entry.appliedModel = params.model;
+        } catch (error) {
+          yield { kind: 'error', error: toErrorPayload(error) };
+          return;
+        }
       }
 
       const queue = new EventQueue<AcpEvent>();

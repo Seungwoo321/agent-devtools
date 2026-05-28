@@ -160,8 +160,8 @@ gate the import behind `import.meta.env.DEV`.`
 **원인**
 
 - `mountAgentDevtools` 의 첫 검사에서 `isProductionBuild()` 가 true 면 그 자리에서
-  throw 한다 (`packages/react/src/orchestrator/mount.ts:156-159`).
-- 판정은 `process.env.NODE_ENV === 'production'` 비교 (`mount.ts:464-471`). Vite 가
+  throw 한다 (`packages/widget-core/src/orchestrator/mount.ts:230-232`).
+- 판정은 `process.env.NODE_ENV === 'production'` 비교 (`mount.ts:689-696`). Vite 가
   build 시 이 토큰을 리터럴로 치환하므로 정상적인 dev/prod 분기에서는 의도대로
   작동한다.
 - 동시에 Vite 플러그인은 `apply: 'serve'` 로 production build 자체에서는 플러그인

@@ -12,7 +12,7 @@
  *
  * The host element itself stays a plain `<div>` on the page. Layout
  * constraints (position: fixed, z-index, viewport pinning) live in the
- * launcher (ADT-21) — the shell only owns isolation.
+ * launcher — the shell only owns isolation.
  */
 
 const HOST_TAG = 'agent-devtools-widget';
@@ -54,14 +54,66 @@ export interface CreateShadowWidgetRootOptions {
   extraStyles?: string;
 }
 
+/**
+ * Theme attribute the orchestrator flips on the host element. The selectors
+ * below recolour the whole widget by remapping the design tokens — a single
+ * DOM write swaps every component because they all read `var(--adt-*)`.
+ */
+export const THEME_ATTR = 'data-theme';
+
+/**
+ * Design tokens — dark palette only.
+ *
+ * Light is the *absence* of these tokens: every component references a colour
+ * as `var(--adt-*, <light-literal>)`, so when no token is defined the literal
+ * fallback (the original pre-theming colour) applies. That makes the light
+ * theme byte-identical to the old look and preserves each element's own light
+ * nuance (e.g. a 0.06 vs 0.16 border alpha) without enumerating it here.
+ *
+ * Dark, by contrast, is defined once in this block and applied in two places —
+ * the explicit `[data-theme="dark"]` selector and the `auto` +
+ * `prefers-color-scheme: dark` media query — so the dark palette has a single
+ * source of truth. Flipping the host's `data-theme` attribute is the only
+ * write needed to recolour the whole widget.
+ */
+const DARK_TOKENS = `
+  color-scheme: dark;
+  --adt-surface: #1e1e1e;
+  --adt-surface-raised: #2a2a2e;
+  --adt-text: #e8e8ea;
+  --adt-text-muted: #9ca3af;
+  --adt-accent: #e8e8ea;
+  --adt-accent-text: #1a1a1a;
+  --adt-border: rgba(255, 255, 255, 0.14);
+  --adt-chip-bg: #2f2f33;
+  --adt-overlay-weak: rgba(255, 255, 255, 0.08);
+  --adt-backdrop: rgba(0, 0, 0, 0.6);
+  --adt-user-bubble-bg: rgba(255, 255, 255, 0.1);
+  --adt-assistant-bubble-bg: #2a2a2e;
+  --adt-assistant-bubble-text: #e8e8ea;
+  --adt-danger: #ff6b6b;
+  --adt-danger-bg: rgba(255, 107, 107, 0.14);
+  --adt-success: #4ade80;
+  --adt-shadow: rgba(0, 0, 0, 0.5);
+`;
+
 const BASE_STYLES = `
 :host {
   all: initial;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.4;
-  color: #1a1a1a;
+  color-scheme: light;
+  color: var(--adt-text, #1a1a1a);
   contain: layout style;
+}
+:host([${THEME_ATTR}="dark"]) {
+${DARK_TOKENS}
+}
+@media (prefers-color-scheme: dark) {
+  :host([${THEME_ATTR}="auto"]) {
+${DARK_TOKENS}
+  }
 }
 *, *::before, *::after {
   box-sizing: border-box;

@@ -51,7 +51,13 @@ import {
   type SettingsPanelHandle,
   type SettingsStore,
 } from '../settings/index.js';
-import { createShadowWidgetRoot, type ShadowWidgetRoot } from '../widget/index.js';
+import { createShadowWidgetRoot, THEME_ATTR, type ShadowWidgetRoot } from '../widget/index.js';
+import {
+  loadPanelOpen,
+  loadWidgetVisible,
+  savePanelOpen,
+  saveWidgetVisible,
+} from './visibility-storage.js';
 
 export interface TransportPayload {
   readonly text: string;
@@ -218,7 +224,7 @@ export interface AgentDevtoolsHandle {
 }
 
 const NO_TRANSPORT_MESSAGE =
-  'Agent server not configured. Wire `transport` into mountAgentDevtools() or wait for ADT-26.';
+  'Agent server not configured. Wire `transport` into mountAgentDevtools().';
 
 export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): AgentDevtoolsHandle {
   if (!options.force && isProductionBuild()) {
@@ -241,9 +247,28 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
   const settingsStore = options.settingsStore ?? createSettingsStore();
   let settingsVisible = false;
 
+  // Drive the widget colour scheme off a single `data-theme` attribute on the
+  // shadow host. Every component reads `var(--adt-*)` tokens defined per theme
+  // in the shadow root, so flipping this one attribute recolours the whole
+  // widget without re-rendering any component. `auto` defers to the host OS
+  // `prefers-color-scheme` via the media query in the base styles.
+  widget.host.setAttribute(THEME_ATTR, settingsStore.get().theme);
+  let lastTheme = settingsStore.get().theme;
+  const unsubscribeTheme = settingsStore.subscribe((settings) => {
+    if (settings.theme === lastTheme) return;
+    lastTheme = settings.theme;
+    widget.host.setAttribute(THEME_ATTR, settings.theme);
+  });
+
+  // Restore the user's last open/closed choice so a refresh re-opens the
+  // panel they left open. Nothing persisted yet → start closed (the
+  // composer's own default).
+  const persistedPanelOpen = loadPanelOpen() ?? false;
+
   const composer = createComposer({
     container: widget.container,
     document: doc,
+    visible: persistedPanelOpen,
     onSubmit: handleSubmit,
     onTogglePicker: handleTogglePicker,
     onToggleSettings: () => toggleSettings(!settingsVisible),
@@ -336,6 +361,9 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       composer.setPicked(resolvePicked(element));
       composer.setPickerActive(false);
       composer.setVisible(true);
+      // Picking lands the user in an open panel — persist that as their
+      // open/closed choice so a refresh keeps it open.
+      savePanelOpen(true);
       streamRenderer.scrollToBottom();
       composer.focus();
     },
@@ -350,6 +378,9 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     onClick(): void {
       const willOpen = composer.element.style.display === 'none';
       composer.setVisible(willOpen);
+      // The launcher click is the canonical user-driven open/close toggle —
+      // persist it so the panel reopens (or stays closed) after a refresh.
+      savePanelOpen(willOpen);
       if (willOpen) {
         // The list does not retain scrollTop while `display: none` because
         // the browser does not lay it out. Re-anchor to the latest turn
@@ -434,6 +465,8 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
 
   function handleClose(): void {
     composer.setVisible(false);
+    // Escape / close button are user-driven closes — remember them.
+    savePanelOpen(false);
   }
 
   function handleNewSession(): void {
@@ -518,20 +551,30 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
   // operators can toggle the entire devtools surface with one hotkey
   // — and so `defaultVisible: false` ships a fully dormant widget for
   // dev environments where non-frontend users load the page.
-  let widgetVisible = options.defaultVisible ?? true;
+  //
+  // A persisted choice (from a prior hotkey toggle) wins over
+  // `defaultVisible`, which is only the seed for a first-ever visit.
+  let widgetVisible = loadWidgetVisible() ?? options.defaultVisible ?? true;
   if (!widgetVisible) {
     launcher.setVisible(false);
+    // Collapse the composer's DOM without touching the persisted panel-open
+    // choice — this is a system-driven hide, not the user closing the panel.
     composer.setVisible(false);
   }
 
   function setWidgetVisible(next: boolean): void {
     if (widgetVisible === next) return;
     widgetVisible = next;
+    // The hotkey toggle is user-driven — remember it across reloads.
+    saveWidgetVisible(next);
     launcher.setVisible(next);
     if (!next) {
       // Going dark: collapse the composer and abort any picker so the
-      // widget surface leaves no overlay behind. Keep the message store
-      // intact — toggling visibility is not "new session".
+      // widget surface leaves no overlay behind. The composer's DOM hides
+      // but the persisted panel-open choice is left intact (system-driven
+      // collapse), so a later refresh with the widget shown can still
+      // restore the panel. Keep the message store intact too — toggling
+      // visibility is not "new session".
       composer.setVisible(false);
       picker.cancel();
     }
@@ -573,6 +616,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       inflight?.abort();
       handoffController?.abort();
       unsubscribeSafeMode();
+      unsubscribeTheme();
       picker.stop();
       observer.stop();
       handoffModal.destroy();

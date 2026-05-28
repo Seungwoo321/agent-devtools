@@ -97,6 +97,49 @@ describe('createSdkProvider', () => {
     expect(seen?.options?.abortController).toBeInstanceOf(AbortController);
   });
 
+  it('sends the claude_code preset and pinned setting sources for terminal parity', async () => {
+    // Regression guard for the "400 role 'system' is not supported on this
+    // model" error: omitting systemPrompt makes the SDK use its minimal
+    // default instead of the full Claude Code prompt the terminal uses.
+    let seen: { prompt: string; options?: SdkOptions } | undefined;
+    const query = vi.fn((params: { prompt: string; options?: SdkOptions }) => {
+      seen = params;
+      return makeQuery([{ type: 'result' }]);
+    });
+    const provider = createSdkProvider({ query });
+
+    await collect(provider({ prompt: 'hello' }, makeCtx()));
+
+    expect(seen?.options?.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code' });
+    expect(seen?.options?.settingSources).toEqual(['user', 'project', 'local']);
+  });
+
+  it('forwards a context model to the SDK options', async () => {
+    let seen: SdkOptions | undefined;
+    const query = vi.fn((params: { prompt: string; options?: SdkOptions }) => {
+      seen = params.options;
+      return makeQuery([{ type: 'result' }]);
+    });
+    const provider = createSdkProvider({ query });
+
+    await collect(provider({ prompt: 'p' }, makeCtx({ model: 'opus' })));
+
+    expect(seen?.model).toBe('opus');
+  });
+
+  it('omits model from the SDK options when the context carries none', async () => {
+    let seen: SdkOptions | undefined;
+    const query = vi.fn((params: { prompt: string; options?: SdkOptions }) => {
+      seen = params.options;
+      return makeQuery([{ type: 'result' }]);
+    });
+    const provider = createSdkProvider({ query });
+
+    await collect(provider({ prompt: 'p' }, makeCtx()));
+
+    expect(seen?.model).toBeUndefined();
+  });
+
   it("sets allowDangerouslySkipPermissions when permissionMode is 'bypassPermissions'", async () => {
     let seen: SdkOptions | undefined;
     const query = vi.fn((params: { prompt: string; options?: SdkOptions }) => {

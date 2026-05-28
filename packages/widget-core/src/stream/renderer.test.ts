@@ -471,6 +471,27 @@ describe('createStreamRenderer', () => {
     handle.destroy();
   });
 
+  it('re-paints the working indicator after a tool result while the model round-trips', () => {
+    const store = createMessageStore({ generateId: counterIds() });
+    const handle = createStreamRenderer({ container, store });
+    store.appendUserMessage('go');
+    store.applyEvent({ type: 'tool-use-start', blockId: 'tu1', name: 'inspect' });
+    // Streaming the tool input — indicator hidden.
+    expect(items(handle).some((n) => n.getAttribute('data-kind') === 'assistant-pending')).toBe(
+      false,
+    );
+    store.applyEvent({ type: 'tool-use-stop', blockId: 'tu1' });
+    store.applyEvent({ type: 'tool-result', toolUseId: 'tu1', content: 'ok' });
+    // tool-result is folded into the tool-use <details>, so the only
+    // top-level nodes are the user bubble, the tool-use block, and the
+    // re-painted indicator at the tail.
+    const rendered = items(handle);
+    const last = rendered[rendered.length - 1];
+    expect(last?.getAttribute('data-kind')).toBe('assistant-pending');
+    expect(last?.querySelectorAll('[data-agent-devtools-pending-dot]').length).toBe(3);
+    handle.destroy();
+  });
+
   it('injects keyframes for the pending dot animation as a sibling of the root', () => {
     const store = createMessageStore({ generateId: counterIds() });
     const handle = createStreamRenderer({ container, store });

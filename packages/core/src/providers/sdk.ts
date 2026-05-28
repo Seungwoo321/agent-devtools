@@ -81,6 +81,26 @@ export function createSdkProvider(options: CreateSdkProviderOptions = {}): Agent
 
     const sdkOptions: SdkOptions = {
       abortController: controller,
+      // Terminal parity. `claude -p` runs with the full Claude Code system
+      // prompt; the Agent SDK, when `systemPrompt` is omitted, falls back to a
+      // *minimal* default that drops Claude Code's identity. On the
+      // subscription / model endpoint that minimal request is rejected with
+      // "400 role 'system' is not supported on this model" — the exact error
+      // dogfooding surfaced. Opting into the `claude_code` preset sends the
+      // same prompt the terminal sends, restoring parity.
+      systemPrompt: { type: 'preset', preset: 'claude_code' },
+      // Pin the filesystem setting sources. The SDK default already loads all
+      // sources (matching the CLI), but that default is version-dependent;
+      // were it ever flipped to isolation mode (`[]`), the project CLAUDE.md
+      // context would silently vanish and dogfooding parity would regress.
+      // `'project'` is required for CLAUDE.md to load.
+      settingSources: ['user', 'project', 'local'],
+      // Terminal-parity model selection. The SDK `model` option takes the same
+      // aliases the terminal's `/model` menu uses (`opus`, `sonnet`, `haiku`)
+      // or a full model id, and resolves them against the account's real
+      // models. Omitted when the request carries no model, so the SDK falls
+      // back to the CLI default — matching the widget's `Default` choice.
+      ...(context.model !== undefined && { model: context.model }),
       permissionMode: context.permissionMode,
       ...(context.permissionMode === 'bypassPermissions' && {
         allowDangerouslySkipPermissions: true,

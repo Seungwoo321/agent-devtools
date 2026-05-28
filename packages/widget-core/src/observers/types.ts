@@ -1,6 +1,6 @@
 /**
  * Structured records emitted by the page observers. The agent context layer
- * (ADT-19) takes these and ships them up to the server alongside the picked
+ * takes these and ships them up to the server alongside the picked
  * element and page files. Keep the shape stable: the server-side prompt
  * formatter and any future report tooling read these fields directly.
  */

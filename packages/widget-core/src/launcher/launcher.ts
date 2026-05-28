@@ -2,7 +2,7 @@
  * Floating launcher button. Owns three concerns:
  *
  *   1. Render a fixed-position button (anchored to the bottom-right of the
- *      container provided by ADT-20's shadow root) with sensible defaults.
+ *      container provided by the widget's shadow root) with sensible defaults.
  *   2. Translate pointer events into reducer events so click vs. drag is
  *      decided by a pure state machine. The wiring captures the pointer on
  *      press so the drag survives even when the cursor leaves the button.
@@ -217,9 +217,9 @@ function applyStaticStyles(button: HTMLButtonElement, size: number): void {
   s.padding = '0';
   s.margin = '0';
   s.cursor = 'grab';
-  s.background = '#1a1a1a';
-  s.color = '#ffffff';
-  s.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.25)';
+  s.background = 'var(--adt-accent, #1a1a1a)';
+  s.color = 'var(--adt-accent-text, #ffffff)';
+  s.boxShadow = '0 4px 16px var(--adt-shadow, rgba(0, 0, 0, 0.25))';
   s.display = 'flex';
   s.alignItems = 'center';
   s.justifyContent = 'center';

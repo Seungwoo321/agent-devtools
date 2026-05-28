@@ -51,6 +51,22 @@ function permissionInput(mode: string): HTMLInputElement {
   return el;
 }
 
+function themeInput(mode: 'auto' | 'light' | 'dark'): HTMLInputElement {
+  const el = container.querySelector<HTMLInputElement>(
+    `[data-agent-devtools-settings-theme="${mode}"]`,
+  );
+  if (!el) throw new Error(`theme input not found: ${mode}`);
+  return el;
+}
+
+function modelInput(id: 'default' | 'opus' | 'sonnet' | 'haiku'): HTMLInputElement {
+  const el = container.querySelector<HTMLInputElement>(
+    `[data-agent-devtools-settings-model="${id}"]`,
+  );
+  if (!el) throw new Error(`model input not found: ${id}`);
+  return el;
+}
+
 describe('createSettingsPanel', () => {
   it('renders provider + permission radios reflecting the current settings', () => {
     const store = createSettingsStore({ storage: makeStorage() });
@@ -78,6 +94,57 @@ describe('createSettingsPanel', () => {
     planRadio.checked = true;
     planRadio.dispatchEvent(new Event('change', { bubbles: true }));
     expect(store.get().permissionMode).toBe('plan');
+  });
+
+  it('renders the theme radios with auto selected by default', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    expect(themeInput('auto').checked).toBe(true);
+    expect(themeInput('light').checked).toBe(false);
+    expect(themeInput('dark').checked).toBe(false);
+  });
+
+  it('toggling a theme radio mutates the store', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    const darkRadio = themeInput('dark');
+    darkRadio.checked = true;
+    darkRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().theme).toBe('dark');
+  });
+
+  it('re-renders the theme selection when the store changes from outside', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    store.set({ theme: 'light' });
+    expect(themeInput('light').checked).toBe(true);
+    expect(themeInput('auto').checked).toBe(false);
+  });
+
+  it('renders the model radios with default selected by default', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    expect(modelInput('default').checked).toBe(true);
+    expect(modelInput('opus').checked).toBe(false);
+    expect(modelInput('sonnet').checked).toBe(false);
+    expect(modelInput('haiku').checked).toBe(false);
+  });
+
+  it('toggling a model radio mutates the store', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    const opusRadio = modelInput('opus');
+    opusRadio.checked = true;
+    opusRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().model).toBe('opus');
+  });
+
+  it('re-renders the model selection when the store changes from outside', () => {
+    const store = createSettingsStore({ storage: makeStorage() });
+    createSettingsPanel({ container, store, visible: true });
+    store.set({ model: 'sonnet' });
+    expect(modelInput('sonnet').checked).toBe(true);
+    expect(modelInput('default').checked).toBe(false);
   });
 
   it('selecting bypassPermissions prompts for confirmation and commits on accept', () => {

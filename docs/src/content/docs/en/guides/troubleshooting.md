@@ -200,9 +200,9 @@ gate the import behind `import.meta.env.DEV`.`
 
 - The first check in `mountAgentDevtools` throws on the spot when
   `isProductionBuild()` returns true
-  (`packages/react/src/orchestrator/mount.ts:156-159`).
+  (`packages/widget-core/src/orchestrator/mount.ts:230-232`).
 - The judgement is a `process.env.NODE_ENV === 'production'` comparison
-  (`mount.ts:464-471`). Vite replaces this token with a literal at build
+  (`mount.ts:689-696`). Vite replaces this token with a literal at build
   time, so the standard dev/prod split works as intended.
 - At the same time, the Vite plugin is declared with `apply: 'serve'` so
   the plugin code itself is gated out of production builds as a first

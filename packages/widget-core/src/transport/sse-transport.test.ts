@@ -169,10 +169,14 @@ describe('createDefaultTransport', () => {
     let current: {
       provider: 'acp' | 'sdk';
       permissionMode: 'acceptEdits' | 'bypassPermissions';
+      theme: 'auto' | 'light' | 'dark';
+      model: 'default' | 'opus' | 'sonnet' | 'haiku';
       safeMode: boolean;
     } = {
       provider: 'acp',
       permissionMode: 'acceptEdits',
+      theme: 'auto',
+      model: 'default',
       safeMode: true,
     };
     const transport = createDefaultTransport({
@@ -183,7 +187,13 @@ describe('createDefaultTransport', () => {
     });
     await transport.send(basePayload());
     // Live snapshot — the second turn should see the mutated value.
-    current = { provider: 'sdk', permissionMode: 'bypassPermissions', safeMode: true };
+    current = {
+      provider: 'sdk',
+      permissionMode: 'bypassPermissions',
+      theme: 'auto',
+      model: 'default',
+      safeMode: true,
+    };
     await transport.send(basePayload());
     expect(captured).toHaveLength(2);
     const bodies = captured.map(
@@ -191,6 +201,32 @@ describe('createDefaultTransport', () => {
     );
     expect(bodies[0]).toMatchObject({ provider: 'acp', permissionMode: 'acceptEdits' });
     expect(bodies[1]).toMatchObject({ provider: 'sdk', permissionMode: 'bypassPermissions' });
+  });
+
+  it('sends the selected model but omits it for the default sentinel', async () => {
+    const { fetch: fetchImpl, captured } = makeFetch({ textBody: '' });
+    let model: 'default' | 'opus' | 'sonnet' | 'haiku' = 'opus';
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      getSettings: () => ({
+        provider: 'acp',
+        permissionMode: 'acceptEdits',
+        theme: 'auto',
+        model,
+        safeMode: false,
+      }),
+    });
+    await transport.send(basePayload());
+    // `default` must not put a model on the wire — the provider decides.
+    model = 'default';
+    await transport.send(basePayload());
+
+    const first = JSON.parse(captured[0]?.init.body as string) as Record<string, unknown>;
+    const second = JSON.parse(captured[1]?.init.body as string) as Record<string, unknown>;
+    expect(first).toMatchObject({ model: 'opus' });
+    expect(second).not.toHaveProperty('model');
   });
 
   it('omits provider/permissionMode when getSettings is not supplied (server defaults apply)', async () => {
@@ -212,7 +248,13 @@ describe('createDefaultTransport', () => {
       baseUrl: 'http://127.0.0.1:4317',
       pairingToken: 'tok',
       fetch: fetchImpl,
-      getSettings: () => ({ provider: 'acp', permissionMode: 'acceptEdits', safeMode: true }),
+      getSettings: () => ({
+        provider: 'acp',
+        permissionMode: 'acceptEdits',
+        theme: 'auto',
+        model: 'default',
+        safeMode: true,
+      }),
     });
     await transport.send(basePayload());
     const body = JSON.parse(captured[0]?.init.body as string) as {
@@ -232,7 +274,13 @@ describe('createDefaultTransport', () => {
       baseUrl: 'http://127.0.0.1:4317',
       pairingToken: 'tok',
       fetch: fetchImpl,
-      getSettings: () => ({ provider: 'acp', permissionMode: 'acceptEdits', safeMode: false }),
+      getSettings: () => ({
+        provider: 'acp',
+        permissionMode: 'acceptEdits',
+        theme: 'auto',
+        model: 'default',
+        safeMode: false,
+      }),
     });
     await transport.send(basePayload());
     const body = JSON.parse(captured[0]?.init.body as string) as Record<string, unknown>;
@@ -246,7 +294,13 @@ describe('createDefaultTransport', () => {
       baseUrl: 'http://127.0.0.1:4317',
       pairingToken: 'tok',
       fetch: fetchImpl,
-      getSettings: () => ({ provider: 'acp', permissionMode: 'acceptEdits', safeMode }),
+      getSettings: () => ({
+        provider: 'acp',
+        permissionMode: 'acceptEdits',
+        theme: 'auto',
+        model: 'default',
+        safeMode,
+      }),
     });
     await transport.send(basePayload());
     safeMode = false;
@@ -876,6 +930,91 @@ describe('createDefaultTransport — pre-response fetch retry', () => {
     });
 
     await expect(transport.send(basePayload())).rejects.toThrow(/network error/);
+    expect(calls).toBe(1);
+  });
+
+  it('retries a 503 "agent not ready" then succeeds — the dev-server respawn case', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      if (calls <= 2) {
+        return new Response('{"error":"agent server not ready"}', { status: 503 });
+      }
+      return new Response(streamFrom(['']), { status: 200 });
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 4,
+      preResponseRetryBackoffMs: 1,
+      preResponseRetryMaxBackoffMs: 4,
+    });
+
+    await transport.send(basePayload());
+    expect(calls).toBe(3);
+  });
+
+  it('surfaces the 503 error once the retry budget is exhausted', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      return new Response('{"error":"agent server not ready"}', { status: 503 });
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 2,
+      preResponseRetryBackoffMs: 1,
+      preResponseRetryMaxBackoffMs: 4,
+    });
+
+    await expect(transport.send(basePayload())).rejects.toThrow(/503/);
+    // initial attempt + 2 retries
+    expect(calls).toBe(3);
+  });
+
+  it('does not retry a 502 — the request already reached the agent', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      return new Response('{"error":"upstream error: socket hang up"}', { status: 502 });
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 3,
+      preResponseRetryBackoffMs: 1,
+    });
+
+    await expect(transport.send(basePayload())).rejects.toThrow(/502/);
+    expect(calls).toBe(1);
+  });
+
+  it('stops retrying a 503 when the caller aborts mid-backoff', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      // Abort during the first backoff window so the retry loop bails out
+      // instead of hammering the server.
+      controller.abort();
+      return new Response('{"error":"agent server not ready"}', { status: 503 });
+    }) as unknown as typeof fetch;
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      preResponseRetries: 5,
+      preResponseRetryBackoffMs: 20,
+      preResponseRetryMaxBackoffMs: 20,
+    });
+
+    await expect(transport.send(basePayload({ signal: controller.signal }))).rejects.toThrow(
+      /aborted/,
+    );
     expect(calls).toBe(1);
   });
 });

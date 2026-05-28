@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createComposer } from './composer.js';
+import { createComposer, CHIP_BG, CHIP_BORDER } from './composer.js';
 import type { PickedEvidence } from '../context/types.js';
 
 let container: HTMLElement;
@@ -186,21 +186,27 @@ describe('createComposer', () => {
   });
 
   it('renders the chip with an opaque background so the conversation stream cannot bleed through', () => {
-    const handle = createComposer({ container, onSubmit: vi.fn(), picked: makePicked() });
-    const chip = handle.element.querySelector<HTMLElement>(
-      '[data-agent-devtools-composer-chip] > span',
-    )!;
-    const bg = chip.style.background;
+    // The chip fill is now a CSS var() theme token, which the browser resolves
+    // but the headless CSS engine drops from inline styles — so the opacity
+    // contract is asserted against the source-of-truth constant (the light
+    // literal fallback) rather than the un-resolvable rendered value. The dark
+    // token's opacity is covered in shadow-root.test.ts.
     // The chip MUST NOT use an alpha-channel background — rgba/hsla with
     // alpha < 1 lets stream text show through. Solid hex / named colors are
     // the contract.
-    expect(bg.toLowerCase()).not.toMatch(/rgba?\(.*0\.\d/);
-    expect(bg.toLowerCase()).not.toMatch(/hsla?\(.*0\.\d/);
-    expect(bg).not.toBe('transparent');
-    expect(bg).not.toBe('');
+    expect(CHIP_BG.toLowerCase()).not.toMatch(/rgba?\([^)]*0?\.\d/);
+    expect(CHIP_BG.toLowerCase()).not.toMatch(/hsla?\([^)]*0?\.\d/);
+    expect(CHIP_BG).not.toBe('transparent');
+    expect(CHIP_BG).not.toBe('');
     // And the chip should have a visible border so it still reads as a
     // discrete affordance against a similarly-colored panel.
-    expect(chip.style.border).not.toBe('');
+    expect(CHIP_BORDER).not.toBe('');
+    // The chip element still actually renders with the marker so the slot is
+    // wired up.
+    const handle = createComposer({ container, onSubmit: vi.fn(), picked: makePicked() });
+    expect(
+      handle.element.querySelector('[data-agent-devtools-composer-chip] > span'),
+    ).not.toBeNull();
     handle.destroy();
   });
 
@@ -446,11 +452,13 @@ describe('createComposer', () => {
       '[data-agent-devtools-composer-settings]',
     );
     if (!gear) throw new Error('gear not found');
-    const inactiveBg = gear.style.background;
+    // The active state is painted with a var() token (dropped by the headless
+    // CSS engine) and mirrored onto aria-pressed, which is the stable signal.
+    expect(gear.getAttribute('aria-pressed')).toBe('false');
     handle.setSettingsActive(true);
-    expect(gear.style.background).not.toBe(inactiveBg);
+    expect(gear.getAttribute('aria-pressed')).toBe('true');
     handle.setSettingsActive(false);
-    expect(gear.style.background).toBe(inactiveBg);
+    expect(gear.getAttribute('aria-pressed')).toBe('false');
     handle.destroy();
   });
 
@@ -699,21 +707,24 @@ describe('createComposer', () => {
     handle.destroy();
   });
 
+  // The lit colour is now a CSS var() theme token (resolved by the browser),
+  // and non-browser CSS engines drop var() from inline styles — so "is the
+  // affordance showing" is tracked by a dedicated state attribute rather than
+  // the painted background value.
+  const LIT_ATTR = 'data-agent-devtools-composer-resize-lit';
+
   it('pointerenter on a resize handle paints a hover affordance; leave resets it', () => {
     const handle = createComposer({ container, onSubmit: vi.fn(), sizeStorage: null });
     const left = getHandle(handle.element, 'left');
-    expect(left.style.background).toBe('transparent');
+    expect(left.hasAttribute(LIT_ATTR)).toBe(false);
     left.dispatchEvent(
       pointerEvent('pointerenter' as 'pointerdown', { pointerId: 20, clientX: 0, clientY: 0 }),
     );
-    // Any non-empty, non-transparent background — the exact rgba form is an
-    // implementation detail; the contract is "visible to the user".
-    expect(left.style.background).not.toBe('');
-    expect(left.style.background).not.toBe('transparent');
+    expect(left.hasAttribute(LIT_ATTR)).toBe(true);
     left.dispatchEvent(
       pointerEvent('pointerleave' as 'pointerdown', { pointerId: 20, clientX: 0, clientY: 0 }),
     );
-    expect(left.style.background).toBe('transparent');
+    expect(left.hasAttribute(LIT_ATTR)).toBe(false);
     handle.destroy();
   });
 
@@ -723,17 +734,16 @@ describe('createComposer', () => {
     const handle = createComposer({ container, onSubmit: vi.fn(), sizeStorage: null });
     const left = getHandle(handle.element, 'left');
     left.dispatchEvent(pointerEvent('pointerdown', { pointerId: 21, clientX: 500, clientY: 300 }));
-    const litDuringDrag = left.style.background;
-    expect(litDuringDrag).not.toBe('transparent');
+    expect(left.hasAttribute(LIT_ATTR)).toBe(true);
     // Simulate the cursor leaving the 6px strip while pointer capture keeps
     // the drag alive — the handle must stay lit so the user can still see
     // what they're dragging.
     left.dispatchEvent(
       pointerEvent('pointerleave' as 'pointerdown', { pointerId: 21, clientX: 300, clientY: 300 }),
     );
-    expect(left.style.background).toBe(litDuringDrag);
+    expect(left.hasAttribute(LIT_ATTR)).toBe(true);
     left.dispatchEvent(pointerEvent('pointerup', { pointerId: 21, clientX: 300, clientY: 300 }));
-    expect(left.style.background).toBe('transparent');
+    expect(left.hasAttribute(LIT_ATTR)).toBe(false);
     handle.destroy();
   });
 

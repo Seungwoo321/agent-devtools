@@ -10,7 +10,14 @@
  * field is in-memory only and must re-default to `true` on every widget
  * mount, so a fresh tab cannot silently inherit a relaxed posture.
  */
-import { DEFAULT_SETTINGS, isPermissionMode, isProviderId, type Settings } from './types.js';
+import {
+  DEFAULT_SETTINGS,
+  isModelId,
+  isPermissionMode,
+  isProviderId,
+  isThemeMode,
+  type Settings,
+} from './types.js';
 
 export const DEFAULT_SETTINGS_STORAGE_KEY = 'agent-devtools:settings';
 
@@ -51,10 +58,12 @@ export function loadSettings(options: SettingsStorageOptions = {}): Settings {
     const permissionMode = isPermissionMode(p.permissionMode)
       ? p.permissionMode
       : DEFAULT_SETTINGS.permissionMode;
+    const theme = isThemeMode(p.theme) ? p.theme : DEFAULT_SETTINGS.theme;
+    const model = isModelId(p.model) ? p.model : DEFAULT_SETTINGS.model;
     // `safeMode` is never read from storage — it is mount-scoped state that
     // must always start from the default (`true`). Any value present in the
     // persisted payload is ignored on purpose.
-    return { provider, permissionMode, safeMode: DEFAULT_SETTINGS.safeMode };
+    return { provider, permissionMode, theme, model, safeMode: DEFAULT_SETTINGS.safeMode };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -70,6 +79,8 @@ export function saveSettings(settings: Settings, options: SettingsStorageOptions
       JSON.stringify({
         provider: settings.provider,
         permissionMode: settings.permissionMode,
+        theme: settings.theme,
+        model: settings.model,
       }),
     );
     return true;

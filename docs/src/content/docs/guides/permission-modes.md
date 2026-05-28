@@ -4,7 +4,7 @@ description: agent-devtools 의 5가지 권한 모드 — `default`, `acceptEdit
 ---
 
 권한 모드는 위젯 설정 패널에서 전환할 수 있다. 위젯이 별도 저장값 없이
-마운트될 때의 **초기 모드는 `acceptEdits`** 다 (`packages/react/src/settings/types.ts:39`
+마운트될 때의 **초기 모드는 `acceptEdits`** 다 (`packages/widget-core/src/settings/types.ts:84`
 의 `DEFAULT_SETTINGS.permissionMode`). `bypassPermissions` 는 설정 패널 안에서만
 노출되고 채팅 컴포저에서는 선택할 수 없다.
 

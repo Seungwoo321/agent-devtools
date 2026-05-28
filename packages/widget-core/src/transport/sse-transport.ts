@@ -80,25 +80,55 @@ export interface CreateDefaultTransportOptions {
    */
   readonly streamSilentMs?: number;
   /**
-   * Pre-response fetch retry count. When `fetch()` itself rejects (network
-   * error before any Response is returned), the transport retries this
-   * many additional times with a small backoff. Once a Response arrives
-   * the prompt has reached the server and no retry happens — duplicating
-   * the prompt would re-run the LLM. AbortErrors never retry. Default `1`
-   * (one retry, i.e. two total attempts). Pass `0` to disable.
+   * Retry count for failures that provably never reached the agent, so a
+   * retry can't duplicate the turn. Two cases qualify and share this budget:
+   *
+   *   1. `fetch()` itself rejects (network error before any Response) — the
+   *      request never left the client / never got a reply.
+   *   2. The dev server replies `503 Service Unavailable` — the Vite proxy
+   *      rejects the request *before* forwarding it upstream while the agent
+   *      server respawns (e.g. just after a dev-server restart). The agent
+   *      never saw the prompt, so re-sending is idempotent. This is the
+   *      common "network error right after a hot reload" case.
+   *
+   * Any other outcome (a `2xx` stream that later drops, `500`/`502`, `401`,
+   * …) means the prompt reached the agent and may have started editing
+   * files — retrying then would re-run the LLM, so those are never retried.
+   * AbortErrors never retry either. Backoff is exponential (see
+   * `preResponseRetryBackoffMs` / `preResponseRetryMaxBackoffMs`) so a
+   * multi-second respawn is waited out while a genuinely dead server still
+   * fails within a bounded window. Default `4`. Pass `0` to disable.
    */
   readonly preResponseRetries?: number;
   /**
-   * Milliseconds to wait between the failed initial fetch and the retry
-   * attempt. Default `300`. Only used when `preResponseRetries > 0`.
+   * Base backoff between retry attempts, in milliseconds. The actual wait
+   * grows exponentially per attempt (`base · 2^(attempt-1)`), capped at
+   * `preResponseRetryMaxBackoffMs`. Default `300`. Only used when
+   * `preResponseRetries > 0`.
    */
   readonly preResponseRetryBackoffMs?: number;
+  /**
+   * Upper bound on a single exponential backoff wait, in milliseconds.
+   * Keeps the total retry window bounded (with the defaults: 300 + 600 +
+   * 1200 + 2000 ≈ 4.1s across four retries). Default `2000`.
+   */
+  readonly preResponseRetryMaxBackoffMs?: number;
 }
 
 const DEFAULT_STREAM_SILENT_MS = 60_000;
-const DEFAULT_PRE_RESPONSE_RETRIES = 1;
+const DEFAULT_PRE_RESPONSE_RETRIES = 4;
 const DEFAULT_PRE_RESPONSE_RETRY_BACKOFF_MS = 300;
+const DEFAULT_PRE_RESPONSE_RETRY_MAX_BACKOFF_MS = 2_000;
 const DEFAULT_ENRICHMENT_TIMEOUT_MS = 3_000;
+
+/**
+ * Status the dev-server proxy returns while the agent server is not yet
+ * reachable (still spawning, or respawning after a restart). It is emitted
+ * *before* the proxy forwards anything upstream, so the agent never saw the
+ * prompt — making a retry idempotent. Standard `503 Service Unavailable`
+ * "try again later" semantics.
+ */
+const AGENT_NOT_READY_STATUS = 503;
 
 /**
  * Race the caller-provided signal (if any) against a fixed timeout. Used
@@ -184,6 +214,8 @@ export function createDefaultTransport(
   const preResponseRetries = options.preResponseRetries ?? DEFAULT_PRE_RESPONSE_RETRIES;
   const preResponseRetryBackoffMs =
     options.preResponseRetryBackoffMs ?? DEFAULT_PRE_RESPONSE_RETRY_BACKOFF_MS;
+  const preResponseRetryMaxBackoffMs =
+    options.preResponseRetryMaxBackoffMs ?? DEFAULT_PRE_RESPONSE_RETRY_MAX_BACKOFF_MS;
   // One session per browser tab. Persisted to sessionStorage so a full
   // reload reconnects to the same server-side ACP session (the server
   // keeps a `clientSessionId → ACP sessionId` map for the dev-server
@@ -213,6 +245,10 @@ export function createDefaultTransport(
           ...(settings && {
             provider: settings.provider,
             permissionMode: settings.permissionMode,
+            // `default` is the sentinel for "no model" — omit the field so the
+            // provider uses its own default. Any other value is forwarded as
+            // an alias the provider resolves (terminal `/model` parity).
+            ...(settings.model && settings.model !== 'default' && { model: settings.model }),
             // When the header-level "Safe mode" toggle is on, lock the
             // side-effecting categories to `ask` while leaving file edits
             // on auto. When off, omit `permissionPolicy` so the server
@@ -229,6 +265,7 @@ export function createDefaultTransport(
         payload.signal,
         preResponseRetries,
         preResponseRetryBackoffMs,
+        preResponseRetryMaxBackoffMs,
       );
 
       if (!response.ok) {
@@ -699,11 +736,22 @@ async function readWithWatchdog(
 }
 
 /**
- * Retry the initial fetch when it rejects with a network error before any
- * Response arrives — that means the request never reached the server, so
- * a retry is idempotent. Once a Response is received the prompt has hit
- * the server and the LLM has likely started; retrying then would
- * duplicate work. Abort errors are never retried.
+ * Retry the initial request only when it provably never reached the agent,
+ * so a retry can't duplicate the turn. Two failures qualify:
+ *
+ *   - `fetch()` rejects before any Response (network error) — nothing left
+ *     the client, or no reply came back.
+ *   - The dev-server proxy answers `503` (agent server not ready) — it
+ *     rejects the request before forwarding upstream while the agent
+ *     respawns, so the prompt never hit the agent. This is the "network
+ *     error right after a hot reload / dev-server restart" case.
+ *
+ * Once any other Response arrives (a `2xx` stream, `500`, `502`, `401`, …)
+ * the prompt has reached the agent and the LLM may have started editing
+ * files; retrying then would duplicate work, so we return it for the
+ * caller to handle. Abort errors are never retried. Backoff is exponential
+ * and capped so a multi-second respawn is waited out while a genuinely
+ * dead server still fails within a bounded window.
  */
 async function fetchWithPreResponseRetry(
   fetchImpl: typeof fetch,
@@ -712,19 +760,31 @@ async function fetchWithPreResponseRetry(
   signal: AbortSignal,
   retries: number,
   backoffMs: number,
+  maxBackoffMs: number,
 ): Promise<Response> {
   let attempt = 0;
   for (;;) {
+    let response: Response | null = null;
     try {
-      return await fetchImpl(url, init);
+      response = await fetchImpl(url, init);
     } catch (error) {
       if (isAbortError(error) || signal.aborted) throw error;
       if (attempt >= retries) throw error;
-      attempt += 1;
-      if (backoffMs > 0) {
-        await waitOrAbort(backoffMs, signal);
-        if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+      // fall through to backoff + retry
+    }
+    if (response) {
+      if (response.status !== AGENT_NOT_READY_STATUS || attempt >= retries) {
+        return response;
       }
+      // Drain the 503 body so the underlying socket can be reused for the
+      // retry instead of leaking an unread stream.
+      await response.body?.cancel().catch(() => undefined);
+    }
+    attempt += 1;
+    const wait = Math.min(backoffMs * 2 ** (attempt - 1), maxBackoffMs);
+    if (wait > 0) {
+      await waitOrAbort(wait, signal);
+      if (signal.aborted) throw new DOMException('aborted', 'AbortError');
     }
   }
 }

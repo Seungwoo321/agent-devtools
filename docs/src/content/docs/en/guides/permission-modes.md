@@ -6,7 +6,7 @@ description: The five permission modes — `default`, `acceptEdits`, `plan`, `by
 You can switch permission mode from the widget's settings panel. When the
 widget mounts without a stored preference, **the initial mode is
 `acceptEdits`** (see `DEFAULT_SETTINGS.permissionMode` at
-`packages/react/src/settings/types.ts:39`). `bypassPermissions` is exposed
+`packages/widget-core/src/settings/types.ts:84`). `bypassPermissions` is exposed
 only inside the settings panel — never from the chat composer — and should
 be used sparingly.
 

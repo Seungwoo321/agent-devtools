@@ -86,8 +86,37 @@ const PANEL_SIZE_STORAGE_KEY = 'agent-devtools:panelSize';
 
 // Reveal-on-hover tint for the otherwise-transparent resize handles. Matches
 // the toolbar icon hover convention so the affordance reads as "interactive
-// edge of the panel" rather than a stray UI element.
-const RESIZE_HANDLE_HOVER_BG = 'rgba(0, 0, 0, 0.08)';
+// edge of the panel" rather than a stray UI element. The colour is a theme
+// token resolved by the browser; light keeps the original black tint via the
+// literal fallback, dark flips to the white `--adt-overlay-weak`.
+const RESIZE_HANDLE_HOVER_BG = 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.08))';
+
+// Marks a handle as currently lit (hovered or mid-drag). The painted colour
+// lives in the inline `background` token above, but `var()` is not resolvable
+// in non-browser CSS engines, so this attribute is the framework-agnostic
+// signal for "is this affordance showing" — used by tests and available to
+// any future stylesheet rule.
+const RESIZE_HANDLE_LIT_ATTR = 'data-agent-devtools-composer-resize-lit';
+
+function setHandleLit(handle: HTMLElement, lit: boolean): void {
+  if (lit) {
+    handle.style.background = RESIZE_HANDLE_HOVER_BG;
+    handle.setAttribute(RESIZE_HANDLE_LIT_ATTR, '');
+  } else {
+    handle.style.background = 'transparent';
+    handle.removeAttribute(RESIZE_HANDLE_LIT_ATTR);
+  }
+}
+
+// Picked-element chip fill + border. The fill MUST be alpha-free in every
+// theme so the conversation stream rendered behind the chip slot cannot bleed
+// through it (a prior 6% alpha tint vanished once messages stacked up). Both
+// the light literal fallback (`#eef0f3`) and the dark token (`--adt-chip-bg:
+// #2f2f33`) are opaque hex. The border may carry alpha — it is a hairline, not
+// a fill. Exported for white-box opacity assertions (not part of the package's
+// public entry).
+export const CHIP_BG = 'var(--adt-chip-bg, #eef0f3)';
+export const CHIP_BORDER = '1px solid var(--adt-border, rgba(0, 0, 0, 0.08))';
 
 export interface ComposerSubmitPayload {
   readonly text: string;
@@ -280,6 +309,9 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   settingsButton.type = 'button';
   settingsButton.setAttribute(SETTINGS_TOGGLE_ATTR, '');
   settingsButton.setAttribute('aria-label', 'Open settings');
+  // The gear toggles the settings panel — opt into aria-pressed so the active
+  // state is announced (and observable) independent of the painted colour.
+  settingsButton.setAttribute('aria-pressed', String(settingsActive));
   // Plain U+2699 GEAR rather than an SVG to dodge a font-rendering edge case
   // in shadow roots and keep the bundle tiny.
   settingsButton.textContent = '⚙';
@@ -517,7 +549,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       // Keep the affordance lit while the drag is in flight — pointer
       // capture can suppress hover transitions once the cursor leaves the
       // 6px strip, so we paint it explicitly.
-      handle.style.background = RESIZE_HANDLE_HOVER_BG;
+      setHandleLit(handle, true);
       try {
         handle.setPointerCapture(event.pointerId);
       } catch {
@@ -594,7 +626,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
     // Drop the lit background — if the cursor is still over the handle the
     // next pointerenter will repaint it; otherwise the affordance correctly
     // disappears.
-    handle.style.background = 'transparent';
+    setHandleLit(handle, false);
     activeDrag = null;
     const width = panel.offsetWidth || parseFloat(panel.style.width) || PANEL_DEFAULT_WIDTH;
     const height = panel.offsetHeight || parseFloat(panel.style.height) || PANEL_DEFAULT_HEIGHT;
@@ -603,7 +635,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   function onHandlePointerEnter(event: PointerEvent): void {
     const handle = event.currentTarget as HTMLElement;
-    handle.style.background = RESIZE_HANDLE_HOVER_BG;
+    setHandleLit(handle, true);
   }
 
   function onHandlePointerLeave(event: PointerEvent): void {
@@ -612,7 +644,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
     // cursor can wander far off the 6px strip while pointer capture keeps
     // the drag alive.
     if (activeDrag && activeDrag.pointerId === event.pointerId) return;
-    handle.style.background = 'transparent';
+    setHandleLit(handle, false);
   }
 
   const handleListeners: Array<[HTMLElement, (event: PointerEvent) => void, () => void]> = [];
@@ -729,11 +761,11 @@ function applyPanelStyles(panel: HTMLElement): void {
   s.bottom = '88px';
   // Width / height are owned by the resize subsystem (`applyPanelSize`)
   // so the user's drag-resized dimensions persist across reloads.
-  s.background = '#ffffff';
-  s.color = '#1a1a1a';
-  s.border = '1px solid rgba(0, 0, 0, 0.08)';
+  s.background = 'var(--adt-surface, #ffffff)';
+  s.color = 'var(--adt-text, #1a1a1a)';
+  s.border = '1px solid var(--adt-border, rgba(0, 0, 0, 0.08))';
   s.borderRadius = '12px';
-  s.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.18)';
+  s.boxShadow = '0 12px 32px var(--adt-shadow, rgba(0, 0, 0, 0.18))';
   s.flexDirection = 'column';
   s.overflow = 'hidden';
   s.fontFamily = 'inherit';
@@ -937,7 +969,7 @@ function applyHeaderStyles(header: HTMLElement): void {
   s.alignItems = 'center';
   s.gap = '8px';
   s.padding = '10px 12px';
-  s.borderBottom = '1px solid rgba(0, 0, 0, 0.06)';
+  s.borderBottom = '1px solid var(--adt-border, rgba(0, 0, 0, 0.06))';
 }
 
 function applyTitleStyles(title: HTMLElement): void {
@@ -951,9 +983,11 @@ function applyPickButtonStyles(button: HTMLButtonElement, active: boolean): void
   const s = button.style;
   s.padding = '4px 10px';
   s.borderRadius = '999px';
-  s.border = active ? '1px solid #1a1a1a' : '1px solid rgba(0, 0, 0, 0.16)';
-  s.background = active ? '#1a1a1a' : 'transparent';
-  s.color = active ? '#ffffff' : '#1a1a1a';
+  s.border = active
+    ? '1px solid var(--adt-accent, #1a1a1a)'
+    : '1px solid var(--adt-border, rgba(0, 0, 0, 0.16))';
+  s.background = active ? 'var(--adt-accent, #1a1a1a)' : 'transparent';
+  s.color = active ? 'var(--adt-accent-text, #ffffff)' : 'var(--adt-text, #1a1a1a)';
   s.fontSize = '12px';
   s.cursor = 'pointer';
 }
@@ -973,9 +1007,11 @@ function applySafeModeButtonState(button: HTMLButtonElement, safeMode: boolean):
   const s = button.style;
   s.padding = '4px 10px';
   s.borderRadius = '999px';
-  s.border = safeMode ? '1px solid #1a1a1a' : '1px solid rgba(0, 0, 0, 0.16)';
-  s.background = safeMode ? '#1a1a1a' : 'transparent';
-  s.color = safeMode ? '#ffffff' : '#1a1a1a';
+  s.border = safeMode
+    ? '1px solid var(--adt-accent, #1a1a1a)'
+    : '1px solid var(--adt-border, rgba(0, 0, 0, 0.16))';
+  s.background = safeMode ? 'var(--adt-accent, #1a1a1a)' : 'transparent';
+  s.color = safeMode ? 'var(--adt-accent-text, #ffffff)' : 'var(--adt-text, #1a1a1a)';
   s.fontSize = '12px';
   s.cursor = 'pointer';
 }
@@ -987,11 +1023,18 @@ function applyIconButtonStyles(button: HTMLButtonElement, active: boolean): void
   s.padding = '0';
   s.borderRadius = '6px';
   s.border = '0';
-  s.background = active ? 'rgba(0, 0, 0, 0.08)' : 'transparent';
-  s.color = active ? '#1a1a1a' : '#666';
+  s.background = active ? 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.08))' : 'transparent';
+  s.color = active ? 'var(--adt-text, #1a1a1a)' : 'var(--adt-text-muted, #666)';
   s.cursor = 'pointer';
   s.fontSize = '14px';
   s.lineHeight = '1';
+  // Toggle buttons (the gear) opt into aria-pressed at creation; momentary
+  // action buttons (handoff / new-session) never carry it and stay plain.
+  // This is also the framework-agnostic signal for the active state, since
+  // the painted background is a `var()` token that headless CSS engines drop.
+  if (button.hasAttribute('aria-pressed')) {
+    button.setAttribute('aria-pressed', String(active));
+  }
 }
 
 function applyCloseButtonStyles(button: HTMLButtonElement): void {
@@ -1002,7 +1045,7 @@ function applyCloseButtonStyles(button: HTMLButtonElement): void {
   s.borderRadius = '6px';
   s.border = '0';
   s.background = 'transparent';
-  s.color = '#666';
+  s.color = 'var(--adt-text-muted, #666)';
   s.cursor = 'pointer';
   s.fontSize = '14px';
   s.lineHeight = '1';
@@ -1027,10 +1070,11 @@ function applyChipStyles(chip: HTMLElement): void {
   // Solid fill + subtle border so the chip never reads as transparent
   // against the conversation stream rendered above it inside the panel.
   // A previous 6% alpha tint visually disappeared once a few messages
-  // landed behind the chip host slot.
-  s.background = '#eef0f3';
-  s.border = '1px solid rgba(0, 0, 0, 0.08)';
-  s.color = '#1a1a1a';
+  // landed behind the chip host slot. See CHIP_BG / CHIP_BORDER for the
+  // opacity contract.
+  s.background = CHIP_BG;
+  s.border = CHIP_BORDER;
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.fontSize = '12px';
   s.maxWidth = '100%';
   // overflow is hidden on the LABEL (see populateChipTooltip / chip label
@@ -1079,11 +1123,11 @@ function applyChipTooltipStyles(tooltip: HTMLElement): void {
   s.maxWidth = '320px';
   s.padding = '8px 10px';
   s.borderRadius = '8px';
-  s.background = '#1a1a1a';
-  s.color = '#ffffff';
+  s.background = 'var(--adt-accent, #1a1a1a)';
+  s.color = 'var(--adt-accent-text, #ffffff)';
   s.fontSize = '11px';
   s.lineHeight = '1.4';
-  s.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.22)';
+  s.boxShadow = '0 4px 14px var(--adt-shadow, rgba(0, 0, 0, 0.22))';
   s.opacity = '0';
   s.visibility = 'hidden';
   s.transition = 'opacity 120ms ease-out';
@@ -1149,8 +1193,8 @@ function applyChipRemoveStyles(button: HTMLButtonElement): void {
   s.padding = '0';
   s.borderRadius = '999px';
   s.border = '0';
-  s.background = 'rgba(0, 0, 0, 0.12)';
-  s.color = '#1a1a1a';
+  s.background = 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.12))';
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.cursor = 'pointer';
   s.fontSize = '10px';
   s.lineHeight = '1';
@@ -1160,14 +1204,14 @@ function applyTextareaStyles(textarea: HTMLTextAreaElement): void {
   const s = textarea.style;
   s.margin = '12px';
   s.padding = '8px 10px';
-  s.border = '1px solid rgba(0, 0, 0, 0.16)';
+  s.border = '1px solid var(--adt-border, rgba(0, 0, 0, 0.16))';
   s.borderRadius = '8px';
   s.resize = 'none';
   s.fontFamily = 'inherit';
   s.fontSize = '13px';
   s.lineHeight = '1.4';
-  s.background = '#ffffff';
-  s.color = '#1a1a1a';
+  s.background = 'var(--adt-surface, #ffffff)';
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.outline = 'none';
   // Lock the input to the rows=3 box so the stream area scrolls instead of
   // squeezing the textarea once the conversation history fills the panel.
@@ -1187,8 +1231,8 @@ function applySendButtonStyles(button: HTMLButtonElement): void {
   s.padding = '6px 14px';
   s.borderRadius = '8px';
   s.border = '0';
-  s.background = '#1a1a1a';
-  s.color = '#ffffff';
+  s.background = 'var(--adt-accent, #1a1a1a)';
+  s.color = 'var(--adt-accent-text, #ffffff)';
   s.fontSize = '13px';
   s.fontWeight = '500';
   s.cursor = 'pointer';

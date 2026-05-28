@@ -1,7 +1,7 @@
 /**
  * Floating outline that follows the hovered element. Implemented as a single
  * absolutely-positioned div parented to <body>. We deliberately avoid Shadow
- * DOM here (that's the widget's concern, ADT-20); the picker overlay must
+ * DOM here (that's the widget's concern); the picker overlay must
  * sit on the top compositing layer with `pointer-events: none` so clicks
  * fall through to the underlying target.
  *

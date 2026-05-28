@@ -1,5 +1,13 @@
 # @agent-devtools/sveltekit
 
+## 1.1.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`4cdbe4b`](https://github.com/Seungwoo321/agent-devtools/commit/4cdbe4b2e2103c015dd8fda2278ce683c1ece0a5), [`6317aa3`](https://github.com/Seungwoo321/agent-devtools/commit/6317aa3fdc501738aa89fcae6a660384e3f7bc15)]:
+  - @agent-devtools/core@1.1.0-beta.0
+  - @agent-devtools/svelte@1.1.0-beta.0
+
 ## 1.0.0
 
 ### Patch Changes

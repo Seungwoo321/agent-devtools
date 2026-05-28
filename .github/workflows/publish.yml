@@ -90,10 +90,17 @@ jobs:
           # Commit + push the version bump immediately so the next run's
           # `changeset publish` sees the same tree the npm registry will see.
           # [skip ci] prevents this commit from re-triggering the workflow.
+          # Retry once on non-fast-forward: between checkout and push another
+          # job (or a manual push) may have advanced the branch — pull --rebase
+          # and re-push so the version commit lands on top instead of failing.
           if [ -n "$(git status --porcelain)" ]; then
             git add -A
             git commit -m "chore: version agent-devtools beta prerelease [skip ci]"
-            git push origin "${GITHUB_REF_NAME}"
+            if ! git push origin "${GITHUB_REF_NAME}"; then
+              echo "non-fast-forward on first push; rebasing and retrying"
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+              git push origin "${GITHUB_REF_NAME}"
+            fi
           fi
 
           # Pre mode publish: DO NOT pass --tag here. Changesets routes
@@ -105,7 +112,10 @@ jobs:
           # versioned; annotated per-package tags are created and pushed
           # together with --follow-tags.
           pnpm exec changeset publish
-          git push --follow-tags origin "${GITHUB_REF_NAME}"
+          if ! git push --follow-tags origin "${GITHUB_REF_NAME}"; then
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push --follow-tags origin "${GITHUB_REF_NAME}"
+          fi
 
       - name: Publish Release (main branch)
         if: github.ref == 'refs/heads/main'
@@ -126,25 +136,59 @@ jobs:
             pnpm exec changeset version
             git add -A
             git commit -m "chore: release agent-devtools packages [skip ci]"
-            git push origin "${GITHUB_REF_NAME}"
+            if ! git push origin "${GITHUB_REF_NAME}"; then
+              echo "non-fast-forward on first push; rebasing and retrying"
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+              git push origin "${GITHUB_REF_NAME}"
+            fi
           fi
           pnpm exec changeset publish
-          git push --follow-tags origin "${GITHUB_REF_NAME}"
+          if ! git push --follow-tags origin "${GITHUB_REF_NAME}"; then
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            git push --follow-tags origin "${GITHUB_REF_NAME}"
+          fi
 
       - name: Sync main to develop
         if: github.ref == 'refs/heads/main'
         run: |
           # Single-workflow back-merge — mirrors the canonical template's
           # closing step. After a stable release main owns the release
-          # bookkeeping (package versions, CHANGELOGs, pre-mode state). Take
-          # main's side on conflicts; develop re-enters pre mode on its next
-          # push. The normal back-merge is conflict-free; the --theirs block
-          # only fires on a race (a develop push overlapping the release).
+          # bookkeeping (package versions, CHANGELOGs, pre-mode state). The
+          # normal back-merge is conflict-free; the resolution block below only
+          # fires on a race (a develop push overlapping the release).
+          #
+          # Race-loss-safe conflict policy:
+          #   - For packages/*/package.json and CHANGELOG.md: take whichever
+          #     side has the higher SemVer version. This preserves a forward
+          #     prerelease line on develop (e.g. 1.1.0-beta.N) instead of
+          #     regressing it to the stable version that just landed on main.
+          #     A naive `--theirs` (main always wins) would drag develop's
+          #     versions backwards — the exact regression observed when PR #9's
+          #     push lost a non-fast-forward race. The next stable release
+          #     reconciles the prerelease line into the final X.Y.Z anyway.
+          #   - For .changeset/pre.json and consumed .changeset/*.md: accept
+          #     main's deletion. These are modify/delete conflicts; develop
+          #     re-enters pre mode on its next push and recreates pre.json.
           git fetch origin develop
           git checkout develop
           if ! git merge --no-ff main -m "chore: sync main into develop after stable release [skip ci]"; then
-            git checkout --theirs packages/*/package.json packages/*/CHANGELOG.md 2>/dev/null || true
-            git add packages/*/package.json packages/*/CHANGELOG.md 2>/dev/null || true
+            for f in $(git diff --name-only --diff-filter=U -- 'packages/*/package.json' 'packages/*/CHANGELOG.md'); do
+              ours_ver=$(git show :2:"$f" 2>/dev/null | grep -m1 '"version"' | sed -E 's/.*"version"[^"]*"([^"]+)".*/\1/' || true)
+              theirs_ver=$(git show :3:"$f" 2>/dev/null | grep -m1 '"version"' | sed -E 's/.*"version"[^"]*"([^"]+)".*/\1/' || true)
+              if [ -n "$ours_ver" ] && [ -n "$theirs_ver" ]; then
+                higher=$(printf "%s\n%s\n" "$ours_ver" "$theirs_ver" | sort -V | tail -1)
+                if [ "$higher" = "$ours_ver" ]; then
+                  git checkout --ours "$f"
+                else
+                  git checkout --theirs "$f"
+                fi
+              else
+                # No version field on one side (e.g. CHANGELOG.md): keep the
+                # forward branch (develop) for narrative continuity.
+                git checkout --ours "$f"
+              fi
+              git add "$f"
+            done
             # The stable release deletes the changesets pre-mode bookkeeping
             # on main: pre.json is removed once `changeset version` finalises
             # the exit, and every applied .md is consumed. These surface as
@@ -161,4 +205,7 @@ jobs:
             fi
             git commit --no-edit
           fi
-          git push origin develop
+          if ! git push origin develop; then
+            git pull --rebase --autostash origin develop
+            git push origin develop
+          fi
