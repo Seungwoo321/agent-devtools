@@ -69,10 +69,15 @@ describe('loadSettings', () => {
 
   it('round-trips a saved payload', () => {
     const storage = makeStorage();
-    saveSettings({ provider: 'sdk', permissionMode: 'plan', safeMode: true }, { storage });
+    saveSettings(
+      { provider: 'sdk', permissionMode: 'plan', theme: 'dark', model: 'opus', safeMode: true },
+      { storage },
+    );
     expect(loadSettings({ storage })).toEqual({
       provider: 'sdk',
       permissionMode: 'plan',
+      theme: 'dark',
+      model: 'opus',
       safeMode: true,
     });
   });
@@ -80,12 +85,14 @@ describe('loadSettings', () => {
   it('uses a custom key when provided', () => {
     const storage = makeStorage();
     saveSettings(
-      { provider: 'sdk', permissionMode: 'plan', safeMode: true },
+      { provider: 'sdk', permissionMode: 'plan', theme: 'light', model: 'haiku', safeMode: true },
       { storage, key: 'custom' },
     );
     expect(loadSettings({ storage, key: 'custom' })).toEqual({
       provider: 'sdk',
       permissionMode: 'plan',
+      theme: 'light',
+      model: 'haiku',
       safeMode: true,
     });
     // Defaults under the default key remain untouched.
@@ -96,13 +103,65 @@ describe('loadSettings', () => {
     const storage = makeStorage();
     storage.setItem(
       DEFAULT_SETTINGS_STORAGE_KEY,
-      JSON.stringify({ provider: 'mystery', permissionMode: 'plan' }),
+      JSON.stringify({ provider: 'mystery', permissionMode: 'plan', theme: 'dark' }),
     );
     expect(loadSettings({ storage })).toEqual({
       provider: DEFAULT_SETTINGS.provider,
       permissionMode: 'plan',
+      theme: 'dark',
+      model: DEFAULT_SETTINGS.model,
       safeMode: true,
     });
+  });
+
+  it('resets a corrupt theme to the default while keeping the rest', () => {
+    const storage = makeStorage();
+    storage.setItem(
+      DEFAULT_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ provider: 'sdk', permissionMode: 'plan', theme: 'neon' }),
+    );
+    expect(loadSettings({ storage })).toEqual({
+      provider: 'sdk',
+      permissionMode: 'plan',
+      theme: DEFAULT_SETTINGS.theme,
+      model: DEFAULT_SETTINGS.model,
+      safeMode: true,
+    });
+  });
+
+  it('round-trips the selected model and resets a corrupt one to the default', () => {
+    const storage = makeStorage();
+    storage.setItem(
+      DEFAULT_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ provider: 'sdk', permissionMode: 'plan', theme: 'dark', model: 'sonnet' }),
+    );
+    expect(loadSettings({ storage }).model).toBe('sonnet');
+
+    storage.setItem(
+      DEFAULT_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ provider: 'sdk', permissionMode: 'plan', theme: 'dark', model: 'gpt-9' }),
+    );
+    expect(loadSettings({ storage }).model).toBe(DEFAULT_SETTINGS.model);
+  });
+
+  it('defaults model when the persisted payload predates model selection', () => {
+    const storage = makeStorage();
+    // A payload written before the model field existed has no `model` key.
+    storage.setItem(
+      DEFAULT_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ provider: 'sdk', permissionMode: 'plan', theme: 'dark' }),
+    );
+    expect(loadSettings({ storage }).model).toBe(DEFAULT_SETTINGS.model);
+  });
+
+  it('defaults theme when the persisted payload predates theming', () => {
+    const storage = makeStorage();
+    // A payload written before the theme field existed has no `theme` key.
+    storage.setItem(
+      DEFAULT_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ provider: 'sdk', permissionMode: 'plan' }),
+    );
+    expect(loadSettings({ storage }).theme).toBe(DEFAULT_SETTINGS.theme);
   });
 
   it('falls back to defaults when the payload is not JSON', () => {
@@ -139,7 +198,10 @@ describe('saveSettings', () => {
 describe('clearSettings', () => {
   it('removes the stored payload so the next load is default', () => {
     const storage = makeStorage();
-    saveSettings({ provider: 'sdk', permissionMode: 'plan', safeMode: true }, { storage });
+    saveSettings(
+      { provider: 'sdk', permissionMode: 'plan', theme: 'dark', model: 'opus', safeMode: true },
+      { storage },
+    );
     clearSettings({ storage });
     expect(loadSettings({ storage })).toEqual(DEFAULT_SETTINGS);
   });

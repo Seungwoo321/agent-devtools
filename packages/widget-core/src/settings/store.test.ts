@@ -40,8 +40,15 @@ describe('createSettingsStore', () => {
     );
     const store = createSettingsStore({ storage });
     // `safeMode` is in-memory only — even if storage somehow held a value,
-    // the store must re-default it to `true` on every mount.
-    expect(store.get()).toEqual({ provider: 'sdk', permissionMode: 'plan', safeMode: true });
+    // the store must re-default it to `true` on every mount. `theme` is
+    // absent from this legacy payload so it falls back to the default.
+    expect(store.get()).toEqual({
+      provider: 'sdk',
+      permissionMode: 'plan',
+      theme: DEFAULT_SETTINGS.theme,
+      model: DEFAULT_SETTINGS.model,
+      safeMode: true,
+    });
   });
 
   it('applies partial patches and notifies subscribers', () => {
@@ -52,6 +59,8 @@ describe('createSettingsStore', () => {
     expect(store.get()).toEqual({
       provider: 'sdk',
       permissionMode: DEFAULT_SETTINGS.permissionMode,
+      theme: DEFAULT_SETTINGS.theme,
+      model: DEFAULT_SETTINGS.model,
       safeMode: DEFAULT_SETTINGS.safeMode,
     });
     expect(listener).toHaveBeenCalledTimes(1);
@@ -66,10 +75,13 @@ describe('createSettingsStore', () => {
     const raw = storage.getItem('agent-devtools:settings');
     expect(raw).not.toBeNull();
     // `safeMode` is intentionally absent from the persisted payload — see
-    // settings/storage.ts for the rationale.
+    // settings/storage.ts for the rationale. `theme` rides along with the
+    // persisted fields so a reload keeps the chosen appearance.
     expect(JSON.parse(raw as string)).toEqual({
       provider: 'sdk',
       permissionMode: 'plan',
+      theme: DEFAULT_SETTINGS.theme,
+      model: DEFAULT_SETTINGS.model,
     });
   });
 
@@ -104,8 +116,31 @@ describe('createSettingsStore', () => {
     expect(seen).toEqual({
       provider: DEFAULT_SETTINGS.provider,
       permissionMode: 'bypassPermissions',
+      theme: DEFAULT_SETTINGS.theme,
+      model: DEFAULT_SETTINGS.model,
       safeMode: DEFAULT_SETTINGS.safeMode,
     });
+  });
+
+  it('persists a theme change and re-hydrates it on the next mount', () => {
+    const storage = makeStorage();
+    const store = createSettingsStore({ storage });
+    store.set({ theme: 'dark' });
+    expect(store.get().theme).toBe('dark');
+    // A freshly-recreated store on the same storage backend recovers the
+    // persisted theme — unlike safeMode, theme survives a reload.
+    const next = createSettingsStore({ storage });
+    expect(next.get().theme).toBe('dark');
+  });
+
+  it('persists a model change and re-hydrates it on the next mount', () => {
+    const storage = makeStorage();
+    const store = createSettingsStore({ storage });
+    store.set({ model: 'opus' });
+    expect(store.get().model).toBe('opus');
+    // Like theme (and unlike safeMode), the chosen model survives a reload.
+    const next = createSettingsStore({ storage });
+    expect(next.get().model).toBe('opus');
   });
 
   it('defaults safeMode to true on every store construction', () => {

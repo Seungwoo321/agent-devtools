@@ -42,19 +42,30 @@ export function createSettingsStore(options: CreateSettingsStoreOptions = {}): S
       const next: Settings = {
         provider: patch.provider ?? current.provider,
         permissionMode: patch.permissionMode ?? current.permissionMode,
+        theme: patch.theme ?? current.theme,
+        model: patch.model ?? current.model,
         safeMode: nextSafeMode,
       };
       const providerChanged = next.provider !== current.provider;
       const permissionChanged = next.permissionMode !== current.permissionMode;
+      const themeChanged = next.theme !== current.theme;
+      const modelChanged = next.model !== current.model;
       const safeModeChanged = next.safeMode !== current.safeMode;
-      if (!providerChanged && !permissionChanged && !safeModeChanged) {
+      if (
+        !providerChanged &&
+        !permissionChanged &&
+        !themeChanged &&
+        !modelChanged &&
+        !safeModeChanged
+      ) {
         return;
       }
       current = next;
       // `safeMode` is in-memory only — skip the persistence write when the
       // only change is the safety toggle so storage never carries a stale
-      // boolean across mounts.
-      if (providerChanged || permissionChanged) {
+      // boolean across mounts. `theme` and `model`, like provider/permission,
+      // are persisted.
+      if (providerChanged || permissionChanged || themeChanged || modelChanged) {
         saveSettings(current, options);
       }
       emit();
