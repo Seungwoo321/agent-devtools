@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/widget-core",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.0",
   "description": "Framework-agnostic widget shell for agent-devtools — closed Shadow DOM mount, composer, picker overlay, SSE transport",
   "keywords": [
     "agent-devtools",
