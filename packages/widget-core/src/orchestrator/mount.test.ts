@@ -554,6 +554,25 @@ describe('mountAgentDevtools — settings panel wiring', () => {
     handle.destroy();
   });
 
+  it('seeds the host data-theme from the settings store and follows changes', () => {
+    const settingsStore = createSettingsStore();
+    settingsStore.set({ theme: 'dark' });
+    const handle = mountAgentDevtools({ settingsStore });
+    // Initial attribute mirrors the store value present at mount time.
+    expect(handle.widget.host.getAttribute('data-theme')).toBe('dark');
+    // A later store change flips the single host attribute — that one write
+    // is what recolours the whole widget via the CSS tokens.
+    settingsStore.set({ theme: 'light' });
+    expect(handle.widget.host.getAttribute('data-theme')).toBe('light');
+    handle.destroy();
+  });
+
+  it('defaults the host data-theme to auto when no theme was chosen', () => {
+    const handle = mountAgentDevtools();
+    expect(handle.widget.host.getAttribute('data-theme')).toBe('auto');
+    handle.destroy();
+  });
+
   it('creates an internal settings store when none is supplied', () => {
     const handle = mountAgentDevtools();
     expect(handle.settingsStore).toBeDefined();
@@ -1044,5 +1063,143 @@ describe('mountAgentDevtools — enrichPageContext wiring', () => {
       expect(setVisibleSpy).not.toHaveBeenCalled();
       setVisibleSpy.mockRestore();
     });
+  });
+});
+
+describe('mountAgentDevtools — visibility persistence', () => {
+  const PANEL_OPEN_KEY = 'agent-devtools:panelOpen';
+  const WIDGET_VISIBLE_KEY = 'agent-devtools:widgetVisible';
+
+  function pressToggleHotkey(): void {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        ctrlKey: true,
+        shiftKey: true,
+        code: 'Semicolon',
+        key: ';',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }
+
+  function pointer(type: 'pointerdown' | 'pointerup', x: number, y: number): Event {
+    const Ctor = (globalThis as unknown as { PointerEvent?: typeof PointerEvent }).PointerEvent;
+    if (Ctor) {
+      return new Ctor(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        button: 0,
+        clientX: x,
+        clientY: y,
+      });
+    }
+    const ev = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperties(ev, {
+      pointerId: { value: 1 },
+      button: { value: 0 },
+      clientX: { value: x },
+      clientY: { value: y },
+    });
+    return ev;
+  }
+
+  function clickLauncher(handle: ReturnType<typeof mountAgentDevtools>): void {
+    const btn = handle.launcher.element;
+    // A no-move pointerdown→pointerup is what the reducer treats as a click.
+    btn.dispatchEvent(pointer('pointerdown', 24, 24));
+    btn.dispatchEvent(pointer('pointerup', 24, 24));
+  }
+
+  it('restores an open panel from storage on mount', () => {
+    globalThis.localStorage.setItem(PANEL_OPEN_KEY, 'true');
+    const handle = mountAgentDevtools();
+    expect(handle.composer.element.style.display).toBe('flex');
+    handle.destroy();
+  });
+
+  it('starts closed when nothing is persisted', () => {
+    const handle = mountAgentDevtools();
+    expect(handle.composer.element.style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('restores a hidden widget from storage even when defaultVisible would show it', () => {
+    globalThis.localStorage.setItem(WIDGET_VISIBLE_KEY, 'false');
+    const handle = mountAgentDevtools();
+    expect(handle.launcher.isVisible()).toBe(false);
+    expect(handle.composer.element.style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('a persisted widget-visible flag overrides defaultVisible: false', () => {
+    globalThis.localStorage.setItem(WIDGET_VISIBLE_KEY, 'true');
+    const handle = mountAgentDevtools({ defaultVisible: false });
+    expect(handle.launcher.isVisible()).toBe(true);
+    handle.destroy();
+  });
+
+  it('persists a launcher-driven open across a remount', () => {
+    const first = mountAgentDevtools();
+    expect(first.composer.element.style.display).toBe('none');
+    clickLauncher(first);
+    expect(first.composer.element.style.display).toBe('flex');
+    expect(globalThis.localStorage.getItem(PANEL_OPEN_KEY)).toBe('true');
+    first.destroy();
+
+    const second = mountAgentDevtools();
+    expect(second.composer.element.style.display).toBe('flex');
+    second.destroy();
+  });
+
+  it('persists an Escape-driven close', () => {
+    globalThis.localStorage.setItem(PANEL_OPEN_KEY, 'true');
+    const handle = mountAgentDevtools();
+    expect(handle.composer.element.style.display).toBe('flex');
+    const textarea = handle.composer.element.querySelector('textarea') as HTMLTextAreaElement;
+    textarea.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    expect(handle.composer.element.style.display).toBe('none');
+    expect(globalThis.localStorage.getItem(PANEL_OPEN_KEY)).toBe('false');
+    handle.destroy();
+  });
+
+  it('persists a hotkey-driven widget toggle across a remount', () => {
+    const first = mountAgentDevtools({ defaultVisible: false });
+    expect(first.launcher.isVisible()).toBe(false);
+    pressToggleHotkey();
+    expect(first.launcher.isVisible()).toBe(true);
+    expect(globalThis.localStorage.getItem(WIDGET_VISIBLE_KEY)).toBe('true');
+    first.destroy();
+
+    const second = mountAgentDevtools({ defaultVisible: false });
+    expect(second.launcher.isVisible()).toBe(true);
+    second.destroy();
+  });
+
+  it('hiding the whole widget does not clobber the persisted panel-open choice', () => {
+    globalThis.localStorage.setItem(PANEL_OPEN_KEY, 'true');
+    const handle = mountAgentDevtools();
+    expect(handle.composer.element.style.display).toBe('flex');
+    pressToggleHotkey(); // widget goes dark — system-driven collapse
+    expect(handle.composer.element.style.display).toBe('none');
+    // The collapse is visual only; the user's open choice must survive.
+    expect(globalThis.localStorage.getItem(PANEL_OPEN_KEY)).toBe('true');
+    handle.destroy();
+  });
+
+  it('toggling the picker does not clobber the persisted panel-open choice', () => {
+    globalThis.localStorage.setItem(PANEL_OPEN_KEY, 'true');
+    const handle = mountAgentDevtools();
+    expect(handle.composer.element.style.display).toBe('flex');
+    const pickButton = handle.composer.element.querySelector(
+      '[data-agent-devtools-composer-pick]',
+    ) as HTMLButtonElement;
+    pickButton.click(); // panel hides transiently while picking
+    expect(handle.composer.element.style.display).toBe('none');
+    expect(globalThis.localStorage.getItem(PANEL_OPEN_KEY)).toBe('true');
+    handle.destroy();
   });
 });
