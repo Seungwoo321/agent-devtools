@@ -593,8 +593,8 @@ function applyPickedChipSummaryStyles(el: HTMLElement): void {
   s.gap = '6px';
   s.padding = '2px 8px';
   s.borderRadius = '999px';
-  s.background = 'rgba(0, 0, 0, 0.06)';
-  s.color = '#1a1a1a';
+  s.background = 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.06))';
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.cursor = 'pointer';
   s.userSelect = 'none';
   s.listStyle = 'none';
@@ -620,8 +620,10 @@ function applyPickedPanelStyles(el: HTMLElement): void {
   s.marginTop = '6px';
   s.padding = '8px 10px';
   s.borderRadius = '8px';
-  s.background = '#1a1a1a';
-  s.color = '#f5f5f5';
+  // The picked-evidence card stays a dark "code card" in both themes; in dark
+  // it lifts to the raised surface so it reads against the dark panel.
+  s.background = 'var(--adt-surface-raised, #1a1a1a)';
+  s.color = 'var(--adt-text, #f5f5f5)';
   s.maxWidth = '100%';
   s.display = 'flex';
   s.flexDirection = 'column';
@@ -670,7 +672,7 @@ function applyPickedBlockPreStyles(el: HTMLElement): void {
   const s = el.style;
   s.margin = '0';
   s.padding = '6px 8px';
-  s.background = 'rgba(255, 255, 255, 0.06)';
+  s.background = 'var(--adt-overlay-weak, rgba(255, 255, 255, 0.06))';
   s.borderRadius = '6px';
   s.fontFamily =
     'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace';
@@ -685,8 +687,11 @@ function applyUserBodyStyles(el: HTMLElement): void {
   const s = el.style;
   s.padding = '8px 12px';
   s.borderRadius = '14px 14px 4px 14px';
-  s.background = '#1a1a1a';
-  s.color = '#ffffff';
+  // Light text on the dark/translucent user bubble in both themes: light has
+  // no --adt-text token so the #ffffff fallback applies; dark resolves the
+  // token to #e8e8ea.
+  s.background = 'var(--adt-user-bubble-bg, #1a1a1a)';
+  s.color = 'var(--adt-text, #ffffff)';
   s.maxWidth = '85%';
   s.whiteSpace = 'pre-wrap';
   s.wordBreak = 'break-word';
@@ -696,8 +701,8 @@ function applyAssistantBodyStyles(el: HTMLElement): void {
   const s = el.style;
   s.padding = '8px 12px';
   s.borderRadius = '14px 14px 14px 4px';
-  s.background = 'rgba(0, 0, 0, 0.04)';
-  s.color = '#1a1a1a';
+  s.background = 'var(--adt-assistant-bubble-bg, rgba(0, 0, 0, 0.04))';
+  s.color = 'var(--adt-assistant-bubble-text, #1a1a1a)';
   s.maxWidth = '85%';
   s.whiteSpace = 'pre-wrap';
   s.wordBreak = 'break-word';
@@ -714,7 +719,7 @@ function applyAssistantPendingStyles(el: HTMLElement): void {
   const s = el.style;
   s.padding = '10px 14px';
   s.borderRadius = '14px 14px 14px 4px';
-  s.background = 'rgba(0, 0, 0, 0.04)';
+  s.background = 'var(--adt-assistant-bubble-bg, rgba(0, 0, 0, 0.04))';
   s.display = 'inline-flex';
   s.alignItems = 'center';
   s.gap = '4px';
@@ -726,7 +731,7 @@ function applyPendingDotStyles(el: HTMLElement, delayMs: number): void {
   s.width = '6px';
   s.height = '6px';
   s.borderRadius = '50%';
-  s.background = '#1a1a1a';
+  s.background = 'var(--adt-assistant-bubble-text, #1a1a1a)';
   s.opacity = '0.25';
   s.animation = 'agent-devtools-pending-dot 1.4s ease-in-out infinite';
   s.animationDelay = `${delayMs}ms`;
@@ -746,7 +751,7 @@ function applyToolSummaryStyles(el: HTMLElement, isError = false): void {
   s.fontSize = '12px';
   s.fontFamily =
     'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace';
-  s.color = isError ? '#b00020' : '#444';
+  s.color = isError ? 'var(--adt-danger, #b00020)' : 'var(--adt-text-muted, #444)';
   s.cursor = 'pointer';
   s.userSelect = 'none';
   s.listStyle = 'none';
@@ -757,16 +762,16 @@ function applyToolDividerStyles(el: HTMLElement, isError = false): void {
   s.fontSize = '11px';
   s.fontFamily =
     'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace';
-  s.color = isError ? '#b00020' : '#666';
+  s.color = isError ? 'var(--adt-danger, #b00020)' : 'var(--adt-text-muted, #666)';
   s.paddingTop = '4px';
-  s.borderTop = '1px dashed rgba(0, 0, 0, 0.08)';
+  s.borderTop = '1px dashed var(--adt-border, rgba(0, 0, 0, 0.08))';
 }
 
 function applyToolPreStyles(el: HTMLElement): void {
   const s = el.style;
   s.margin = '0';
   s.padding = '8px 10px';
-  s.background = 'rgba(0, 0, 0, 0.04)';
+  s.background = 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.04))';
   s.borderRadius = '8px';
   s.fontFamily =
     'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace';
@@ -781,7 +786,7 @@ function applyErrorStyles(el: HTMLElement): void {
   const s = el.style;
   s.padding = '8px 12px';
   s.borderRadius = '8px';
-  s.background = 'rgba(176, 0, 32, 0.08)';
-  s.color = '#b00020';
+  s.background = 'var(--adt-danger-bg, rgba(176, 0, 32, 0.08))';
+  s.color = 'var(--adt-danger, #b00020)';
   s.fontSize = '12px';
 }

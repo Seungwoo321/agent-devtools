@@ -37,12 +37,13 @@ export interface AssistantTextItem {
 }
 
 /**
- * Transient placeholder rendered between the moment the user submits a turn
- * and the moment the first concrete assistant event arrives (text delta,
- * tool use start, error, or done). Lets the renderer paint the conventional
- * three dot typing indicator so the surface never looks frozen while the
- * model is warming up. Never persisted — a re-hydrated conversation has no
- * in-flight turn to wait on.
+ * Transient "assistant is working" placeholder that lets the renderer paint
+ * the conventional three dot typing indicator. It sits at the tail of the list
+ * during any in-flight period where the assistant is not actively emitting
+ * content — after the user submits (warming up), while a tool executes, and
+ * while the model round-trips on a tool result — and is dropped the moment
+ * text or tool input streams again, or the turn ends (done / error). Never
+ * persisted: a re-hydrated conversation has no in-flight turn to wait on.
  */
 export interface AssistantPendingItem {
   readonly kind: 'assistant-pending';
