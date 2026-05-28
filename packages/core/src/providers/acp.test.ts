@@ -217,6 +217,45 @@ describe('createAcpProvider', () => {
     }
   });
 
+  it('forwards a context model to the runtime params', async () => {
+    const ws = makeWorkspace();
+    try {
+      const seen: Array<string | undefined> = [];
+      const runtime: AcpRuntime = {
+        run: async function* (params): AsyncIterable<AcpEvent> {
+          seen.push(params.model);
+          yield { kind: 'result', stopReason: 'end_turn' };
+        },
+      };
+      const provider = createAcpProvider({ runtime });
+      await collect(provider({ prompt: 'p' }, makeCtx({ workspace: ws, model: 'opus' })));
+      expect(seen).toEqual(['opus']);
+    } finally {
+      (ws as Workspace & { [Symbol.dispose]: () => void })[Symbol.dispose]();
+    }
+  });
+
+  it('omits model from runtime params when the context carries none', async () => {
+    const ws = makeWorkspace();
+    try {
+      let seenModel: unknown = 'not-called';
+      let modelWasInParams = true;
+      const runtime: AcpRuntime = {
+        run: async function* (params): AsyncIterable<AcpEvent> {
+          seenModel = params.model;
+          modelWasInParams = 'model' in params;
+          yield { kind: 'result', stopReason: 'end_turn' };
+        },
+      };
+      const provider = createAcpProvider({ runtime });
+      await collect(provider({ prompt: 'p' }, makeCtx({ workspace: ws })));
+      expect(seenModel).toBeUndefined();
+      expect(modelWasInParams).toBe(false);
+    } finally {
+      (ws as Workspace & { [Symbol.dispose]: () => void })[Symbol.dispose]();
+    }
+  });
+
   it('lets a request-scoped permissionPolicy override the provider default', async () => {
     const ws = makeWorkspace();
     try {
