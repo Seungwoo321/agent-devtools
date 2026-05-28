@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.0
+
+### Minor Changes
+
+- [#11](https://github.com/Seungwoo321/agent-devtools/pull/11) [`4cdbe4b`](https://github.com/Seungwoo321/agent-devtools/commit/4cdbe4b2e2103c015dd8fda2278ce683c1ece0a5) Thanks [@Seungwoo321](https://github.com/Seungwoo321)! - Add model selection so a prompt can run on the same models the Claude Code
+  terminal offers. A new `model` setting exposes the terminal's `/model` menu —
+  `default`, `opus`, `sonnet`, `haiku` — in the settings panel, persists in
+  localStorage alongside the provider, permission mode and theme, and rides on
+  each request body. `default` is a sentinel that sends no model on the wire, so
+  the chosen provider keeps its own default exactly as it does today.
+
+  Both providers resolve the alias through the shared Claude Agent SDK resolver,
+  so no live model-discovery round-trip is needed. The SDK provider forwards the
+  alias as the `query()` `model` option. The ACP provider applies it with
+  `session/set_model` after the session is established and before the prompt is
+  dispatched; it remembers the last applied model per session to skip a redundant
+  round-trip when the model is unchanged across turns, and surfaces an error
+  (rather than silently running on the wrong model) if the agent rejects the
+  request. The server validates only that `model` is a non-empty string and
+  forwards it verbatim, leaving the model set open for full date-pinned ids or
+  future tiers without a protocol change.
+
+### Patch Changes
+
+- [#11](https://github.com/Seungwoo321/agent-devtools/pull/11) [`6317aa3`](https://github.com/Seungwoo321/agent-devtools/commit/6317aa3fdc501738aa89fcae6a660384e3f7bc15) Thanks [@Seungwoo321](https://github.com/Seungwoo321)! - Fix the in-process SDK provider being rejected with "API Error: 400 role 'system' is not supported on this model". The provider omitted `systemPrompt`, so the Claude Agent SDK fell back to its minimal default prompt instead of the full Claude Code prompt that `claude -p` uses by default. It now opts into the `claude_code` preset, restoring terminal parity, and pins `settingSources` so project `CLAUDE.md` context cannot be silently dropped by a future SDK default change.
+
 ## 1.1.0-beta.0
 
 ### Minor Changes
