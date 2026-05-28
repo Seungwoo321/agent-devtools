@@ -11,18 +11,24 @@
  * explicitly; the chat composer has no surface for it by design.
  */
 import {
+  MODEL_IDS,
   PERMISSION_MODES,
   PROVIDER_IDS,
+  THEME_MODES,
   type AgentServerInfo,
+  type ModelId,
   type PermissionMode,
   type ProviderId,
   type Settings,
+  type ThemeMode,
 } from './types.js';
 import type { SettingsStore } from './store.js';
 
 const PANEL_ATTR = 'data-agent-devtools-settings';
 const PROVIDER_RADIO_ATTR = 'data-agent-devtools-settings-provider';
+const MODEL_RADIO_ATTR = 'data-agent-devtools-settings-model';
 const PERMISSION_RADIO_ATTR = 'data-agent-devtools-settings-permission';
+const THEME_RADIO_ATTR = 'data-agent-devtools-settings-theme';
 const WORKSPACE_ATTR = 'data-agent-devtools-settings-workspace';
 const CLOSE_ATTR = 'data-agent-devtools-settings-close';
 
@@ -31,12 +37,25 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   sdk: 'SDK (Claude Agent SDK, in-process)',
 };
 
+const MODEL_LABELS: Record<ModelId, string> = {
+  default: 'Default — use the provider default model (recommended)',
+  opus: 'Opus — most capable',
+  sonnet: 'Sonnet — balanced',
+  haiku: 'Haiku — fastest',
+};
+
 const PERMISSION_LABELS: Record<PermissionMode, string> = {
   default: 'Default — reject every permission request',
   acceptEdits: 'Accept edits — auto-allow routine file edits (recommended)',
   bypassPermissions: 'Bypass permissions — allow EVERYTHING, no prompts',
   plan: 'Plan — read-only planning mode',
   dontAsk: "Don't ask — same as Accept edits, never surface prompts",
+};
+
+const THEME_LABELS: Record<ThemeMode, string> = {
+  auto: 'Auto — follow the OS appearance (recommended)',
+  light: 'Light',
+  dark: 'Dark',
 };
 
 export interface CreateSettingsPanelOptions {
@@ -111,6 +130,23 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
   providerSection.body.appendChild(providerFieldset);
   panel.appendChild(providerSection.root);
 
+  // Model section
+  const modelSection = buildSection(doc, 'Model');
+  const modelFieldset = doc.createElement('fieldset');
+  applyFieldsetStyles(modelFieldset);
+  const modelRadios: Record<ModelId, HTMLInputElement> = createRadioGroup(
+    doc,
+    'model',
+    MODEL_IDS,
+    MODEL_LABELS,
+    MODEL_RADIO_ATTR,
+  );
+  for (const id of MODEL_IDS) {
+    modelFieldset.appendChild(modelRadios[id].parentElement as HTMLElement);
+  }
+  modelSection.body.appendChild(modelFieldset);
+  panel.appendChild(modelSection.root);
+
   // Permission section
   const permissionSection = buildSection(doc, 'Permission Mode');
   const permissionFieldset = doc.createElement('fieldset');
@@ -130,6 +166,23 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
   permissionSection.body.appendChild(permissionFieldset);
   panel.appendChild(permissionSection.root);
 
+  // Theme section
+  const themeSection = buildSection(doc, 'Theme');
+  const themeFieldset = doc.createElement('fieldset');
+  applyFieldsetStyles(themeFieldset);
+  const themeRadios: Record<ThemeMode, HTMLInputElement> = createRadioGroup(
+    doc,
+    'theme',
+    THEME_MODES,
+    THEME_LABELS,
+    THEME_RADIO_ATTR,
+  );
+  for (const mode of THEME_MODES) {
+    themeFieldset.appendChild(themeRadios[mode].parentElement as HTMLElement);
+  }
+  themeSection.body.appendChild(themeFieldset);
+  panel.appendChild(themeSection.root);
+
   // Workspace section (read-only)
   const workspaceSection = buildSection(doc, 'Workspace Root');
   const workspaceValue = doc.createElement('code');
@@ -144,8 +197,14 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
     for (const id of PROVIDER_IDS) {
       providerRadios[id].checked = settings.provider === id;
     }
+    for (const id of MODEL_IDS) {
+      modelRadios[id].checked = settings.model === id;
+    }
     for (const mode of PERMISSION_MODES) {
       permissionRadios[mode].checked = settings.permissionMode === mode;
+    }
+    for (const mode of THEME_MODES) {
+      themeRadios[mode].checked = settings.theme === mode;
     }
   }
 
@@ -184,6 +243,12 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
     const value = target.value as ProviderId;
     options.store.set({ provider: value });
   }
+  function onModelChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    if (!target.checked) return;
+    const value = target.value as ModelId;
+    options.store.set({ model: value });
+  }
   function onPermissionChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     if (!target.checked) return;
@@ -208,6 +273,12 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
     }
     options.store.set({ permissionMode: value });
   }
+  function onThemeChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    if (!target.checked) return;
+    const value = target.value as ThemeMode;
+    options.store.set({ theme: value });
+  }
   function onCloseClick(): void {
     options.onClose?.();
   }
@@ -215,8 +286,14 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
   for (const id of PROVIDER_IDS) {
     providerRadios[id].addEventListener('change', onProviderChange);
   }
+  for (const id of MODEL_IDS) {
+    modelRadios[id].addEventListener('change', onModelChange);
+  }
   for (const mode of PERMISSION_MODES) {
     permissionRadios[mode].addEventListener('change', onPermissionChange);
+  }
+  for (const mode of THEME_MODES) {
+    themeRadios[mode].addEventListener('change', onThemeChange);
   }
   closeButton.addEventListener('click', onCloseClick);
 
@@ -239,8 +316,14 @@ export function createSettingsPanel(options: CreateSettingsPanelOptions): Settin
       for (const id of PROVIDER_IDS) {
         providerRadios[id].removeEventListener('change', onProviderChange);
       }
+      for (const id of MODEL_IDS) {
+        modelRadios[id].removeEventListener('change', onModelChange);
+      }
       for (const mode of PERMISSION_MODES) {
         permissionRadios[mode].removeEventListener('change', onPermissionChange);
+      }
+      for (const mode of THEME_MODES) {
+        themeRadios[mode].removeEventListener('change', onThemeChange);
       }
       closeButton.removeEventListener('click', onCloseClick);
       panel.remove();
@@ -302,8 +385,8 @@ function applyPanelStyles(panel: HTMLElement): void {
   s.inset = '0';
   s.display = 'none';
   s.flexDirection = 'column';
-  s.background = '#ffffff';
-  s.color = '#1a1a1a';
+  s.background = 'var(--adt-surface, #ffffff)';
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.overflowY = 'auto';
   s.fontFamily = 'inherit';
   s.fontSize = '13px';
@@ -315,7 +398,7 @@ function applyHeaderStyles(header: HTMLElement): void {
   s.alignItems = 'center';
   s.gap = '8px';
   s.padding = '10px 12px';
-  s.borderBottom = '1px solid rgba(0, 0, 0, 0.06)';
+  s.borderBottom = '1px solid var(--adt-border, rgba(0, 0, 0, 0.06))';
 }
 
 function applyTitleStyles(el: HTMLElement): void {
@@ -333,7 +416,7 @@ function applyHeaderCloseStyles(button: HTMLButtonElement): void {
   s.borderRadius = '6px';
   s.border = '0';
   s.background = 'transparent';
-  s.color = '#666';
+  s.color = 'var(--adt-text-muted, #666)';
   s.cursor = 'pointer';
   s.fontSize = '14px';
   s.lineHeight = '1';
@@ -342,7 +425,7 @@ function applyHeaderCloseStyles(button: HTMLButtonElement): void {
 function applySectionStyles(section: HTMLElement): void {
   const s = section.style;
   s.padding = '12px';
-  s.borderBottom = '1px solid rgba(0, 0, 0, 0.06)';
+  s.borderBottom = '1px solid var(--adt-border, rgba(0, 0, 0, 0.06))';
 }
 
 function applySectionHeadingStyles(heading: HTMLElement): void {
@@ -352,7 +435,7 @@ function applySectionHeadingStyles(heading: HTMLElement): void {
   s.fontWeight = '600';
   s.textTransform = 'uppercase';
   s.letterSpacing = '0.04em';
-  s.color = '#666';
+  s.color = 'var(--adt-text-muted, #666)';
 }
 
 function applySectionBodyStyles(body: HTMLElement): void {
@@ -391,15 +474,15 @@ function applyRadioLabelStyles(label: HTMLElement): void {
 
 function applyDangerRowStyles(row: HTMLElement): void {
   const s = row.style;
-  s.color = '#a33';
-  s.background = 'rgba(255, 0, 0, 0.04)';
+  s.color = 'var(--adt-danger, #a33)';
+  s.background = 'var(--adt-danger-bg, rgba(255, 0, 0, 0.04))';
 }
 
 function applyWorkspaceValueStyles(value: HTMLElement): void {
   const s = value.style;
   s.display = 'block';
   s.padding = '8px 10px';
-  s.background = 'rgba(0, 0, 0, 0.04)';
+  s.background = 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.04))';
   s.borderRadius = '6px';
   s.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
   s.fontSize = '12px';
