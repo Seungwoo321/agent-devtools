@@ -189,7 +189,8 @@ export function createHandoffModal(options: CreateHandoffModalOptions): HandoffM
 
   function setStatus(text: string, kind: 'info' | 'error' = 'info'): void {
     status.textContent = text;
-    status.style.color = kind === 'error' ? '#b00020' : '#1a7f37';
+    status.style.color =
+      kind === 'error' ? 'var(--adt-danger, #b00020)' : 'var(--adt-success, #1a7f37)';
   }
 
   function showLoading(): void {
@@ -339,7 +340,7 @@ function applyBackdropStyles(el: HTMLElement): void {
   const s = el.style;
   s.position = 'fixed';
   s.inset = '0';
-  s.background = 'rgba(0, 0, 0, 0.45)';
+  s.background = 'var(--adt-backdrop, rgba(0, 0, 0, 0.45))';
   s.display = 'flex';
   s.alignItems = 'center';
   s.justifyContent = 'center';
@@ -351,10 +352,10 @@ function applyModalStyles(el: HTMLElement): void {
   const s = el.style;
   s.width = 'min(560px, calc(100vw - 32px))';
   s.maxHeight = 'calc(100vh - 64px)';
-  s.background = '#ffffff';
-  s.color = '#1a1a1a';
+  s.background = 'var(--adt-surface, #ffffff)';
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.borderRadius = '12px';
-  s.boxShadow = '0 24px 48px rgba(0, 0, 0, 0.32)';
+  s.boxShadow = '0 24px 48px var(--adt-shadow, rgba(0, 0, 0, 0.32))';
   s.display = 'flex';
   s.flexDirection = 'column';
   s.overflow = 'hidden';
@@ -367,7 +368,7 @@ function applyModalHeaderStyles(el: HTMLElement): void {
   s.alignItems = 'center';
   s.gap = '8px';
   s.padding = '12px 16px';
-  s.borderBottom = '1px solid rgba(0, 0, 0, 0.08)';
+  s.borderBottom = '1px solid var(--adt-border, rgba(0, 0, 0, 0.08))';
 }
 
 function applyModalTitleStyles(el: HTMLElement): void {
@@ -384,7 +385,7 @@ function applyModalCloseStyles(el: HTMLButtonElement): void {
   s.borderRadius = '6px';
   s.border = '0';
   s.background = 'transparent';
-  s.color = '#1a1a1a';
+  s.color = 'var(--adt-text, #1a1a1a)';
   s.fontSize = '16px';
   s.cursor = 'pointer';
 }
@@ -401,7 +402,7 @@ function applyModalBodyStyles(el: HTMLElement): void {
 function applyModalIntroStyles(el: HTMLElement): void {
   const s = el.style;
   s.margin = '0';
-  s.color = '#3a3a3a';
+  s.color = 'var(--adt-text-muted, #3a3a3a)';
   s.lineHeight = '1.5';
 }
 
@@ -409,8 +410,8 @@ function applyCommandBoxStyles(el: HTMLElement): void {
   const s = el.style;
   s.margin = '0';
   s.padding = '10px 12px';
-  s.background = '#f5f5f5';
-  s.border = '1px solid rgba(0, 0, 0, 0.08)';
+  s.background = 'var(--adt-surface-raised, #f5f5f5)';
+  s.border = '1px solid var(--adt-border, rgba(0, 0, 0, 0.08))';
   s.borderRadius = '8px';
   s.fontFamily = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
   s.fontSize = '12px';
@@ -428,10 +429,10 @@ function applyActionsStyles(el: HTMLElement): void {
 function applyCopyButtonStyles(el: HTMLButtonElement): void {
   const s = el.style;
   s.padding = '6px 14px';
-  s.border = '1px solid rgba(0, 0, 0, 0.16)';
+  s.border = '1px solid var(--adt-border, rgba(0, 0, 0, 0.16))';
   s.borderRadius = '8px';
-  s.background = '#1a1a1a';
-  s.color = '#ffffff';
+  s.background = 'var(--adt-accent, #1a1a1a)';
+  s.color = 'var(--adt-accent-text, #ffffff)';
   s.fontSize = '13px';
   s.fontWeight = '600';
   s.cursor = 'pointer';
@@ -447,7 +448,7 @@ function applyFileLabelStyles(el: HTMLElement): void {
   const s = el.style;
   s.margin = '0';
   s.fontSize = '11px';
-  s.color = '#6a6a6a';
+  s.color = 'var(--adt-text-muted, #6a6a6a)';
   s.fontFamily = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
 }
 
@@ -457,9 +458,9 @@ function applyOptionSectionStyles(el: HTMLElement): void {
   s.flexDirection = 'column';
   s.gap = '8px';
   s.padding = '12px';
-  s.border = '1px solid rgba(0, 0, 0, 0.08)';
+  s.border = '1px solid var(--adt-border, rgba(0, 0, 0, 0.08))';
   s.borderRadius = '8px';
-  s.background = '#fafafa';
+  s.background = 'var(--adt-surface-raised, #fafafa)';
 }
 
 function applyOptionHeadingStyles(el: HTMLElement): void {
@@ -467,7 +468,7 @@ function applyOptionHeadingStyles(el: HTMLElement): void {
   s.margin = '0';
   s.fontSize = '13px';
   s.fontWeight = '600';
-  s.color = '#1a1a1a';
+  s.color = 'var(--adt-text, #1a1a1a)';
 }
 
 function applyOptionCaptionStyles(el: HTMLElement): void {
@@ -475,5 +476,5 @@ function applyOptionCaptionStyles(el: HTMLElement): void {
   s.margin = '0';
   s.fontSize = '12px';
   s.lineHeight = '1.45';
-  s.color = '#4a4a4a';
+  s.color = 'var(--adt-text-muted, #4a4a4a)';
 }
