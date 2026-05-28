@@ -72,6 +72,17 @@ export interface AgentStreamRequest {
    * the dev server.
    */
   permissionPolicy?: PermissionPolicy;
+  /**
+   * Model the runtime should use for this turn, e.g. a Claude Code alias
+   * (`'opus'`, `'sonnet'`, `'haiku'`) or a full model id. Both providers
+   * resolve aliases against the account's real models through the same
+   * Claude Agent SDK resolver the terminal uses, so the widget's model menu
+   * mirrors the terminal's. Omitted means "use the provider's default model"
+   * — the widget sends nothing for its `Default` choice. Non-widget callers
+   * may pass any model string; the server validates only that it is a
+   * non-empty string and leaves semantic resolution to the provider.
+   */
+  model?: string;
 }
 
 const PERMISSION_POLICY_KEYS: readonly (keyof PermissionPolicy)[] = [
@@ -104,6 +115,12 @@ export interface AgentRequestContext {
    * provider then falls back to its own safe-by-default policy.
    */
   permissionPolicy?: PermissionPolicy;
+  /**
+   * Resolved model for this turn, forwarded verbatim to the provider. Present
+   * when the request body carried a non-empty `model`; absent otherwise, in
+   * which case the provider uses its own default model.
+   */
+  model?: string;
 }
 
 export type AgentStreamFactory = (
@@ -285,6 +302,21 @@ export function createApp(options: AppOptions = {}) {
       resolvedPolicy = defaultPermissionPolicy;
     }
 
+    // The model set is open (aliases, full date-pinned ids, future tiers) and
+    // each provider resolves semantics itself, so the server validates only
+    // the shape: a non-empty string. An empty or non-string `model` is a
+    // malformed request rather than an unsupported value, hence 400.
+    let resolvedModel: string | undefined;
+    if (body.model !== undefined) {
+      if (typeof body.model !== 'string' || body.model.length === 0) {
+        res.statusCode = 400;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'model must be a non-empty string' }));
+        return;
+      }
+      resolvedModel = body.model;
+    }
+
     const writer = startSse(res);
     const iterable = factory(body, {
       signal,
@@ -292,6 +324,7 @@ export function createApp(options: AppOptions = {}) {
       ...(files !== undefined && { files }),
       permissionMode: requestedPermissionMode,
       ...(resolvedPolicy !== undefined && { permissionPolicy: resolvedPolicy }),
+      ...(resolvedModel !== undefined && { model: resolvedModel }),
     });
     await pumpToSse(writer, iterable, toEvent ? { signal, toEvent } : { signal });
   };

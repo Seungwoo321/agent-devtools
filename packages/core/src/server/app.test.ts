@@ -780,6 +780,65 @@ describe('createApp', () => {
     });
   });
 
+  describe('model routing', () => {
+    it('forwards a request model to the factory context', async () => {
+      let seen: string | undefined;
+      const factory: AgentStreamFactory = async function* (_req, ctx) {
+        seen = ctx.model;
+        yield { type: 'complete' };
+      };
+      const app = await startApp(factory);
+      const { events, readResponse } = postStream(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        model: 'opus',
+      });
+      await readResponse;
+      await events;
+      expect(seen).toBe('opus');
+    });
+
+    it('leaves model undefined on the context when the request omits one', async () => {
+      let seen: string | undefined = 'sentinel';
+      const factory: AgentStreamFactory = async function* (_req, ctx) {
+        seen = ctx.model;
+        yield { type: 'complete' };
+      };
+      const app = await startApp(factory);
+      const { events, readResponse } = postStream(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+      });
+      await readResponse;
+      await events;
+      expect(seen).toBeUndefined();
+    });
+
+    it('returns 400 when model is an empty string', async () => {
+      const factory: AgentStreamFactory = async function* () {
+        yield 'unreachable';
+      };
+      const app = await startApp(factory);
+      const res = await postJson(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        model: '',
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(/model must be a non-empty string/);
+    });
+
+    it('returns 400 when model is not a string', async () => {
+      const factory: AgentStreamFactory = async function* () {
+        yield 'unreachable';
+      };
+      const app = await startApp(factory);
+      const res = await postJson(`${app.url}/v1/agent/stream`, {
+        prompt: 'x',
+        model: 42,
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toMatch(/model must be a non-empty string/);
+    });
+  });
+
   describe('POST /v1/agent/handoff', () => {
     function makeRecorder(): {
       writeHandoffArtifact: (
