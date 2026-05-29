@@ -1,5 +1,13 @@
 # @agent-devtools/svelte
 
+## 1.2.0
+
+### Patch Changes
+
+- Updated dependencies [[`29b80b1`](https://github.com/Seungwoo321/agent-devtools/commit/29b80b15fad3f4adb901d31155d2b7ff78d1e352)]:
+  - @agent-devtools/widget-core@1.2.0
+  - @agent-devtools/core@1.2.0
+
 ## 1.2.0-beta.0
 
 ### Patch Changes

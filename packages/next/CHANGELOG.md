@@ -1,5 +1,13 @@
 # @agent-devtools/next
 
+## 1.2.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/react@1.2.0
+  - @agent-devtools/core@1.2.0
+
 ## 1.2.0-beta.0
 
 ### Patch Changes
