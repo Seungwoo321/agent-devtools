@@ -185,6 +185,31 @@ describe('describePicked', () => {
     expect(out.source && 'columnNumber' in out.source).toBe(false);
   });
 
+  it('falls back to the JSX __source prop when both _debugSource and _debugStack miss', () => {
+    // This is the third source-extraction channel — independent of every
+    // React internal `_debug*` field. Babel/SWC source pragma plugins emit
+    // `__source` on element props, so a future React major that removes
+    // `_debugStack` still leaves a working extraction path.
+    document.body.innerHTML = '<div></div>';
+    const div = document.querySelector('div') as HTMLElement;
+    function FromPragma(): null {
+      return null;
+    }
+    attachFiber(div, {
+      type: FromPragma,
+      memoizedProps: {
+        __source: { fileName: 'src/Pragma.tsx', lineNumber: 18, columnNumber: 4 },
+      },
+    });
+    const out = describePicked(div);
+    expect(out.componentName).toBe('FromPragma');
+    expect(out.source).toEqual({
+      fileName: 'src/Pragma.tsx',
+      lineNumber: 18,
+      columnNumber: 4,
+    });
+  });
+
   it('falls back to _debugStack when _debugSource is absent (React 19)', () => {
     document.body.innerHTML = '<div></div>';
     const div = document.querySelector('div') as HTMLElement;
