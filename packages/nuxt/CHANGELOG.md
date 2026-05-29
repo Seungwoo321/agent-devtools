@@ -1,5 +1,14 @@
 # @agent-devtools/nuxt
 
+## 1.2.1-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`56eb210`](https://github.com/Seungwoo321/agent-devtools/commit/56eb210502b621c2fdd2952bafb5c2eab4538512)]:
+  - @agent-devtools/widget-core@1.2.1-beta.0
+  - @agent-devtools/vue@1.2.1-beta.0
+  - @agent-devtools/core@1.2.1-beta.0
+
 ## 1.2.0
 
 ### Patch Changes

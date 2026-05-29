@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/next",
-  "version": "1.2.0",
+  "version": "1.2.1-beta.0",
   "description": "Next.js 15 adapter for agent-devtools — re-exports the React widget + adds App / Pages router dev-only injection",
   "keywords": [
     "agent-devtools",
