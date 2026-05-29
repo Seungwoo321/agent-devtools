@@ -10,7 +10,14 @@ export type ErrorRecordKind =
   | 'unhandled-rejection'
   | 'window-error'
   | 'fetch-error'
-  | 'fetch-non-ok';
+  | 'fetch-non-ok'
+  /**
+   * Throw caught by the widget's own guard layer (event handler boundary,
+   * shadow-root render path, picker overlay). Distinct from the host-app
+   * kinds above so the agent can tell devtool-internal failures from host
+   * failures in the same surface.
+   */
+  | 'widget-internal';
 
 export interface ErrorRecord {
   /** Category of the captured event — see ErrorRecordKind. */

@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-  <sub><strong>1.0 — generally available.</strong> Adapters for React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, and plain HTML all ship from the same fixed major track, so the Vite plugin, the framework-agnostic widget core, and every framework adapter stay version-aligned by construction.</sub>
+  <sub><strong>1.x — generally available.</strong> Adapters for React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, and plain HTML all ship from the same fixed major track, so the Vite plugin, the framework-agnostic widget core, and every framework adapter stay version-aligned by construction.</sub>
 </p>
 
 ## Demo
@@ -249,22 +249,22 @@ In every case, running `pnpm dev`:
 
 All `@agent-devtools/*` packages publish on a single shared version line — the npm badge above always reflects the current release.
 
-| Package                                                   | Description                                               |
-| --------------------------------------------------------- | --------------------------------------------------------- |
-| [`@agent-devtools/core`](./packages/core)                 | Framework-agnostic core (server, agent engine, transport) |
-| [`@agent-devtools/widget-core`](./packages/widget-core)   | Framework-agnostic widget shell (closed Shadow DOM mount) |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | Domain-agnostic loop strategy + LLM provider abstraction  |
-| [`@agent-devtools/react`](./packages/react)               | React 19 fiber walker + DOM picker + auto context         |
-| [`@agent-devtools/vue`](./packages/vue)                   | Vue 3 vnode walker + DOM picker + closed shadow widget    |
-| [`@agent-devtools/vue2`](./packages/vue2)                 | Vue 2.7 component-tree walker + picker + widget           |
-| [`@agent-devtools/angular`](./packages/angular)           | Angular Ivy walker + picker + widget                      |
-| [`@agent-devtools/svelte`](./packages/svelte)             | Svelte 4/5 `__svelte_meta` resolver + picker + widget     |
-| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | SvelteKit layout mount + server `handle` binding          |
-| [`@agent-devtools/next`](./packages/next)                 | Next.js 15 App Router wrapper — webpack alias + bootstrap |
-| [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — same wrapper for `>= 12`   |
-| [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin auto-injection            |
-| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin auto-injection     |
-| [`@agent-devtools/vite`](./packages/vite)                 | Vite plugin (5–8) — auto-inject widget + dev-only guard   |
+| Package                                                   | Description                                                     |
+| --------------------------------------------------------- | --------------------------------------------------------------- |
+| [`@agent-devtools/core`](./packages/core)                 | Framework-agnostic core (server, agent engine, server-side SSE) |
+| [`@agent-devtools/widget-core`](./packages/widget-core)   | Framework-agnostic widget shell (closed Shadow DOM mount)       |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | Domain-agnostic loop strategy + LLM provider abstraction        |
+| [`@agent-devtools/react`](./packages/react)               | React 19 fiber walker + DOM picker + auto context               |
+| [`@agent-devtools/vue`](./packages/vue)                   | Vue 3 vnode walker + DOM picker + closed shadow widget          |
+| [`@agent-devtools/vue2`](./packages/vue2)                 | Vue 2.7 component-tree walker + picker + widget                 |
+| [`@agent-devtools/angular`](./packages/angular)           | Angular Ivy walker + picker + widget                            |
+| [`@agent-devtools/svelte`](./packages/svelte)             | Svelte 4/5 `__svelte_meta` resolver + picker + widget           |
+| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | SvelteKit layout mount + server `handle` binding                |
+| [`@agent-devtools/next`](./packages/next)                 | Next.js 15 App Router wrapper — webpack alias + bootstrap       |
+| [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — same wrapper for `>= 12`         |
+| [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin auto-injection                  |
+| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin auto-injection           |
+| [`@agent-devtools/vite`](./packages/vite)                 | Vite plugin (5–8) — auto-inject widget + dev-only guard         |
 
 ## Security defaults
 

@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/html",
-  "version": "1.1.0",
+  "version": "1.2.0-beta.0",
   "description": "npx runner for agent-devtools — serve a plain HTML folder with the dev-only widget injected, no framework, no config",
   "keywords": [
     "agent-devtools",
@@ -42,6 +42,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -51,7 +53,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.7.0",
-    "tsup": "^8.5.1"
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
   },
   "publishConfig": {
     "access": "public"

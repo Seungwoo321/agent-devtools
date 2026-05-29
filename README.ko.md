@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-  <sub><strong>1.0 정식 출시.</strong> React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, plain HTML 어댑터가 같은 fixed major 트랙으로 출시되어, Vite 플러그인 · framework-agnostic 위젯 코어 · 모든 어댑터의 버전이 구조적으로 정렬된다.</sub>
+  <sub><strong>1.x 정식 출시.</strong> React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, plain HTML 어댑터가 같은 fixed major 트랙으로 출시되어, Vite 플러그인 · framework-agnostic 위젯 코어 · 모든 어댑터의 버전이 구조적으로 정렬된다.</sub>
 </p>
 
 ## Demo
@@ -249,22 +249,22 @@ export default function App({ Component, pageProps }: AppProps) {
 
 모든 `@agent-devtools/*` 패키지는 단일 공유 버전 라인으로 함께 publish 된다 — 상단의 npm 배지가 항상 현재 릴리즈를 가리킨다.
 
-| Package                                                   | Description                                               |
-| --------------------------------------------------------- | --------------------------------------------------------- |
-| [`@agent-devtools/core`](./packages/core)                 | 프레임워크-무관 코어 (server, agent engine, transport)    |
-| [`@agent-devtools/widget-core`](./packages/widget-core)   | 프레임워크-무관 widget shell (closed Shadow DOM mount)    |
-| [`@agent-devtools/harness-core`](./packages/harness-core) | 도메인-무관 loop 전략 + LLM provider 추상화               |
-| [`@agent-devtools/react`](./packages/react)               | React 19 fiber walker + DOM picker + auto context         |
-| [`@agent-devtools/vue`](./packages/vue)                   | Vue 3 vnode walker + DOM picker + closed shadow widget    |
-| [`@agent-devtools/vue2`](./packages/vue2)                 | Vue 2.7 컴포넌트 트리 walker + picker + widget            |
-| [`@agent-devtools/angular`](./packages/angular)           | Angular Ivy walker + picker + widget                      |
-| [`@agent-devtools/svelte`](./packages/svelte)             | Svelte 4/5 `__svelte_meta` resolver + picker + widget     |
-| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | SvelteKit layout mount + server `handle` 바인딩           |
-| [`@agent-devtools/next`](./packages/next)                 | Next.js 15 App Router wrapper — webpack alias + bootstrap |
-| [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — `>= 12` 호환 동일 패턴     |
-| [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin 자동 주입                 |
-| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin 자동 주입          |
-| [`@agent-devtools/vite`](./packages/vite)                 | Vite 플러그인 (5–8) — auto-inject widget + dev-only guard |
+| Package                                                   | Description                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| [`@agent-devtools/core`](./packages/core)                 | 프레임워크-무관 코어 (server, agent engine, server-side SSE) |
+| [`@agent-devtools/widget-core`](./packages/widget-core)   | 프레임워크-무관 widget shell (closed Shadow DOM mount)       |
+| [`@agent-devtools/harness-core`](./packages/harness-core) | 도메인-무관 loop 전략 + LLM provider 추상화                  |
+| [`@agent-devtools/react`](./packages/react)               | React 19 fiber walker + DOM picker + auto context            |
+| [`@agent-devtools/vue`](./packages/vue)                   | Vue 3 vnode walker + DOM picker + closed shadow widget       |
+| [`@agent-devtools/vue2`](./packages/vue2)                 | Vue 2.7 컴포넌트 트리 walker + picker + widget               |
+| [`@agent-devtools/angular`](./packages/angular)           | Angular Ivy walker + picker + widget                         |
+| [`@agent-devtools/svelte`](./packages/svelte)             | Svelte 4/5 `__svelte_meta` resolver + picker + widget        |
+| [`@agent-devtools/sveltekit`](./packages/sveltekit)       | SvelteKit layout mount + server `handle` 바인딩              |
+| [`@agent-devtools/next`](./packages/next)                 | Next.js 15 App Router wrapper — webpack alias + bootstrap    |
+| [`@agent-devtools/next-pages`](./packages/next-pages)     | Next.js Pages Router wrapper — `>= 12` 호환 동일 패턴        |
+| [`@agent-devtools/nuxt`](./packages/nuxt)                 | Nuxt 3 module — dev-only plugin 자동 주입                    |
+| [`@agent-devtools/nuxt2`](./packages/nuxt2)               | Nuxt 2 module — dev-only client plugin 자동 주입             |
+| [`@agent-devtools/vite`](./packages/vite)                 | Vite 플러그인 (5–8) — auto-inject widget + dev-only guard    |
 
 ## Security defaults
 

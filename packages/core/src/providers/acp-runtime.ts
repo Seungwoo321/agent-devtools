@@ -48,6 +48,7 @@ import {
   type PermissionPolicy,
 } from './acp.js';
 import { createDefaultAcpSessionStore, type AcpSessionStore } from './acp-session-store.js';
+import { categorizeToolKind } from './permission-category.js';
 import { formatContextPreamble } from './context-preamble.js';
 
 /**
@@ -509,33 +510,6 @@ export function decidePermission(
     case 'ask':
     default:
       return { outcome: { outcome: 'cancelled' } };
-  }
-}
-
-type PermissionCategory = keyof PermissionPolicy | 'safeRead';
-
-function categorizeToolKind(kind: string | null | undefined): PermissionCategory {
-  switch (kind) {
-    case 'edit':
-    case 'delete':
-    case 'move':
-      return 'fileEdit';
-    case 'execute':
-      return 'bash';
-    case 'fetch':
-      return 'webFetch';
-    case 'read':
-    case 'search':
-    case 'think':
-    case 'switch_mode':
-      return 'safeRead';
-    case 'other':
-    default:
-      // Unknown / null / unrecognized kinds bucket into `mcpTool` so they
-      // inherit the conservative MCP default ('ask') rather than silently
-      // running. ACP can extend `ToolKind`, so this default also future-
-      // proofs against new kinds added in newer SDK releases.
-      return 'mcpTool';
   }
 }
 

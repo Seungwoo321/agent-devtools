@@ -224,4 +224,81 @@ describe('createLauncher', () => {
     expect(storage.getItem(DEFAULT_LAUNCHER_STORAGE_KEY)).toBeNull();
     handle.destroy();
   });
+
+  // ── L2 surfacing: runtime-error count badge ───────────────────────────
+  //
+  // The launcher is the only widget surface that is *always* visible while
+  // the widget is mounted (the composer panel hides). A red bubble with
+  // the unread error count gives the user a reason to open the composer
+  // and triage. The orchestrator owns the count source (subscribes to the
+  // observer); the launcher just renders what it's told.
+
+  it('keeps the error badge hidden when no errors have been surfaced', () => {
+    const handle = createLauncher({ container, storage: makeStorage() });
+    const badge = handle.element.querySelector(
+      '[data-agent-devtools-launcher-error-badge]',
+    ) as HTMLSpanElement;
+    expect(badge).not.toBeNull();
+    expect(badge.style.display).toBe('none');
+    expect(handle.getErrorCount()).toBe(0);
+    handle.destroy();
+  });
+
+  it('shows the badge with the live count once setErrorCount is called', () => {
+    const handle = createLauncher({ container, storage: makeStorage() });
+    const badge = handle.element.querySelector(
+      '[data-agent-devtools-launcher-error-badge]',
+    ) as HTMLSpanElement;
+    handle.setErrorCount(3);
+    expect(badge.style.display).toBe('inline-block');
+    expect(badge.textContent).toBe('3');
+    expect(handle.getErrorCount()).toBe(3);
+    handle.destroy();
+  });
+
+  it('collapses counts above 99 to "99+" so the badge stays a single chip', () => {
+    const handle = createLauncher({ container, storage: makeStorage() });
+    const badge = handle.element.querySelector(
+      '[data-agent-devtools-launcher-error-badge]',
+    ) as HTMLSpanElement;
+    handle.setErrorCount(250);
+    expect(badge.textContent).toBe('99+');
+    expect(handle.getErrorCount()).toBe(250);
+    handle.destroy();
+  });
+
+  it('normalises negative / non-finite counts to 0 and hides the badge', () => {
+    const handle = createLauncher({ container, storage: makeStorage() });
+    handle.setErrorCount(5); // show
+    handle.setErrorCount(-1); // reset
+    const badge = handle.element.querySelector(
+      '[data-agent-devtools-launcher-error-badge]',
+    ) as HTMLSpanElement;
+    expect(badge.style.display).toBe('none');
+    expect(handle.getErrorCount()).toBe(0);
+    handle.setErrorCount(Number.NaN);
+    expect(handle.getErrorCount()).toBe(0);
+    handle.destroy();
+  });
+
+  it('does not let the badge swallow a launcher click (pointer-events: none)', () => {
+    const onClick = vi.fn();
+    const handle = createLauncher({ container, storage: makeStorage(), onClick });
+    handle.setErrorCount(2);
+    const badge = handle.element.querySelector(
+      '[data-agent-devtools-launcher-error-badge]',
+    ) as HTMLSpanElement;
+    expect(badge.style.pointerEvents).toBe('none');
+    handle.element.dispatchEvent(pointerEvent('pointerdown'));
+    handle.element.dispatchEvent(pointerEvent('pointerup'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    handle.destroy();
+  });
+
+  it('ignores setErrorCount calls after destroy', () => {
+    const handle = createLauncher({ container, storage: makeStorage() });
+    handle.destroy();
+    expect(() => handle.setErrorCount(7)).not.toThrow();
+    expect(handle.getErrorCount()).toBe(0);
+  });
 });

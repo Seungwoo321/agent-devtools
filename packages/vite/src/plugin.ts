@@ -49,6 +49,7 @@ import {
   type PermissionPolicy,
   type StartAgentDevtoolsServerOptions,
 } from '@agent-devtools/core/server';
+import { buildEarlyErrorTrapScript } from '@agent-devtools/widget-core/bootstrap';
 import { resolveImportFrom, type Framework } from './framework.js';
 
 const DEFAULT_PLUGIN_NAME = 'agent-devtools';
@@ -233,6 +234,21 @@ export function agentDevtools(options: AgentDevtoolsPluginOptions = {}): Plugin 
       handler(): IndexHtmlTransformResult | void {
         if (!enabled) return;
         const tags: HtmlTagDescriptor[] = [];
+        // L0 ultra-early error trap — a CLASSIC <script> (no `type`
+        // attribute) so it executes synchronously in document order and
+        // installs capture-phase listeners BEFORE any deferred module
+        // (the bootstrap below, plus the host app's own modules) is
+        // evaluated. Without this, a host bundle parse error, a top-level
+        // await rejection during initial module evaluation, or a sync
+        // throw during the host's first render would never reach the
+        // observer — the user would see a blank screen with no captured
+        // evidence. Order in the head matters: this MUST come first.
+        tags.push({
+          tag: 'script',
+          attrs: {},
+          injectTo: 'head',
+          children: buildEarlyErrorTrapScript(),
+        });
         if (handle) {
           tags.push({
             tag: 'script',
@@ -622,17 +638,28 @@ function buildBootstrap(
     // message when the user submits, so the empty state is obvious. We
     // still create a settings store so the panel renders + persists user
     // choices (provider, permission mode) for the moment the server arrives.
+    //
+    // The mount call itself is wrapped in try/catch — if mountAgentDevtools
+    // throws (shadow-root attach failure, custom element collision on the
+    // host page, settings storage corrupt), the throw is routed to the L0
+    // early trap via the dispatched ErrorEvent so the host page keeps
+    // working and the next observer.start() can drain it.
     return [
       `import { mountAgentDevtools, createSettingsStore } from ${spec};`,
       `if (!window.__AGENT_DEVTOOLS_MOUNTED__) {`,
       `  window.__AGENT_DEVTOOLS_MOUNTED__ = true;`,
-      `  var __settings = createSettingsStore();`,
-      `  var __opts = { settingsStore: __settings };`,
-      shadowOpen ? `  __opts.shadowOpen = true;` : `  /* shadow closed (default) */`,
+      `  try {`,
+      `    var __settings = createSettingsStore();`,
+      `    var __opts = { settingsStore: __settings };`,
+      shadowOpen ? `    __opts.shadowOpen = true;` : `    /* shadow closed (default) */`,
       defaultVisible
-        ? `  /* defaultVisible: true (default) */`
-        : `  __opts.defaultVisible = false;`,
-      `  mountAgentDevtools(__opts);`,
+        ? `    /* defaultVisible: true (default) */`
+        : `    __opts.defaultVisible = false;`,
+      `    mountAgentDevtools(__opts);`,
+      `  } catch (err) {`,
+      `    try { console.error('[agent-devtools] mount failed', err); } catch (_) {}`,
+      `    try { window.dispatchEvent(new ErrorEvent('error', { message: 'agent-devtools mount failed: ' + (err && err.message ? err.message : err), error: err })); } catch (_) {}`,
+      `  }`,
       `}`,
     ]
       .filter((line) => !line.trim().startsWith('/*'))
@@ -646,20 +673,27 @@ function buildBootstrap(
     `import { mountAgentDevtools, createDefaultTransport, createAgentInfoFetcher, createHandoffRequester, createRelatedImportsFetcher, createSourceSliceFetcher, createPageContextEnricher, createSettingsStore } from ${spec};`,
     `if (!window.__AGENT_DEVTOOLS_MOUNTED__) {`,
     `  window.__AGENT_DEVTOOLS_MOUNTED__ = true;`,
-    `  var __cfg = window.${CONFIG_GLOBAL};`,
-    `  var __settings = createSettingsStore();`,
-    `  var __transport = __cfg ? createDefaultTransport(Object.assign({}, __cfg, { getSettings: function () { return __settings.get(); } })) : undefined;`,
-    `  var __getServerInfo = __cfg ? createAgentInfoFetcher(__cfg) : undefined;`,
-    `  var __requestHandoff = __cfg ? createHandoffRequester(Object.assign({}, __cfg, { getClientSessionId: __transport ? function () { return __transport.getClientSessionId && __transport.getClientSessionId(); } : undefined })) : undefined;`,
-    `  var __enrich = __cfg ? createPageContextEnricher({ fetchRelatedImports: createRelatedImportsFetcher(__cfg), fetchSourceSlice: createSourceSliceFetcher(__cfg) }) : undefined;`,
-    `  var __opts = { settingsStore: __settings };`,
-    `  if (__transport) __opts.transport = __transport;`,
-    `  if (__getServerInfo) __opts.getServerInfo = __getServerInfo;`,
-    `  if (__requestHandoff) __opts.requestHandoff = __requestHandoff;`,
-    `  if (__enrich) __opts.enrichPageContext = __enrich;`,
-    shadowOpen ? `  __opts.shadowOpen = true;` : `  /* shadow closed (default) */`,
-    defaultVisible ? `  /* defaultVisible: true (default) */` : `  __opts.defaultVisible = false;`,
-    `  mountAgentDevtools(__opts);`,
+    `  try {`,
+    `    var __cfg = window.${CONFIG_GLOBAL};`,
+    `    var __settings = createSettingsStore();`,
+    `    var __transport = __cfg ? createDefaultTransport(Object.assign({}, __cfg, { getSettings: function () { return __settings.get(); } })) : undefined;`,
+    `    var __getServerInfo = __cfg ? createAgentInfoFetcher(__cfg) : undefined;`,
+    `    var __requestHandoff = __cfg ? createHandoffRequester(Object.assign({}, __cfg, { getClientSessionId: __transport ? function () { return __transport.getClientSessionId && __transport.getClientSessionId(); } : undefined })) : undefined;`,
+    `    var __enrich = __cfg ? createPageContextEnricher({ fetchRelatedImports: createRelatedImportsFetcher(__cfg), fetchSourceSlice: createSourceSliceFetcher(__cfg) }) : undefined;`,
+    `    var __opts = { settingsStore: __settings };`,
+    `    if (__transport) __opts.transport = __transport;`,
+    `    if (__getServerInfo) __opts.getServerInfo = __getServerInfo;`,
+    `    if (__requestHandoff) __opts.requestHandoff = __requestHandoff;`,
+    `    if (__enrich) __opts.enrichPageContext = __enrich;`,
+    shadowOpen ? `    __opts.shadowOpen = true;` : `    /* shadow closed (default) */`,
+    defaultVisible
+      ? `    /* defaultVisible: true (default) */`
+      : `    __opts.defaultVisible = false;`,
+    `    mountAgentDevtools(__opts);`,
+    `  } catch (err) {`,
+    `    try { console.error('[agent-devtools] mount failed', err); } catch (_) {}`,
+    `    try { window.dispatchEvent(new ErrorEvent('error', { message: 'agent-devtools mount failed: ' + (err && err.message ? err.message : err), error: err })); } catch (_) {}`,
+    `  }`,
     `}`,
   ]
     .filter((line) => !line.trim().startsWith('/*'))

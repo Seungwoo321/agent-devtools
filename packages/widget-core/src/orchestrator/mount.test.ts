@@ -1202,4 +1202,124 @@ describe('mountAgentDevtools — visibility persistence', () => {
     expect(globalThis.localStorage.getItem(PANEL_OPEN_KEY)).toBe('true');
     handle.destroy();
   });
+
+  // ── Runtime resilience (L0 + L1) ──────────────────────────────────────
+  //
+  // The widget owns its own boundary. A throw inside picker.onPick (the
+  // describePicked walker explodes on a weird DOM node, say) must NOT
+  // tear down the widget surface — instead it is captured as a
+  // widget-internal record so the agent sees the failure in the same
+  // evidence stream as host runtime errors. L0 covers the symmetric pre-
+  // mount path: anything caught by the early classic-script trap during
+  // host bootstrap is drained into the observer when start() runs.
+
+  it('contains a throw from a wrapped picker.onPick callback and records it as widget-internal', () => {
+    const boom = new Error('describePicked exploded');
+    const describePicked = vi.fn(() => {
+      throw boom;
+    });
+    const handle = mountAgentDevtools({ describePicked });
+    const target = document.createElement('section');
+    target.id = 'target';
+    document.body.appendChild(target);
+
+    const pickButton = queryShadow<HTMLButtonElement>(
+      handle.widget.shadowRoot,
+      '[data-agent-devtools-composer-pick]',
+    );
+    pickButton.click();
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(target);
+
+    // The wrapped onPick swallows the throw — the dispatchEvent call
+    // returns normally rather than propagating the Error up to the test.
+    expect(() => {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }).not.toThrow();
+
+    const records = handle.observer.getRecords();
+    const widgetInternal = records.filter((r) => r.kind === 'widget-internal');
+    expect(widgetInternal).toHaveLength(1);
+    expect(widgetInternal[0]!.message).toContain('picker.onPick');
+    expect(widgetInternal[0]!.message).toContain('describePicked exploded');
+    // Widget surface stays usable — the launcher click still toggles the panel.
+    handle.launcher.element.click();
+    vi.restoreAllMocks();
+    handle.destroy();
+  });
+
+  it('propagates a fresh runtime error through the observer subscription onto both surfaces', () => {
+    const handle = mountAgentDevtools();
+    expect(handle.launcher.getErrorCount()).toBe(0);
+    expect(handle.composer.getErrorCount()).toBe(0);
+    // Inject through the public ingest seam — same path the L1 widget guard
+    // uses to surface contained widget-internal throws.
+    handle.observer.ingest({
+      kind: 'window-error',
+      timestamp: Date.now(),
+      message: 'host blew up',
+    });
+    expect(handle.launcher.getErrorCount()).toBe(1);
+    expect(handle.composer.getErrorCount()).toBe(1);
+    handle.observer.ingest({
+      kind: 'console-error',
+      timestamp: Date.now(),
+      message: 'and again',
+    });
+    expect(handle.launcher.getErrorCount()).toBe(2);
+    expect(handle.composer.getErrorCount()).toBe(2);
+    handle.destroy();
+  });
+
+  it('clicking Analyze prefills the composer, opens the panel, and clears the unread count', () => {
+    const handle = mountAgentDevtools();
+    // Two captured errors → banner + badge visible.
+    handle.observer.ingest({
+      kind: 'window-error',
+      timestamp: Date.now(),
+      message: 'first',
+    });
+    handle.observer.ingest({
+      kind: 'console-error',
+      timestamp: Date.now(),
+      message: 'second',
+    });
+    expect(handle.composer.getErrorCount()).toBe(2);
+    const action = handle.composer.element.querySelector(
+      '[data-agent-devtools-composer-error-banner-action]',
+    ) as HTMLButtonElement;
+    action.click();
+    expect(handle.composer.getText()).toMatch(/2 runtime errors/);
+    expect(handle.composer.element.style.display).toBe('flex');
+    expect(handle.composer.getErrorCount()).toBe(0);
+    expect(handle.launcher.getErrorCount()).toBe(0);
+    handle.destroy();
+  });
+
+  it('drains early-trap entries into the observer at mount time', () => {
+    // Simulate what the Vite-injected classic <script> trap does before
+    // the module bootstrap runs: enqueue an error record onto the global
+    // ring buffer. mountAgentDevtools should pick it up via the observer's
+    // start() drain so the agent sees the pre-mount failure.
+    const EARLY_GLOBAL = '__AGENT_DEVTOOLS_EARLY_ERRORS__';
+    (window as unknown as Record<string, unknown>)[EARLY_GLOBAL] = {
+      records: [
+        {
+          kind: 'window-error',
+          timestamp: 12345,
+          message: 'pre-mount host failure',
+          stack: 'at host.js:1:1',
+        },
+      ],
+      dispose: () => {
+        delete (window as unknown as Record<string, unknown>)[EARLY_GLOBAL];
+      },
+    };
+    const handle = mountAgentDevtools();
+    const drained = handle.observer
+      .getRecords()
+      .find((r) => r.message === 'pre-mount host failure');
+    expect(drained).toBeDefined();
+    expect(drained?.kind).toBe('window-error');
+    handle.destroy();
+  });
 });

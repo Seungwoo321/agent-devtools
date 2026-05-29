@@ -38,6 +38,7 @@ import {
   type PermissionResolution,
 } from './acp.js';
 import { formatContextPreamble } from './context-preamble.js';
+import { categorizeSdkToolName } from './permission-category.js';
 import { translateSdkMessage, type AcpEnvelope } from './sdk-to-acp.js';
 
 /** Subset of the SDK surface we depend on. Lets tests inject a fake. */
@@ -200,40 +201,4 @@ function createCanUseTool(policy: PermissionPolicy): CanUseTool {
         };
     }
   };
-}
-
-type SdkPermissionCategory = keyof PermissionPolicy | 'safeRead';
-
-/**
- * Map a Claude Code SDK tool name into the same security buckets the ACP
- * runtime uses. Built-in tool names are stable enough to enumerate; anything
- * unrecognized falls through to `mcpTool` so third-party MCP tools (which
- * arrive as `mcp__<server>__<tool>`) inherit the conservative default.
- */
-function categorizeSdkToolName(toolName: string): SdkPermissionCategory {
-  switch (toolName) {
-    case 'Read':
-    case 'Glob':
-    case 'Grep':
-    case 'WebSearch':
-    case 'NotebookRead':
-    case 'TodoWrite':
-      return 'safeRead';
-    case 'Edit':
-    case 'Write':
-    case 'NotebookEdit':
-    case 'MultiEdit':
-      return 'fileEdit';
-    case 'Bash':
-    case 'BashOutput':
-    case 'KillBash':
-      return 'bash';
-    case 'WebFetch':
-      return 'webFetch';
-    default:
-      // Unknown / MCP tools (`mcp__<server>__<tool>`) bucket into `mcpTool`
-      // so they inherit the conservative MCP default ('ask') rather than
-      // silently running.
-      return 'mcpTool';
-  }
 }

@@ -41,7 +41,7 @@ page DOM is what determines the isolation model.
   depend on the host's Provider/Context tree, and conversely the widget's
   state never leaks into the host. `mountAgentDevtools()` mounts the
   launcher, composer, settings panel, stream renderer, and picker directly
-  onto its own shadow root (`packages/widget-core/src/orchestrator/mount.ts:302`).
+  onto its own shadow root (`packages/widget-core/src/orchestrator/mount.ts:230`).
 
 ## Launcher
 
@@ -56,7 +56,7 @@ and toggles the composer open or closed on click.
   reposition it; on pointerup the coordinates — clamped to the viewport
   bounds — are saved to `localStorage`. On the next mount the launcher
   reappears in the same spot
-  (`packages/widget-core/src/launcher/launcher.ts:119`). At mount time the
+  (`packages/widget-core/src/launcher/launcher.ts:149`). At mount time the
   saved position is clamped against the current viewport once more, so it
   never ends up off-screen after a window resize.
 - **Click vs drag.** Pointer input is routed through a pure reducer
@@ -64,16 +64,16 @@ and toggles the composer open or closed on click.
   `onClick` callback only fires for a real click effect. The synthetic
   click that browsers fire at the end of a drag is swallowed by the
   reducer — so the composer never pops open by accident
-  (`packages/widget-core/src/launcher/launcher.ts:117`).
+  (`packages/widget-core/src/launcher/launcher.ts:140`).
 - **Click behavior.** The orchestrator checks the current visibility via
   `composer.element.style.display === 'none'` and toggles. When opening, it
   also calls `composer.focus()` so the user can start typing immediately
-  (`packages/widget-core/src/orchestrator/mount.ts:379`).
+  (`packages/widget-core/src/orchestrator/mount.ts:405`).
 - **The composer follows the launcher.** During a drag, `onPositionChange`
   is called on every move and updates the composer's `setAnchor`. The
   panel's right edge aligns with the launcher's right edge, and the panel's
   bottom edge sits 16px above the launcher
-  (`packages/widget-core/src/orchestrator/mount.ts:398`).
+  (`packages/widget-core/src/orchestrator/mount.ts:419`).
 - **No global shortcut.** There is no global keyboard shortcut to toggle
   the launcher. The only way to close from the keyboard is to press
   `Escape` while the composer is open (this closes the composer only —
@@ -84,37 +84,37 @@ and toggles the composer open or closed on click.
 A natural-language input, action buttons, and a streaming message view all
 live inside one panel.
 
-- **Default size and anchor.** The panel is 320px wide and 420px tall by
-  default, with a minimum of 280×240. Eight-direction resize handles let
+- **Default size and anchor.** The panel is 360px wide and 420px tall by
+  default, with a minimum of 320×240. Eight-direction resize handles let
   the user drag the panel larger, and the resulting size is persisted to
   `localStorage` under `agent-devtools:panelSize`
-  (`packages/widget-core/src/composer/composer.ts:85`).
+  (`packages/widget-core/src/composer/composer.ts:91`).
 - **Keyboard behavior.**
   - `Enter` (without Shift) → submit if the text is non-empty and a
     request is not already in flight.
   - `Shift + Enter` → newline.
   - `Escape` → close the composer only (launcher stays)
-    (`packages/widget-core/src/composer/composer.ts:461`).
+    (`packages/widget-core/src/composer/composer.ts:541`).
 - **Submit payload.** Sent to the orchestrator as `{ text, picked }`. The
   `picked` field is the most recent `PickedEvidence` captured by the picker
   (`null` if nothing was picked). The orchestrator combines this with the
   prompt and the result of `buildPageContext()` and hands it to the
-  transport (`packages/widget-core/src/orchestrator/mount.ts:419`).
+  transport (`packages/widget-core/src/orchestrator/mount.ts:508`).
 - **In-flight UI state.** When the transport starts replying it calls
   `setSending(true)`, which disables the textarea and the send button. On
   success or failure it calls `setSending(false)`. To prevent concurrent
   requests an in-flight `AbortController` aborts the previous request when
-  a new submit happens (`packages/widget-core/src/orchestrator/mount.ts:413`).
+  a new submit happens (`packages/widget-core/src/orchestrator/mount.ts:487`).
 - **Streaming response.** A stream renderer is inserted into the composer
   panel above the textarea. As the transport pipes SSE/JSON chunks into
   `MessageStore.applyEvent()`, the renderer draws them straight onto the
-  screen (`packages/widget-core/src/orchestrator/mount.ts:313`).
+  screen (`packages/widget-core/src/orchestrator/mount.ts:331`).
 - **Extra actions.** The composer header has buttons for the picker toggle,
   settings (gear), terminal handoff (continue the conversation in the
   Claude CLI), and new conversation (reset the session). New conversation
   clears the message store and asks the transport's `resetSession()` to
   hand out a fresh server-side ACP session
-  (`packages/widget-core/src/orchestrator/mount.ts:486`).
+  (`packages/widget-core/src/orchestrator/mount.ts:560`).
 
 ## Settings panel
 
@@ -200,7 +200,7 @@ Even if the user does not explicitly pick an element, every submit
 automatically attaches a snapshot of the page context. The orchestrator
 calls `buildPageContext()` on each submit and bundles the following block
 into the transport payload
-(`packages/widget-core/src/orchestrator/mount.ts:419`,
+(`packages/widget-core/src/orchestrator/mount.ts:493`,
 `packages/widget-core/src/context/build.ts:53`).
 
 Fields carried by `PageContext`
@@ -221,7 +221,7 @@ Fields carried by `PageContext`
   (`packages/react/src/context/build.ts:19`).
 - `errors` — the most recent 50 console error / exception records that
   `createErrorObserver()` has been collecting since mount time
-  (`packages/widget-core/src/orchestrator/mount.ts:354`).
+  (`packages/widget-core/src/orchestrator/mount.ts:250`).
 - `picked` — the `PickedEvidence` captured by the picker, present only
   when an element has actually been picked (see the section below).
 
@@ -251,7 +251,7 @@ picker's active / idle state directly.
   the host app via `preventDefault` + `stopPropagation`. The orchestrator's
   `onPick` callback receives the element, runs `describePicked()` to build
   a `PickedEvidence`, and surfaces it as the picked chip on the composer
-  (`packages/widget-core/src/orchestrator/mount.ts:359`).
+  (`packages/widget-core/src/orchestrator/mount.ts:385`).
 - **Escape to cancel.** Pressing `Escape` while the picker is active
   cancels it and returns to `idle`
   (`packages/widget-core/src/picker/picker.ts:93`).

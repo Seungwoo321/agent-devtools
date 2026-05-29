@@ -34,7 +34,7 @@ overlay 한 개로 구성된다. 각 조각이 호스트 페이지 DOM 안에서
   렌더된다. 위젯이 호스트의 Provider/Context 트리에 의존하지 않고, 반대로 위젯의
   state 도 호스트로 새지 않는다. `mountAgentDevtools()` 가 launcher / composer /
   settings panel / stream renderer / picker 를 모두 자기 shadow root 위에 직접
-  올린다 (`packages/widget-core/src/orchestrator/mount.ts:302`).
+  올린다 (`packages/widget-core/src/orchestrator/mount.ts:230`).
 
 ## Launcher
 
@@ -47,20 +47,20 @@ overlay 한 개로 구성된다. 각 조각이 호스트 페이지 DOM 안에서
 - **드래그 이동 + 영구화.** 버튼을 누른 채로 드래그하면 위치를 옮길 수 있고,
   pointerup 시 viewport 경계로 clamp 된 좌표가 `localStorage` 에 저장된다.
   다음 mount 때 같은 자리에서 다시 떠오른다
-  (`packages/widget-core/src/launcher/launcher.ts:119`). 창 크기가
+  (`packages/widget-core/src/launcher/launcher.ts:149`). 창 크기가
   줄어도 화면 밖으로 사라지지 않도록 mount 시점에 viewport 로 한 번 더
   clamp 된다.
 - **Click vs drag.** pointer 입력은 순수 reducer (`launcher/state.ts`) 에서
   click / drag 로 분기되고, 실제 click effect 일 때만 `onClick` 콜백이 호출된다.
   드래그 끝의 합성 click 은 reducer 가 삼킨다 — composer 가 의도치 않게 열리지
-  않는다 (`packages/widget-core/src/launcher/launcher.ts:117`).
+  않는다 (`packages/widget-core/src/launcher/launcher.ts:140`).
 - **클릭 동작.** orchestrator 가 `composer.element.style.display === 'none'`
   으로 현재 가시성을 보고 토글한다. 열릴 때는 `composer.focus()` 까지 호출해서
-  바로 입력 가능한 상태로 만든다 (`packages/widget-core/src/orchestrator/mount.ts:379`).
+  바로 입력 가능한 상태로 만든다 (`packages/widget-core/src/orchestrator/mount.ts:405`).
 - **Composer 가 launcher 를 따라간다.** 드래그 중에 `onPositionChange` 가 매번
   호출되며 composer 의 `setAnchor` 를 갱신한다. 패널의 우측 모서리는 launcher 의
   우측 모서리와 정렬되고, 패널 하단은 launcher 위로 16px 위에 붙어 있다
-  (`packages/widget-core/src/orchestrator/mount.ts:398`).
+  (`packages/widget-core/src/orchestrator/mount.ts:419`).
 - **단축키는 별도 없음.** launcher 토글 전역 단축키는 현재 없다. 키보드로 닫는
   유일한 방법은 composer 가 열린 상태에서 `Escape` 를 누르는 것 (composer 만
   닫힘, launcher 는 그대로) 이다.
@@ -69,30 +69,30 @@ overlay 한 개로 구성된다. 각 조각이 호스트 페이지 DOM 안에서
 
 자연어 입력창 + 액션 버튼 + 스트리밍 메시지 뷰가 한 패널 안에 들어 있다.
 
-- **기본 크기와 anchor.** 기본 패널 폭 320px, 높이 420px, 최소 280×240. 8 방향
+- **기본 크기와 anchor.** 기본 패널 폭 360px, 높이 420px, 최소 320×240. 8 방향
   resize handle 이 있어 사용자가 잡아당겨 키울 수 있고, 결과 크기는
   `localStorage` 의 `agent-devtools:panelSize` 에 저장된다
-  (`packages/widget-core/src/composer/composer.ts:85`).
+  (`packages/widget-core/src/composer/composer.ts:91`).
 - **키보드 동작.**
   - `Enter` (Shift 없이) → 텍스트 비어 있지 않고 전송 중이 아니면 submit.
   - `Shift + Enter` → 줄바꿈.
   - `Escape` → composer 만 닫음 (launcher 는 유지)
-    (`packages/widget-core/src/composer/composer.ts:461`).
+    (`packages/widget-core/src/composer/composer.ts:541`).
 - **Submit 페이로드.** `{ text, picked }` 형태로 orchestrator 에게 전달된다.
   `picked` 는 picker 가 최근에 잡아둔 `PickedEvidence` (없으면 `null`).
   orchestrator 가 prompt 와 `buildPageContext()` 결과를 합쳐 transport 로
-  보낸다 (`packages/widget-core/src/orchestrator/mount.ts:419`).
+  보낸다 (`packages/widget-core/src/orchestrator/mount.ts:508`).
 - **전송 중 UI 상태.** transport 가 응답을 시작하면 `setSending(true)` 가 호출되어
   textarea 와 send 버튼이 비활성화된다. 완료/실패 시 `setSending(false)`. 동시에
   여러 요청이 가지 않도록 in-flight `AbortController` 가 새 submit 시 이전
-  요청을 abort 한다 (`packages/widget-core/src/orchestrator/mount.ts:413`).
+  요청을 abort 한다 (`packages/widget-core/src/orchestrator/mount.ts:487`).
 - **스트리밍 응답.** stream renderer 가 composer 패널 안 textarea 위쪽에
   insert 된다. transport 가 SSE/JSON 청크를 `MessageStore.applyEvent()` 로 흘리면
-  renderer 가 그대로 그린다 (`packages/widget-core/src/orchestrator/mount.ts:313`).
+  renderer 가 그대로 그린다 (`packages/widget-core/src/orchestrator/mount.ts:331`).
 - **추가 액션.** 컴포저 헤더에는 picker 토글, settings (톱니바퀴), terminal
   handoff (Claude CLI 로 대화 이어받기), new conversation (세션 리셋) 버튼이
   있다. new conversation 은 message store 를 비우고 transport 의 `resetSession()`
-  으로 서버측 ACP 세션을 새로 발급한다 (`packages/widget-core/src/orchestrator/mount.ts:486`).
+  으로 서버측 ACP 세션을 새로 발급한다 (`packages/widget-core/src/orchestrator/mount.ts:560`).
 
 ## Settings panel
 
@@ -160,7 +160,7 @@ devtools 의 Application 패널에서 해당 키를 직접 지운다.
 사용자가 Pick 으로 따로 element 를 잡지 않아도, 모든 submit 에는 페이지 컨텍스트
 스냅샷이 자동으로 첨부된다. orchestrator 가 submit 마다 `buildPageContext()` 를
 호출해서 다음 한 묶음을 transport 페이로드에 넣는다
-(`packages/widget-core/src/orchestrator/mount.ts:419`,
+(`packages/widget-core/src/orchestrator/mount.ts:493`,
 `packages/widget-core/src/context/build.ts:53`).
 
 `PageContext` 가 담는 필드 (`packages/widget-core/src/context/types.ts:164`):
@@ -175,7 +175,7 @@ devtools 의 Application 패널에서 해당 키를 직접 지운다.
   중복 파일은 dedup, 최대 50개로 잘린다. `rootContainer` 옵션으로 받은 React
   root 부터 fiber 를 따라간다 (`packages/react/src/context/build.ts:19`).
 - `errors` — `createErrorObserver()` 가 mount 시점부터 수집해 둔 콘솔 에러/예외
-  레코드의 최근 50개 (`packages/widget-core/src/orchestrator/mount.ts:354`).
+  레코드의 최근 50개 (`packages/widget-core/src/orchestrator/mount.ts:250`).
 - `picked` — Pick 으로 잡힌 element 가 있을 때만 채워지는 `PickedEvidence`
   (아래 항목 참고).
 
@@ -202,7 +202,7 @@ viewport size 는 page context 에 포함되지 않는다.
   `stopPropagation` 으로 호스트 앱에 전달되지 않는다. orchestrator 의
   `onPick` 콜백이 element 를 받아 `describePicked()` 로 `PickedEvidence` 를
   만들고 composer 의 picked chip 으로 노출한다
-  (`packages/widget-core/src/orchestrator/mount.ts:359`).
+  (`packages/widget-core/src/orchestrator/mount.ts:385`).
 - **Escape 로 취소.** active 중 Escape 키는 picker 를 cancel 시키고 idle 로
   복귀시킨다 (`packages/widget-core/src/picker/picker.ts:93`).
 - **Picker 가 위젯 자체를 잡지 않게.** picker 시작 시점에 widget shadow host
