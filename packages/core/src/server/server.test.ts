@@ -112,9 +112,30 @@ describe('startServer', () => {
   });
 
   it('throws when no port in [port, port + maxAttempts) is free', async () => {
-    const base = track(await startServer(() => undefined, { port: 0 }));
-    const occupied = base.port;
-    await occupyPort(occupied + 1);
+    // We need two consecutive ports under our control: `occupied` (held by
+    // the tracked server) and `occupied + 1` (manually bound) so the
+    // maxAttempts=2 walk has no free slot to land on. When vitest runs
+    // other test files in parallel (or another process snags an ephemeral
+    // port between calls), the +1 occupy can fail with EADDRINUSE — retry
+    // with a fresh base instead of flaking the suite. Mirrors the pattern
+    // used by the "walks past multiple sequential occupied ports" test
+    // above; the failure mode is identical.
+    let occupied = 0;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const base = track(await startServer(() => undefined, { port: 0 }));
+      try {
+        await occupyPort(base.port + 1);
+        occupied = base.port;
+        break;
+      } catch {
+        // The +1 slot got taken by an external binder during the gap; try
+        // a new ephemeral base. Anything already bound is in `cleanups`
+        // and will be closed in afterEach.
+      }
+    }
+    if (occupied === 0) {
+      throw new Error('could not reserve two consecutive ephemeral ports after 10 attempts');
+    }
 
     await expect(startServer(() => undefined, { port: occupied, maxAttempts: 2 })).rejects.toThrow(
       /No free port found in \[\d+, \d+\] on 127\.0\.0\.1/,
