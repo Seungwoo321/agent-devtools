@@ -504,6 +504,9 @@ importers:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(typescript@6.0.3)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.7(@types/node@25.9.1)(happy-dom@20.9.0)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.90.0)(terser@5.48.0)(yaml@2.9.0))
 
   packages/next:
     dependencies:
@@ -721,6 +724,9 @@ importers:
       '@agent-devtools/core':
         specifier: workspace:*
         version: link:../core
+      '@agent-devtools/widget-core':
+        specifier: workspace:*
+        version: link:../widget-core
     devDependencies:
       '@agent-devtools/angular':
         specifier: workspace:*

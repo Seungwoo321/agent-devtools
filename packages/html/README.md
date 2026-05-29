@@ -1,18 +1,22 @@
 # @agent-devtools/html
 
-A one-command runner that serves a folder of **plain HTML** with the
+A one-command runner that serves **plain HTML** with the
 [agent-devtools](https://github.com/Seungwoo321/agent-devtools) floating
 widget injected. No framework, no bundler config, no LLM API key wiring —
 ideal for handing the in-page agent to a teammate (e.g. a planner sketching
 pages through Claude Code) who is editing static HTML.
 
 ```bash
+# Serve a folder of HTML files (root URL → index.html when present)
 npx @agent-devtools/html ./my-pages
+
+# Or point at a single .html / .htm file and land directly on it
+npx @agent-devtools/html ./my-pages/about.html
 ```
 
 Open the printed `http://127.0.0.1:…` URL, pick any element with the widget,
 and describe the change in natural language. The agent edits the HTML files
-in that folder.
+in the served folder.
 
 ## Why this and not a CDN `<script>`
 
@@ -42,19 +46,28 @@ by grepping the markup.
 ## Usage
 
 ```bash
-# serve the current directory
+# serve the current directory (root URL → index.html when present)
 npx @agent-devtools/html
 
 # serve a specific folder on a fixed port
 npx @agent-devtools/html ./pages --port 3210
+
+# serve a single file directly — its parent directory becomes the served
+# folder and the printed URL points at the file (e.g. /about.html)
+npx @agent-devtools/html ./pages/about.html
 ```
 
-| Option          | Description                                            |
-| --------------- | ------------------------------------------------------ |
-| `[folder]`      | Folder of HTML files to serve (default: cwd)           |
-| `--port <n>`    | Preferred port (Vite picks the next free one if taken) |
-| `--open-shadow` | Mount the widget with an open shadow root (debugging)  |
-| `-h, --help`    | Show help                                              |
+| Option          | Description                                                               |
+| --------------- | ------------------------------------------------------------------------- |
+| `[path]`        | Folder of HTML files **or** a single `.html` / `.htm` file (default: cwd) |
+| `--port <n>`    | Preferred port (Vite picks the next free one if taken)                    |
+| `--open-shadow` | Mount the widget with an open shadow root (debugging)                     |
+| `-h, --help`    | Show help                                                                 |
+
+When the positional argument is a single file, its **parent directory** is
+served as the workspace (so sibling assets resolve normally) and the printed
+URL is suffixed with the file's basename. The file does not need to be named
+`index.html`.
 
 For the smoothest `npx` experience, install it as a dev dependency first so the
 widget resolves from your project's `node_modules`:
@@ -69,9 +82,31 @@ npx agent-devtools-html ./pages
 ```ts
 import { runHtmlServer } from '@agent-devtools/html';
 
+// Folder form
 const { server, url } = await runHtmlServer({ root: './pages', port: 3210 });
 console.log(`serving ${url}`);
 // later: await server.close();
+
+// Single-file form — pass the parent directory as `root` and the basename
+// as `entryFile` so the printed URL lands directly on that page.
+const direct = await runHtmlServer({
+  root: './pages',
+  entryFile: 'about.html',
+});
+console.log(`serving ${direct.url}`); // → http://127.0.0.1:<port>/about.html
+```
+
+For the CLI's `path` argument (which auto-detects file vs folder), use
+`resolveEntry`:
+
+```ts
+import { resolveEntry, runHtmlServer } from '@agent-devtools/html';
+
+const resolved = resolveEntry(process.argv[2] ?? '.');
+await runHtmlServer({
+  root: resolved.root,
+  ...(resolved.entryFile !== null && { entryFile: resolved.entryFile }),
+});
 ```
 
 ## License

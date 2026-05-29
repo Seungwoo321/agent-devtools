@@ -42,6 +42,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -51,7 +53,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.7.0",
-    "tsup": "^8.5.1"
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.6"
   },
   "publishConfig": {
     "access": "public"
