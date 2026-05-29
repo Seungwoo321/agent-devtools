@@ -32,12 +32,7 @@
     "@agent-devtools/widget-core": "1.0.0"
   },
   "changesets": [
-    "model-selection",
-    "network-resilience-retry",
-    "runtime-resilience",
-    "sdk-claude-code-preset",
-    "widget-theme",
-    "widget-visibility-persistence",
-    "working-indicator-full-coverage"
+    "html-direct-file-entry",
+    "runtime-resilience"
   ]
 }
