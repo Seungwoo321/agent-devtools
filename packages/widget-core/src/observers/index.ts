@@ -20,3 +20,5 @@ export {
   type ErrorObserverHandle,
   type ErrorObserverOptions,
 } from './observer.js';
+export { EARLY_ERRORS_GLOBAL, buildEarlyErrorTrapScript, drainEarlyErrors } from './early.js';
+export { redactRecord, redactText, redactUrl } from './redact.js';

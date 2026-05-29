@@ -33,7 +33,7 @@ In a production build, the agent-devtools code path **never enters the module gr
 
 Even if Layer 1 is bypassed, the code refuses to run. **Fail-loud (throw) is the default** — silent no-op would hide a misdeployment.
 
-- `mountAgentDevtools()` throws when `process.env.NODE_ENV === 'production'` (see `isProductionBuild` in [`packages/widget-core/src/orchestrator/mount.ts:689`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/widget-core/src/orchestrator/mount.ts)). The explicit override `{ force: true }` is the only escape hatch and is intended for justified operational debugging.
+- `mountAgentDevtools()` throws when `process.env.NODE_ENV === 'production'` (see `isProductionBuild` in [`packages/widget-core/src/orchestrator/mount.ts:764`](https://github.com/Seungwoo321/agent-devtools/blob/main/packages/widget-core/src/orchestrator/mount.ts)). The explicit override `{ force: true }` is the only escape hatch and is intended for justified operational debugging.
 - `startAgentDevtoolsServer` performs the same check — the server will never `listen` in production.
 - `enabled: false` and similar runtime opt-out options are a **separate layer** from Layer 2. Opt-out is a dev-time off switch and does not substitute for the production block.
 

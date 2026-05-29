@@ -41,6 +41,33 @@ function runTransform(plugin: ReturnType<typeof agentDevtools>): TransformResult
   return result;
 }
 
+/**
+ * Semantic tag finders — the injected tag list is `[earlyTrap, (config?),
+ * bootstrap]` and the trap was added later than these tests, so we look up
+ * by attributes/content rather than by index. Each finder throws on miss so
+ * `findX(result)!.children!` is a safe pattern in the assertions.
+ */
+function findBootstrap(result: TransformResult): HtmlTag {
+  const tag = result.tags.find((t) => t.attrs?.type === 'module');
+  if (!tag) throw new Error('expected a module bootstrap script');
+  return tag;
+}
+function findConfig(result: TransformResult): HtmlTag {
+  const tag = result.tags.find(
+    (t) => t.attrs?.type === undefined && (t.children ?? '').includes('__AGENT_DEVTOOLS_CONFIG__'),
+  );
+  if (!tag) throw new Error('expected a config script');
+  return tag;
+}
+function findEarlyTrap(result: TransformResult): HtmlTag {
+  const tag = result.tags.find(
+    (t) =>
+      t.attrs?.type === undefined && (t.children ?? '').includes('__AGENT_DEVTOOLS_EARLY_ERRORS__'),
+  );
+  if (!tag) throw new Error('expected an early-trap script');
+  return tag;
+}
+
 interface FakeServerSetup {
   readonly close: () => Promise<void>;
   readonly httpServer: EventEmitter;
@@ -132,20 +159,27 @@ describe('agentDevtools()', () => {
     expect(hook.order).toBe('pre');
   });
 
-  it('without a spawned server, injects a single module script into <head>', () => {
+  it('without a spawned server, injects an early-trap classic script + a module bootstrap into <head>', () => {
     const result = runTransform(buildPlugin({ spawnServer: false }));
     expect(result).toBeDefined();
-    expect(result!.tags).toHaveLength(1);
-    const tag = result!.tags[0]!;
-    expect(tag.tag).toBe('script');
-    expect(tag.attrs).toEqual({ type: 'module' });
-    expect(tag.injectTo).toBe('head');
-    expect(typeof tag.children).toBe('string');
+    // tags = [earlyTrap, bootstrap] — no config script since no server.
+    expect(result!.tags).toHaveLength(2);
+    const boot = findBootstrap(result!);
+    expect(boot.tag).toBe('script');
+    expect(boot.attrs).toEqual({ type: 'module' });
+    expect(boot.injectTo).toBe('head');
+    expect(typeof boot.children).toBe('string');
+    const trap = findEarlyTrap(result!);
+    expect(trap.tag).toBe('script');
+    // Classic script — no `type` attribute, runs synchronously before the
+    // deferred module bootstrap.
+    expect(trap.attrs).toEqual({});
+    expect(trap.injectTo).toBe('head');
   });
 
   it('uses the default importFrom = "@agent-devtools/react"', () => {
     const result = runTransform(buildPlugin({ spawnServer: false }));
-    const code = result!.tags[0]!.children!;
+    const code = findBootstrap(result!).children!;
     expect(code).toContain('"@agent-devtools/react"');
     expect(code).toContain('mountAgentDevtools');
     // Even with no server, the bootstrap creates a SettingsStore so the
@@ -162,7 +196,7 @@ describe('agentDevtools()', () => {
     const { viteServer } = makeFakeViteServer();
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
-    const boot = result!.tags[1]!.children!;
+    const boot = findBootstrap(result!).children!;
     expect(boot).toContain('createSettingsStore');
     // Transport receives `getSettings` bound to the same store instance,
     // not a fresh copy — toggling provider in the panel must take effect
@@ -190,7 +224,7 @@ describe('agentDevtools()', () => {
 
   it('emits an idempotent mount guard even on the no-server bootstrap', () => {
     const result = runTransform(buildPlugin({ spawnServer: false }));
-    const code = result!.tags[0]!.children!;
+    const code = findBootstrap(result!).children!;
     expect(code).toContain('__AGENT_DEVTOOLS_MOUNTED__');
   });
 
@@ -198,7 +232,7 @@ describe('agentDevtools()', () => {
     const result = runTransform(
       buildPlugin({ spawnServer: false, importFrom: '@my-org/devtools' }),
     );
-    const code = result!.tags[0]!.children!;
+    const code = findBootstrap(result!).children!;
     expect(code).toContain('"@my-org/devtools"');
   });
 
@@ -208,7 +242,7 @@ describe('agentDevtools()', () => {
     const { viteServer } = makeFakeViteServer({ workspace: '/host/app' });
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
-    const boot = result!.tags[1]!.children!;
+    const boot = findBootstrap(result!).children!;
     expect(boot).toContain('"@agent-devtools/vue"');
   });
 
@@ -218,7 +252,7 @@ describe('agentDevtools()', () => {
     const { viteServer } = makeFakeViteServer({ workspace: '/host/app' });
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
-    const boot = result!.tags[1]!.children!;
+    const boot = findBootstrap(result!).children!;
     expect(boot).toContain('"@agent-devtools/vue2"');
   });
 
@@ -232,14 +266,14 @@ describe('agentDevtools()', () => {
     const { viteServer } = makeFakeViteServer({ workspace: '/host/app' });
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
-    const boot = result!.tags[1]!.children!;
+    const boot = findBootstrap(result!).children!;
     expect(boot).toContain('"@override/pkg"');
     expect(boot).not.toContain('"@agent-devtools/vue"');
   });
 
   it('escapes the import specifier safely (JSON-stringified)', () => {
     const result = runTransform(buildPlugin({ spawnServer: false, importFrom: 'a"b' }));
-    const code = result!.tags[0]!.children!;
+    const code = findBootstrap(result!).children!;
     expect(code).toContain('"a\\"b"');
   });
 
@@ -255,7 +289,7 @@ describe('agentDevtools()', () => {
 
   it('omits the defaultVisible flag when defaulted (visible on first load)', () => {
     const result = runTransform(buildPlugin({ spawnServer: false }));
-    const code = result!.tags[0]!.children!;
+    const code = findBootstrap(result!).children!;
     // True is the orchestrator's own default — propagating an explicit
     // `defaultVisible: true` is unnecessary noise in the injected script.
     expect(code).not.toContain('defaultVisible');
@@ -263,7 +297,7 @@ describe('agentDevtools()', () => {
 
   it('propagates defaultVisible: false through the no-server bootstrap', () => {
     const result = runTransform(buildPlugin({ spawnServer: false, defaultVisible: false }));
-    const code = result!.tags[0]!.children!;
+    const code = findBootstrap(result!).children!;
     expect(code).toContain('__opts.defaultVisible = false;');
   });
 
@@ -273,8 +307,52 @@ describe('agentDevtools()', () => {
     const { viteServer } = makeFakeViteServer();
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
-    const boot = result!.tags[1]!.children!;
+    const boot = findBootstrap(result!).children!;
     expect(boot).toContain('__opts.defaultVisible = false;');
+  });
+
+  it('injects the L0 early-trap classic script before the deferred module bootstrap', () => {
+    const result = runTransform(buildPlugin({ spawnServer: false }));
+    expect(result).toBeDefined();
+    const tags = result!.tags;
+    const trapIdx = tags.findIndex((t) =>
+      (t.children ?? '').includes('__AGENT_DEVTOOLS_EARLY_ERRORS__'),
+    );
+    const bootIdx = tags.findIndex((t) => t.attrs?.type === 'module');
+    expect(trapIdx).toBeGreaterThanOrEqual(0);
+    expect(bootIdx).toBeGreaterThanOrEqual(0);
+    // Order matters: a CLASSIC script in document order beats a deferred
+    // module script. Vite respects the array order when emitting head tags.
+    expect(trapIdx).toBeLessThan(bootIdx);
+    const trap = tags[trapIdx]!;
+    expect(trap.attrs).toEqual({});
+    expect(trap.children).toContain('addEventListener("error"');
+    expect(trap.children).toContain('addEventListener("unhandledrejection"');
+  });
+
+  it('wraps mountAgentDevtools in try/catch so a mount throw routes back to the trap', () => {
+    const result = runTransform(buildPlugin({ spawnServer: false }));
+    const code = findBootstrap(result!).children!;
+    expect(code).toContain('try {');
+    expect(code).toContain('mountAgentDevtools(__opts);');
+    expect(code).toContain('} catch (err) {');
+    // The mount-failure path dispatches an ErrorEvent so the L0 trap catches
+    // it through the same path it captures any other window error.
+    expect(code).toContain("window.dispatchEvent(new ErrorEvent('error'");
+    expect(code).toContain("'agent-devtools mount failed");
+  });
+
+  it('also wraps the server-spawned bootstrap mount in try/catch', async () => {
+    const { start } = makeStartServerStub();
+    const plugin = buildPlugin({ startServer: start });
+    const { viteServer } = makeFakeViteServer();
+    await runConfigureServer(plugin, viteServer);
+    const result = runTransform(plugin);
+    const boot = findBootstrap(result!).children!;
+    expect(boot).toContain('try {');
+    expect(boot).toContain('mountAgentDevtools(__opts);');
+    expect(boot).toContain('} catch (err) {');
+    expect(boot).toContain("window.dispatchEvent(new ErrorEvent('error'");
   });
 });
 
@@ -324,7 +402,7 @@ describe('agentDevtools() — server spawn integration', () => {
     expect(captured[0]?.port).toBe(8765);
   });
 
-  it('after spawn, transformIndexHtml emits a config script then a module bootstrap', async () => {
+  it('after spawn, transformIndexHtml emits trap + config + module bootstrap', async () => {
     const { start } = makeStartServerStub({
       url: 'http://127.0.0.1:4317',
       pairingToken: 'tok-XYZ',
@@ -334,9 +412,11 @@ describe('agentDevtools() — server spawn integration', () => {
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
     expect(result).toBeDefined();
-    expect(result!.tags).toHaveLength(2);
-    const cfg = result!.tags[0]!;
-    const boot = result!.tags[1]!;
+    // tags = [earlyTrap, config, bootstrap] — exact ordering enforced in
+    // the dedicated ordering test below.
+    expect(result!.tags).toHaveLength(3);
+    const cfg = findConfig(result!);
+    const boot = findBootstrap(result!);
     expect(cfg.tag).toBe('script');
     expect(cfg.attrs).toEqual({});
     expect(cfg.injectTo).toBe('head');
@@ -361,8 +441,8 @@ describe('agentDevtools() — server spawn integration', () => {
     const { viteServer } = makeFakeViteServer();
     await runConfigureServer(plugin, viteServer);
     const result = runTransform(plugin);
-    const cfg = result!.tags[0]!.children!;
-    const boot = result!.tags[1]!.children!;
+    const cfg = findConfig(result!).children!;
+    const boot = findBootstrap(result!).children!;
     // Token must appear in the config global only, never concatenated into a URL.
     expect(cfg.includes('secret-token')).toBe(true);
     expect(boot.includes('secret-token')).toBe(false);
@@ -391,8 +471,9 @@ describe('agentDevtools() — server spawn integration', () => {
     expect(captured).toHaveLength(0);
     // And transformIndexHtml falls back to the no-transport bootstrap.
     const result = runTransform(plugin);
-    expect(result!.tags).toHaveLength(1);
-    expect(result!.tags[0]!.children).not.toContain('createDefaultTransport');
+    // tags = [earlyTrap, bootstrap] — no config script since no server.
+    expect(result!.tags).toHaveLength(2);
+    expect(findBootstrap(result!).children).not.toContain('createDefaultTransport');
   });
 
   it('skips spawning when enabled: false even if spawnServer is true', async () => {

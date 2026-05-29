@@ -28,6 +28,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap/index.d.ts",
+      "import": "./dist/bootstrap/index.js",
+      "default": "./dist/bootstrap/index.js"
     }
   },
   "files": [

@@ -27,6 +27,16 @@ const TEXTAREA_ATTR = 'data-agent-devtools-composer-input';
 const SEND_ATTR = 'data-agent-devtools-composer-send';
 const CLOSE_ATTR = 'data-agent-devtools-composer-close';
 const RESIZE_HANDLE_ATTR = 'data-agent-devtools-composer-resize';
+// Layer 2 of the runtime-resilience design. The orchestrator subscribes to
+// the error observer and pushes the live unread count down via
+// `setErrorCount`; this banner is the in-composer surfacing that gives the
+// user one click to ship the captured errors to the agent. Hidden when
+// the count is zero so the panel stays clean during normal use.
+const ERROR_BANNER_ATTR = 'data-agent-devtools-composer-error-banner';
+const ERROR_BANNER_TEXT_ATTR = 'data-agent-devtools-composer-error-banner-text';
+const ERROR_BANNER_ACTION_ATTR = 'data-agent-devtools-composer-error-banner-action';
+/** Display "99+" past this count so the banner stays a single line. */
+const ERROR_BANNER_OVERFLOW = 99;
 
 /**
  * Resize axis identifiers. The panel is fixed-anchored to the launcher
@@ -207,6 +217,19 @@ export interface CreateComposerOptions {
    * server-side ACP session — the agent forgets prior turns.
    */
   readonly onNewSession?: () => void;
+  /**
+   * Called when the user clicks the in-banner "Analyze errors" button.
+   * The orchestrator prefills the textarea with an analysis prompt
+   * referencing the captured records and clears the unread count. The
+   * callback receives the count visible on the banner at click-time
+   * (the orchestrator can use it to size the request — small counts
+   * may inline records, large counts may attach a summary).
+   *
+   * Optional: when omitted the banner button is hidden and the count
+   * is shown as a passive chip. A widget that wants the affordance but
+   * not the wiring (rare — almost always a test) can supply a no-op.
+   */
+  readonly onAnalyzeErrors?: (count: number) => void;
 }
 
 export interface ComposerHandle {
@@ -224,6 +247,15 @@ export interface ComposerHandle {
   setSending(sending: boolean): void;
   /** Show / hide the panel. */
   setVisible(visible: boolean): void;
+  /**
+   * Surface the live unread runtime-error count as an in-panel banner
+   * with an "Analyze errors" affordance. Counts above 99 collapse to
+   * "99+". Setting 0 hides the banner. Non-finite / negative values are
+   * normalised to 0 so a sloppy caller can't paint "-3 errors".
+   */
+  setErrorCount(count: number): void;
+  /** Current displayed error count (0 when the banner is hidden). */
+  getErrorCount(): number;
   /**
    * Anchor the panel to the launcher's position. The composer's right edge
    * aligns with the launcher's right edge, and its bottom sits one `gap`
@@ -357,6 +389,28 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   chipHost.setAttribute(CHIP_ATTR, '');
   applyChipHostStyles(chipHost, picked != null);
 
+  // Runtime-error surfacing banner. Lives between the chip slot and the
+  // stream view so it stays visible regardless of stream scroll position.
+  // Hidden by default; the orchestrator pushes the live count down via
+  // `setErrorCount` and the banner unhides itself when count > 0.
+  const errorBanner = doc.createElement('div');
+  errorBanner.setAttribute(ERROR_BANNER_ATTR, '');
+  errorBanner.setAttribute('role', 'status');
+  errorBanner.setAttribute('aria-live', 'polite');
+  applyErrorBannerStyles(errorBanner);
+  const errorBannerText = doc.createElement('span');
+  errorBannerText.setAttribute(ERROR_BANNER_TEXT_ATTR, '');
+  applyErrorBannerTextStyles(errorBannerText);
+  const errorBannerAction = doc.createElement('button');
+  errorBannerAction.type = 'button';
+  errorBannerAction.setAttribute(ERROR_BANNER_ACTION_ATTR, '');
+  errorBannerAction.setAttribute('aria-label', 'Analyze captured runtime errors');
+  errorBannerAction.textContent = 'Analyze';
+  applyErrorBannerActionStyles(errorBannerAction);
+  errorBanner.appendChild(errorBannerText);
+  errorBanner.appendChild(errorBannerAction);
+  let errorCount = 0;
+
   const textarea = doc.createElement('textarea');
   textarea.setAttribute(TEXTAREA_ATTR, '');
   textarea.setAttribute('placeholder', 'Ask the agent about this page…');
@@ -375,11 +429,13 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   panel.appendChild(header);
   panel.appendChild(chipHost);
+  panel.appendChild(errorBanner);
   panel.appendChild(textarea);
   panel.appendChild(footer);
   container.appendChild(panel);
 
   renderChip();
+  renderErrorBanner();
   renderVisibility();
 
   function renderChip(): void {
@@ -444,6 +500,30 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   function renderVisibility(): void {
     panel.style.display = visible ? 'flex' : 'none';
+  }
+
+  function renderErrorBanner(): void {
+    if (errorCount <= 0) {
+      errorBanner.style.display = 'none';
+      errorBannerText.textContent = '';
+      return;
+    }
+    const display =
+      errorCount > ERROR_BANNER_OVERFLOW ? `${ERROR_BANNER_OVERFLOW}+` : String(errorCount);
+    const noun = errorCount === 1 ? 'runtime error' : 'runtime errors';
+    errorBannerText.textContent = `${display} ${noun} captured`;
+    // Hide the action button entirely when no analyze callback is wired —
+    // the banner becomes a passive chip rather than a dead button.
+    errorBannerAction.style.display = options.onAnalyzeErrors ? 'inline-flex' : 'none';
+    errorBanner.style.display = 'flex';
+  }
+
+  function onErrorBannerActionClick(): void {
+    // Snapshot the count before we let the orchestrator react — handler may
+    // reset it via setErrorCount(0), and we want the captured-at-click value
+    // for the prompt template.
+    const snapshot = errorCount;
+    options.onAnalyzeErrors?.(snapshot);
   }
 
   function refreshSendDisabled(): void {
@@ -677,6 +757,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   handoffButton.addEventListener('click', onHandoffClick);
   newSessionButton.addEventListener('click', onNewSessionClick);
   closeButton.addEventListener('click', onCloseClick);
+  errorBannerAction.addEventListener('click', onErrorBannerActionClick);
   panel.addEventListener('pointerdown', onPointerDown);
 
   return {
@@ -715,6 +796,16 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       visible = next;
       renderVisibility();
     },
+    setErrorCount(count): void {
+      if (destroyed) return;
+      const normalised = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+      if (normalised === errorCount) return;
+      errorCount = normalised;
+      renderErrorBanner();
+    },
+    getErrorCount(): number {
+      return errorCount;
+    },
     setAnchor(anchor): void {
       if (destroyed) return;
       lastAnchor = anchor;
@@ -744,6 +835,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       handoffButton.removeEventListener('click', onHandoffClick);
       newSessionButton.removeEventListener('click', onNewSessionClick);
       closeButton.removeEventListener('click', onCloseClick);
+      errorBannerAction.removeEventListener('click', onErrorBannerActionClick);
       panel.removeEventListener('pointerdown', onPointerDown);
       for (const [, , detach] of handleListeners) detach();
       panel.remove();
@@ -1058,6 +1150,52 @@ function applyChipHostStyles(host: HTMLElement, hasChip: boolean): void {
   // textarea's own margin and the empty state looks oversized.
   s.padding = hasChip ? '10px 12px 0 12px' : '0';
   s.minHeight = '0';
+}
+
+function applyErrorBannerStyles(banner: HTMLElement): void {
+  const s = banner.style;
+  // Slim row that sits flush against the chip slot above. Tinted error
+  // background (token with literal fallback) plus a hairline border so the
+  // banner reads as a runtime-error surface, not part of the conversation.
+  s.display = 'none';
+  s.alignItems = 'center';
+  s.justifyContent = 'space-between';
+  s.gap = '8px';
+  s.margin = '8px 12px 0 12px';
+  s.padding = '6px 10px';
+  s.borderRadius = '8px';
+  s.background = 'var(--adt-error-bg, rgba(229, 72, 77, 0.12))';
+  s.border = '1px solid var(--adt-error-border, rgba(229, 72, 77, 0.35))';
+  s.color = 'var(--adt-error-text-strong, #b51a1d)';
+  s.fontSize = '12px';
+  s.lineHeight = '1.4';
+}
+
+function applyErrorBannerTextStyles(text: HTMLElement): void {
+  const s = text.style;
+  s.flex = '1 1 auto';
+  s.minWidth = '0';
+  s.overflow = 'hidden';
+  s.textOverflow = 'ellipsis';
+  s.whiteSpace = 'nowrap';
+  s.fontWeight = '500';
+}
+
+function applyErrorBannerActionStyles(button: HTMLButtonElement): void {
+  const s = button.style;
+  s.display = 'inline-flex';
+  s.alignItems = 'center';
+  s.padding = '2px 10px';
+  s.borderRadius = '999px';
+  s.border = '1px solid var(--adt-error-border, rgba(229, 72, 77, 0.6))';
+  s.background = 'var(--adt-error, #e5484d)';
+  s.color = 'var(--adt-error-text, #ffffff)';
+  s.fontSize = '11px';
+  s.fontWeight = '600';
+  s.cursor = 'pointer';
+  s.fontFamily = 'inherit';
+  s.lineHeight = '1.4';
+  s.whiteSpace = 'nowrap';
 }
 
 function applyChipStyles(chip: HTMLElement): void {

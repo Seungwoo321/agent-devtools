@@ -963,4 +963,100 @@ describe('createComposer', () => {
     expect(() => btn?.click()).not.toThrow();
     handle.destroy();
   });
+
+  // ── L2 surfacing: error banner + analyze affordance ───────────────────
+  //
+  // The orchestrator subscribes to the runtime-error observer and pushes
+  // the live count down via `setErrorCount`. The composer renders a slim
+  // banner when count > 0 and an Analyze button when an `onAnalyzeErrors`
+  // callback is wired. Clicking Analyze hands the count back to the
+  // orchestrator (which prefills the textarea + resets the count).
+
+  it('keeps the error banner hidden when no errors have been surfaced', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    const banner = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner]',
+    ) as HTMLDivElement;
+    expect(banner).not.toBeNull();
+    expect(banner.style.display).toBe('none');
+    expect(handle.getErrorCount()).toBe(0);
+    handle.destroy();
+  });
+
+  it('shows the banner with a pluralised count once setErrorCount is called', () => {
+    const handle = createComposer({
+      container,
+      onSubmit: vi.fn(),
+      onAnalyzeErrors: vi.fn(),
+    });
+    const banner = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner]',
+    ) as HTMLDivElement;
+    const text = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner-text]',
+    ) as HTMLSpanElement;
+
+    handle.setErrorCount(1);
+    expect(banner.style.display).toBe('flex');
+    expect(text.textContent).toBe('1 runtime error captured');
+
+    handle.setErrorCount(4);
+    expect(text.textContent).toBe('4 runtime errors captured');
+    handle.destroy();
+  });
+
+  it('collapses counts above 99 to "99+" in the banner text', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), onAnalyzeErrors: vi.fn() });
+    const text = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner-text]',
+    ) as HTMLSpanElement;
+    handle.setErrorCount(250);
+    expect(text.textContent).toBe('99+ runtime errors captured');
+    expect(handle.getErrorCount()).toBe(250);
+    handle.destroy();
+  });
+
+  it('normalises negative / non-finite counts to 0 and hides the banner', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    handle.setErrorCount(3);
+    handle.setErrorCount(-1);
+    const banner = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner]',
+    ) as HTMLDivElement;
+    expect(banner.style.display).toBe('none');
+    expect(handle.getErrorCount()).toBe(0);
+    handle.setErrorCount(Number.NaN);
+    expect(handle.getErrorCount()).toBe(0);
+    handle.destroy();
+  });
+
+  it('hides the Analyze action when no onAnalyzeErrors callback is wired', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    handle.setErrorCount(2);
+    const action = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner-action]',
+    ) as HTMLButtonElement;
+    expect(action.style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('fires onAnalyzeErrors with the count at click-time', () => {
+    const onAnalyzeErrors = vi.fn();
+    const handle = createComposer({ container, onSubmit: vi.fn(), onAnalyzeErrors });
+    handle.setErrorCount(7);
+    const action = handle.element.querySelector(
+      '[data-agent-devtools-composer-error-banner-action]',
+    ) as HTMLButtonElement;
+    expect(action.style.display).toBe('inline-flex');
+    action.click();
+    expect(onAnalyzeErrors).toHaveBeenCalledWith(7);
+    handle.destroy();
+  });
+
+  it('ignores setErrorCount calls after destroy', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn() });
+    handle.destroy();
+    expect(() => handle.setErrorCount(3)).not.toThrow();
+    expect(handle.getErrorCount()).toBe(0);
+  });
 });

@@ -29,6 +29,9 @@ const DEFAULT_SIZE_PX = 48;
 const DEFAULT_LABEL = 'Open agent devtools';
 
 const LAUNCHER_ATTR = 'data-agent-devtools-launcher';
+const ERROR_BADGE_ATTR = 'data-agent-devtools-launcher-error-badge';
+/** Above this count the badge collapses to "99+" so it stays a single chip. */
+const ERROR_BADGE_OVERFLOW = 99;
 
 export interface CreateLauncherOptions extends LauncherStorageOptions {
   /** Shadow-root container to append the button into. */
@@ -71,6 +74,20 @@ export interface LauncherHandle {
   setVisible(visible: boolean): void;
   /** Whether the launcher button is currently visible. */
   isVisible(): boolean;
+  /**
+   * Surface the live count of unread runtime-error records as a badge bubble
+   * on the launcher button. Layer 2 of the runtime-resilience design: when
+   * the host page throws and the composer is closed, the user has no signal
+   * unless we put one on the always-visible surface. The orchestrator
+   * subscribes to the observer and calls this for every new record; opening
+   * the composer (or invoking "Analyze errors") resets the count to 0.
+   *
+   * Counts above 99 collapse to "99+" so the badge stays a single chip.
+   * Negative or non-finite values are normalised to 0.
+   */
+  setErrorCount(count: number): void;
+  /** Current displayed error count (0 when the badge is hidden). */
+  getErrorCount(): number;
   /** Remove the button from the DOM and detach listeners. */
   destroy(): void;
 }
@@ -98,6 +115,12 @@ export function createLauncher(options: CreateLauncherOptions): LauncherHandle {
   applyStaticStyles(button, size);
   applyPositionStyles(button, state.position);
   button.appendChild(buildIcon(doc));
+  // Error badge — hidden until the orchestrator surfaces a non-zero count.
+  // Detached `pointer-events: none` so the badge can never swallow a click
+  // and lock the launcher.
+  const errorBadge = buildErrorBadge(doc);
+  button.appendChild(errorBadge);
+  let errorCount = 0;
   container.appendChild(button);
   // Surface the initial resolved position so peers (composer anchor) can
   // align before the first render frame.
@@ -194,6 +217,16 @@ export function createLauncher(options: CreateLauncherOptions): LauncherHandle {
     isVisible(): boolean {
       return visible;
     },
+    setErrorCount(count: number): void {
+      if (destroyed) return;
+      const normalised = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+      if (normalised === errorCount) return;
+      errorCount = normalised;
+      renderErrorBadge(errorBadge, errorCount);
+    },
+    getErrorCount(): number {
+      return errorCount;
+    },
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
@@ -235,6 +268,45 @@ function applyPositionStyles(button: HTMLButtonElement, position: LauncherPositi
   button.style.bottom = `${position.y}px`;
   button.style.left = 'auto';
   button.style.top = 'auto';
+}
+
+function buildErrorBadge(doc: Document): HTMLSpanElement {
+  const badge = doc.createElement('span');
+  badge.setAttribute(ERROR_BADGE_ATTR, '');
+  badge.setAttribute('aria-hidden', 'true');
+  const s = badge.style;
+  s.position = 'absolute';
+  // Anchor the badge to the top-right of the round button, pulling it
+  // slightly outside so a single-digit chip reads cleanly against the
+  // launcher's dark background.
+  s.top = '-4px';
+  s.right = '-4px';
+  s.minWidth = '18px';
+  s.height = '18px';
+  s.padding = '0 5px';
+  s.boxSizing = 'border-box';
+  s.borderRadius = '999px';
+  s.background = 'var(--adt-error, #e5484d)';
+  s.color = 'var(--adt-error-text, #ffffff)';
+  s.fontSize = '11px';
+  s.fontWeight = '600';
+  s.lineHeight = '18px';
+  s.textAlign = 'center';
+  // The badge is purely decorative — it must never intercept a click and
+  // strand the launcher in an "I can't open you" state.
+  s.pointerEvents = 'none';
+  s.display = 'none';
+  return badge;
+}
+
+function renderErrorBadge(badge: HTMLSpanElement, count: number): void {
+  if (count <= 0) {
+    badge.style.display = 'none';
+    badge.textContent = '';
+    return;
+  }
+  badge.textContent = count > ERROR_BADGE_OVERFLOW ? `${ERROR_BADGE_OVERFLOW}+` : String(count);
+  badge.style.display = 'inline-block';
 }
 
 function buildIcon(doc: Document): SVGElement {

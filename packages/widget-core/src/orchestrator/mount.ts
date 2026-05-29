@@ -52,6 +52,7 @@ import {
   type SettingsStore,
 } from '../settings/index.js';
 import { createShadowWidgetRoot, THEME_ATTR, type ShadowWidgetRoot } from '../widget/index.js';
+import { createWidgetGuard, type WidgetGuardHandle } from './guard.js';
 import {
   loadPanelOpen,
   loadWidgetVisible,
@@ -234,6 +235,26 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
   if (!doc) throw new Error('mountAgentDevtools: no document available');
   const resolvePicked = options.describePicked ?? describePicked;
 
+  // L0 + L1 must come up BEFORE any widget construction so that:
+  //   (a) the early-trap drain runs at the earliest moment we own a
+  //       running observer, surfacing anything captured between the
+  //       host's first paint and our mount;
+  //   (b) a throw during shadow-root attach, composer build, picker
+  //       wiring, or any other widget-internal setup is captured as a
+  //       widget-internal record rather than crashing the mount and
+  //       leaving the host with no signal.
+  const win =
+    (typeof globalThis !== 'undefined' ? (globalThis as { window?: Window }).window : undefined) ??
+    doc.defaultView ??
+    undefined;
+  const observer = createErrorObserver({
+    ...(win !== undefined && { window: win }),
+  });
+  observer.start();
+  const guard: WidgetGuardHandle = createWidgetGuard({
+    ingest: (record) => observer.ingest(record),
+  });
+
   const widget = createShadowWidgetRoot({
     document: doc,
     ...(options.shadowOpen === true && { openMode: true }),
@@ -269,23 +290,31 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     container: widget.container,
     document: doc,
     visible: persistedPanelOpen,
-    onSubmit: handleSubmit,
-    onTogglePicker: handleTogglePicker,
-    onToggleSettings: () => toggleSettings(!settingsVisible),
-    onClearPicked: handleClearPicked,
-    onClose: handleClose,
-    onHandoff: handleHandoff,
-    onNewSession: handleNewSession,
+    // handleSubmit is async — guardAsync catches both a sync throw at the
+    // boundary AND a rejected promise so the next click after a failed
+    // submit still works. The remaining handlers are sync; guard wraps them
+    // so a throw in any one cannot lock the entire composer surface.
+    onSubmit: guard.guardAsync(handleSubmit, 'composer.onSubmit'),
+    onTogglePicker: guard.guard(handleTogglePicker, 'composer.onTogglePicker'),
+    onToggleSettings: guard.guard(
+      (): void => toggleSettings(!settingsVisible),
+      'composer.onToggleSettings',
+    ),
+    onClearPicked: guard.guard(handleClearPicked, 'composer.onClearPicked'),
+    onClose: guard.guard(handleClose, 'composer.onClose'),
+    onHandoff: guard.guardAsync(handleHandoff, 'composer.onHandoff'),
+    onNewSession: guard.guard(handleNewSession, 'composer.onNewSession'),
+    onAnalyzeErrors: guard.guard(handleAnalyzeErrors, 'composer.onAnalyzeErrors'),
     // Seed the toggle from the canonical store value so the very first
     // render matches whatever the orchestrator handed us (typically the
     // mount-default `true`, but tests can preload another value).
     safeMode: settingsStore.get().safeMode,
-    onToggleSafeMode: (next): void => {
+    onToggleSafeMode: guard.guard((next: boolean): void => {
       // Composer already painted the local mirror — push the value into
       // the store so the transport and any other store subscriber see it
       // on the very next read.
       settingsStore.set({ safeMode: next });
-    },
+    }, 'composer.onToggleSafeMode'),
   });
   // External mutations to the store (e.g. an upcoming settings-panel
   // surface) must propagate back to the composer's visible affordance.
@@ -321,7 +350,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     container: composer.element,
     document: doc,
     store: settingsStore,
-    onClose: () => toggleSettings(false),
+    onClose: guard.guard((): void => toggleSettings(false), 'settingsPanel.onClose'),
   });
   if (streamRenderer.element.parentElement === composer.element) {
     composer.element.insertBefore(settingsPanel.element, streamRenderer.element);
@@ -345,18 +374,15 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
   const handoffModal = createHandoffModal({
     container: widget.container,
     document: doc,
-    onClose: () => {
+    onClose: guard.guard((): void => {
       handoffController?.abort();
       handoffController = null;
-    },
+    }, 'handoffModal.onClose'),
   });
-
-  const observer = createErrorObserver();
-  observer.start();
 
   const picker = createPicker({
     document: doc,
-    onPick(element): void {
+    onPick: guard.guard((element: Element): void => {
       pickedElement = element;
       composer.setPicked(resolvePicked(element));
       composer.setPickerActive(false);
@@ -366,16 +392,16 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       savePanelOpen(true);
       streamRenderer.scrollToBottom();
       composer.focus();
-    },
-    onCancel(): void {
+    }, 'picker.onPick'),
+    onCancel: guard.guard((): void => {
       composer.setPickerActive(false);
-    },
+    }, 'picker.onCancel'),
   });
 
   const launcher = createLauncher({
     container: widget.container,
     document: doc,
-    onClick(): void {
+    onClick: guard.guard((): void => {
       const willOpen = composer.element.style.display === 'none';
       composer.setVisible(willOpen);
       // The launcher click is the canonical user-driven open/close toggle —
@@ -389,15 +415,63 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
         streamRenderer.scrollToBottom();
         composer.focus();
       }
-    },
-    onPositionChange(position): void {
+    }, 'launcher.onClick'),
+    onPositionChange: guard.guard((position: { x: number; y: number }): void => {
       // Keep the chat panel glued to the launcher: same right-edge, sitting
       // above the button. The composer's `setAnchor` handles viewport
       // clamping so a launcher dragged near the top of the page doesn't
       // strand the panel off-screen.
       composer.setAnchor({ x: position.x, y: position.y });
-    },
+    }, 'launcher.onPositionChange'),
   });
+
+  // ── L2 surfacing: live unread runtime-error count ──────────────────────
+  //
+  // The widget owns the "unread" axis: every record the observer emits
+  // increments the count, both the launcher badge and the in-composer
+  // banner render it, and clicking Analyze (or otherwise triaging) is
+  // what resets it to zero. The store is intentionally the simple sum
+  // of seen-but-not-acknowledged records — counting kinds (host vs
+  // widget-internal) separately would surface more information but the
+  // user's reaction ("something went wrong, open the panel") is the
+  // same in both cases.
+  //
+  // Seed from any records already in the buffer when we mount — this
+  // is how drained L0 early-trap entries show up immediately as an
+  // unread badge instead of waiting for the next runtime error.
+  let unreadErrorCount = observer.getRecords().length;
+  function pushUnreadCount(): void {
+    launcher.setErrorCount(unreadErrorCount);
+    composer.setErrorCount(unreadErrorCount);
+  }
+  pushUnreadCount();
+  const unsubscribeErrors = observer.subscribe(() => {
+    unreadErrorCount += 1;
+    pushUnreadCount();
+  });
+
+  function handleAnalyzeErrors(count: number): void {
+    if (count <= 0) return;
+    // Drop the unread count immediately — the user has acknowledged the
+    // batch by clicking Analyze. New records that arrive after this
+    // restart the count.
+    unreadErrorCount = 0;
+    pushUnreadCount();
+    // Prefill the textarea with an analysis prompt. The transport's
+    // page-context builder will attach the actual records (via
+    // observer.getRecords() inside buildPageContext) on submit, so the
+    // user just needs to confirm with Enter.
+    const noun = count === 1 ? 'this runtime error' : `these ${count} runtime errors`;
+    composer.setText(
+      `Analyze ${noun} captured on the current page. Identify the most likely root cause, ` +
+        'cite the offending file/line if the stack contains one, and propose a fix.',
+    );
+    // Make sure the panel is open and focused so the user can hit Enter
+    // (or edit the prompt) without an extra click.
+    composer.setVisible(true);
+    savePanelOpen(true);
+    composer.focus();
+  }
 
   async function handleSubmit(payload: ComposerSubmitPayload): Promise<void> {
     const text = payload.text.trim();
@@ -580,7 +654,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     }
   }
 
-  const handleToggleKeydown = (event: KeyboardEvent): void => {
+  const handleToggleKeydown = guard.guard((event: KeyboardEvent): void => {
     if (event.defaultPrevented) return;
     if (!(event.metaKey || event.ctrlKey)) return;
     if (!event.shiftKey) return;
@@ -590,7 +664,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     if (!isSemicolon) return;
     event.preventDefault();
     setWidgetVisible(!widgetVisible);
-  };
+  }, 'keydown.toggleHotkey');
   const hotkeyEnabled = options.disableToggleHotkey !== true;
   if (hotkeyEnabled) {
     doc.addEventListener('keydown', handleToggleKeydown);
@@ -617,6 +691,7 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       handoffController?.abort();
       unsubscribeSafeMode();
       unsubscribeTheme();
+      unsubscribeErrors();
       picker.stop();
       observer.stop();
       handoffModal.destroy();

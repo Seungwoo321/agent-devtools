@@ -47,7 +47,8 @@
     "vite": ">=5.0.0"
   },
   "dependencies": {
-    "@agent-devtools/core": "workspace:*"
+    "@agent-devtools/core": "workspace:*",
+    "@agent-devtools/widget-core": "workspace:*"
   },
   "devDependencies": {
     "@agent-devtools/angular": "workspace:*",
