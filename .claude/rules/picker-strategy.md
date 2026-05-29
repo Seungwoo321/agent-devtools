@@ -80,6 +80,11 @@ picker overlay 와 widget UI 가 호스트 앱에 누출되는 사고를 막기 
 - **호스트 focus / scroll containment 무영향**:
   - picker active 동안 호스트 focus 를 가로채지 않는다. Escape 키 listener 는 `capture: true` 로 달되 호스트 keydown 핸들러를 stopPropagation 하지 않는다 (Escape 만 preventDefault).
   - hover/click capture phase listener 는 호스트 scroll container 의 wheel/touchmove 를 막지 않는다.
+- **widget input focused 동안 키 이벤트는 호스트로 누출되지 않는다** (closed shadow 의 트리 격리는 이벤트 격리가 아님 — `KeyboardEvent` 는 `composed: true` 라 retarget 후 호스트 document 까지 propagate 된다):
+  - 어댑터는 widget shadow host element 의 **bubble-phase** 에서 `keydown` / `keyup` / `keypress` 에 대해 `stopPropagation` 을 호출한다. widget 내부에서 발생한 이벤트가 호스트 document/window 의 bubble-phase listener (Storybook `D`, Notion `/`, VSCode `F1`, `Ctrl+K` 류 글로벌 단축키) 로 전파되지 않게 한다.
+  - shadow host 의 bubble-phase 가 widget 내부 listener (composer 의 textarea `keydown` 핸들러 등) 보다 늦게 실행되므로 widget 자체 단축키 처리는 그대로 동작한다. capture-phase 로 부착하면 widget 내부 핸들러를 가로채서 부작용 — bubble-phase 가 정답.
+  - **알려진 한계**: 호스트가 `document` / `window` 에 **capture-phase** 로 박은 listener 는 DOM 표준상 widget 어떤 element 의 listener 보다 먼저 실행되므로 widget 측에서 막을 수 없다. 정책상 호스트의 정상적 글로벌 단축키는 거의 모두 bubble-phase 라 실제 부작용은 거의 없으나, capture-phase 호스트 listener 와의 충돌은 알려진 trade-off 로 둔다.
+  - picker overlay 의 host document Escape listener (위 항목) 는 widget shadow root **밖** 에 부착되므로 본 격리와 독립 — picker 가 외부에서 처리하는 Escape 흐름은 그대로 유지된다.
 
 ## 어댑터 PR 리뷰 기준
 
@@ -89,7 +94,8 @@ picker overlay 와 widget UI 가 호스트 앱에 누출되는 사고를 막기 
 2. picker entry 는 `createPicker({ document, shouldSkip, onPick, onHover, onCancel })` 의 React 어댑터와 동일한 시그니처를 노출한다. widget 측 wire 코드를 재작성하지 않도록.
 3. fallback path 4 케이스에 대한 단위 테스트가 존재한다 (각 walker 부재 케이스에서 picker 가 throw 안 함을 명시).
 4. closed shadow root 불변식의 자동 회귀 가드 — picker 가 widget DOM 을 잡으려고 시도해도 `shouldSkip` 이 차단함을 e2e smoke 에서 검증.
-5. Re-use 가능한 코드 (예: Next 의 React walker 재사용, Nuxt 의 Vue walker 재사용) 는 workspace dependency 로 명시. 코드 복제 PR 은 reject.
+5. widget input 격리의 자동 회귀 가드 — widget shadow root 안에서 발생한 `keydown` / `keyup` / `keypress` 가 호스트 document bubble-phase listener 에 도달하지 않음을 단위 테스트에서 검증.
+6. Re-use 가능한 코드 (예: Next 의 React walker 재사용, Nuxt 의 Vue walker 재사용) 는 workspace dependency 로 명시. 코드 복제 PR 은 reject.
 
 ## 변경 정책
 
