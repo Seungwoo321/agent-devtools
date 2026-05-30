@@ -328,6 +328,64 @@ describe('mountAgentDevtools', () => {
   });
 });
 
+describe('mountAgentDevtools — host key isolation', () => {
+  // KeyboardEvent is `composed: true`, so a keystroke inside the closed
+  // shadow root retargets onto the shadow host and keeps bubbling to the
+  // host document. The widget installs a bubble-phase stop on the shadow
+  // host so host-page shortcuts (Storybook's `D`, Notion's `/`, etc.) don't
+  // fire while the user types in the chat panel.
+  function dispatchInsideWidget(
+    handle: ReturnType<typeof mountAgentDevtools>,
+    type: 'keydown' | 'keyup' | 'keypress',
+  ): void {
+    const textarea = handle.composer.element.querySelector('textarea');
+    if (!textarea) throw new Error('composer textarea missing');
+    textarea.dispatchEvent(
+      new KeyboardEvent(type, { key: 'd', bubbles: true, composed: true, cancelable: true }),
+    );
+  }
+
+  it.each(['keydown', 'keyup', 'keypress'] as const)(
+    'does not leak %s from the widget panel to host document bubble listeners',
+    (type) => {
+      const handle = mountAgentDevtools();
+      const hostListener = vi.fn();
+      document.addEventListener(type, hostListener);
+      try {
+        dispatchInsideWidget(handle, type);
+        expect(hostListener).not.toHaveBeenCalled();
+      } finally {
+        document.removeEventListener(type, hostListener);
+        handle.destroy();
+      }
+    },
+  );
+
+  it('still lets the composer textarea keydown handler run (Enter submit unaffected)', () => {
+    // The shadow-host stop is in the bubble phase, so widget-internal
+    // handlers on the textarea (Enter → submit) execute first and only the
+    // leak-out hop is suppressed.
+    const send = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const handle = mountAgentDevtools({ transport: { send } });
+    handle.composer.setText('hi');
+    handle.composer.element
+      .querySelector('textarea')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
+    expect(handle.composer.getText()).toBe('');
+    handle.destroy();
+  });
+
+  it('removes the host-key stop listeners on destroy', () => {
+    const handle = mountAgentDevtools();
+    const host = handle.widget.host;
+    const removeSpy = vi.spyOn(host, 'removeEventListener');
+    handle.destroy();
+    const removedTypes = removeSpy.mock.calls.map((call) => call[0]);
+    expect(removedTypes).toEqual(expect.arrayContaining(['keydown', 'keyup', 'keypress']));
+    removeSpy.mockRestore();
+  });
+});
+
 describe('mountAgentDevtools — new conversation handler', () => {
   function getNewSessionButton(handle: ReturnType<typeof mountAgentDevtools>): HTMLButtonElement {
     return queryShadow<HTMLButtonElement>(

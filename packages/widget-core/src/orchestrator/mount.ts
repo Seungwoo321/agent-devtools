@@ -281,6 +281,23 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     widget.host.setAttribute(THEME_ATTR, settings.theme);
   });
 
+  // Closed shadow root only isolates the DOM tree, not events: KeyboardEvent
+  // is `composed: true`, so a keystroke inside the widget panel retargets
+  // onto the shadow host and keeps bubbling to the host document. Without
+  // this stop, host-page shortcuts (e.g. Storybook's `D` toggles the
+  // controls panel, Notion's `/`, VSCode webview `F1`) fire while the user
+  // types in the chat input. We attach in the bubble phase on the shadow
+  // host so widget-internal handlers (composer textarea keydown, etc.) run
+  // first and only the leak-out step is suppressed. Capture-phase host
+  // listeners on `document`/`window` still receive the event — that's a
+  // known DOM-standard limit, documented in `picker-strategy.md`.
+  const stopHostKeyLeak = (event: KeyboardEvent): void => {
+    event.stopPropagation();
+  };
+  widget.host.addEventListener('keydown', stopHostKeyLeak);
+  widget.host.addEventListener('keyup', stopHostKeyLeak);
+  widget.host.addEventListener('keypress', stopHostKeyLeak);
+
   // Restore the user's last open/closed choice so a refresh re-opens the
   // panel they left open. Nothing persisted yet → start closed (the
   // composer's own default).
@@ -687,6 +704,9 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       if (hotkeyEnabled) {
         doc.removeEventListener('keydown', handleToggleKeydown);
       }
+      widget.host.removeEventListener('keydown', stopHostKeyLeak);
+      widget.host.removeEventListener('keyup', stopHostKeyLeak);
+      widget.host.removeEventListener('keypress', stopHostKeyLeak);
       inflight?.abort();
       handoffController?.abort();
       unsubscribeSafeMode();

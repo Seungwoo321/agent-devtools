@@ -1,18 +1,24 @@
 /**
- * Fiber → source-location resolver. Supports React ≤ 18 (legacy
- * `_debugSource` field) and React 19 (no `_debugSource`; the JSX call
- * site is recovered by parsing the captured `_debugStack.stack`).
+ * Fiber → source-location resolver. Three independent channels, tried in
+ * order, so picked-element source extraction survives React internal
+ * debug-metadata churn:
  *
- * Why this exists: React 19 removed `_debugSource` from fibers (see
- * `react-dom/cjs/react-dom-client.development.js`'s fiber constructor —
- * it initializes `_debugStack`/`_debugOwner`/`_debugInfo`/`_debugTask`
- * but not `_debugSource`). The replacement is `_debugStack`, an `Error`
- * captured at JSX creation. Its `.stack` string has the user's JSX call
- * site as the first frame that isn't React's own jsx-runtime / jsx-dev-
- * runtime / react-dom internals. Parse it, return the same
- * `FiberSourceLocation` shape the rest of the codebase already consumes,
- * and the picked-element preamble + page-files listing keep working
- * without per-call-site React-version branches.
+ *   1. `_debugSource` — React ≤ 18 set this directly on the fiber from
+ *      the JSX `__source` pragma. Removed in React 19.
+ *   2. `_debugStack` — React 19's replacement: an `Error` captured at
+ *      JSX creation. The first non-React frame of its `.stack` string is
+ *      the user's JSX call site.
+ *   3. `memoizedProps.__source` — the JSX source pragma value as it sits
+ *      on the React element's props, populated by
+ *      `@babel/plugin-transform-react-jsx-source` (and SWC's equivalent).
+ *      Independent of every React internal debug field, so it survives
+ *      any future React-internal change to `_debug*` shapes.
+ *
+ * Why three channels: React 18 → 19 silently dropped `_debugSource`. Any
+ * future major could drop `_debugStack` the same way. Channel 3 reads a
+ * field that lives on element props rather than fiber internals, so a
+ * later React version that overhauls `_debug*` entirely still leaves
+ * source extraction working.
  *
  * Path normalization: Vite serves dev modules from
  * `http://localhost:<port>/src/App.tsx?t=<bust>`. We strip the origin
@@ -25,11 +31,12 @@ import type { FiberNodeLike, FiberSourceLocation } from './types.js';
 /**
  * Resolve a fiber's authored source location.
  *
- * Returns the legacy `_debugSource` if present (React ≤ 18 path), then
- * falls back to parsing `_debugStack.stack` (React 19 path). Returns
- * `undefined` when neither yields a usable location — host (DOM) fibers,
- * production builds, libraries shipping pre-transpiled JSX without
- * source preservation, etc.
+ * Tries `_debugSource` (React ≤ 18), then `_debugStack` parsing (React
+ * 19), then the JSX `__source` prop on `memoizedProps` (channel
+ * independent of every React internal debug field). Returns `undefined`
+ * when none yields a usable location — host (DOM) fibers, production
+ * builds, libraries shipping pre-transpiled JSX without source
+ * preservation, etc.
  */
 export function resolveFiberSource(
   fiber: FiberNodeLike | null | undefined,
@@ -37,7 +44,26 @@ export function resolveFiberSource(
   if (!fiber) return undefined;
   const legacy = normalizeLegacyDebugSource(fiber._debugSource);
   if (legacy) return legacy;
-  return parseDebugStack(fiber._debugStack);
+  const fromStack = parseDebugStack(fiber._debugStack);
+  if (fromStack) return fromStack;
+  return readJsxSourceProp(fiber.memoizedProps);
+}
+
+/**
+ * Read a JSX `__source` prop carried on a fiber's `memoizedProps`.
+ *
+ * `@babel/plugin-transform-react-jsx-source` (and SWC's equivalent) emit
+ * the source pragma as `__source: { fileName, lineNumber, columnNumber? }`
+ * on every JSX element they compile. The shape matches the legacy
+ * `_debugSource`, so we hand it to the same validator.
+ *
+ * Exported for unit testing in isolation. Production callers should use
+ * `resolveFiberSource(fiber)`, which combines all three channels.
+ */
+export function readJsxSourceProp(props: unknown): FiberSourceLocation | undefined {
+  if (props == null || typeof props !== 'object') return undefined;
+  const source = (props as { __source?: unknown }).__source;
+  return normalizeLegacyDebugSource(source);
 }
 
 /**

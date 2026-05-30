@@ -2,15 +2,16 @@
  * Minimal structural typing for React fiber nodes. We only model fields we
  * actually read — react itself doesn't export fiber types.
  *
- * Source-location resolution spans two React generations:
- *   - React ≤ 18 populated `_debugSource` (set by the legacy
- *     `__source` JSX pragma) with `{fileName, lineNumber, columnNumber}`.
- *   - React 19 removed `_debugSource` and instead stores a captured
- *     `Error` on `_debugStack`; the original JSX call site is recovered
- *     by parsing `_debugStack.stack`.
- *
- * `resolveFiberSource` (see `./source.ts`) tries `_debugSource` first and
- * falls back to `_debugStack` parsing, so this module supports both eras.
+ * Source-location resolution uses three independent channels in
+ * `resolveFiberSource` (see `./source.ts`):
+ *   1. `_debugSource` — React ≤ 18 set this directly on the fiber from
+ *      the JSX `__source` pragma. Removed in React 19.
+ *   2. `_debugStack` — React 19's replacement: an `Error` captured at
+ *      JSX creation; the call site is recovered by parsing `.stack`.
+ *   3. `memoizedProps.__source` — the JSX source pragma as it sits on
+ *      element props (Babel + SWC plugin output). Independent of every
+ *      React internal debug field, so it survives future React-internal
+ *      changes to the `_debug*` shapes.
  */
 
 export interface FiberSourceLocation {

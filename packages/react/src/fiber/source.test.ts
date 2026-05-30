@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeLegacyDebugSource, parseDebugStack, resolveFiberSource } from './source.js';
+import {
+  normalizeLegacyDebugSource,
+  parseDebugStack,
+  readJsxSourceProp,
+  resolveFiberSource,
+} from './source.js';
 import type { FiberNodeLike } from './types.js';
 
 /**
@@ -204,6 +209,80 @@ describe('resolveFiberSource', () => {
       fileName: 'src/App.tsx',
       lineNumber: 36,
       columnNumber: 11,
+    });
+  });
+
+  it('falls back to memoizedProps.__source when both debug channels miss', () => {
+    const fiber: FiberNodeLike = {
+      memoizedProps: {
+        __source: {
+          fileName: '/src/Button.tsx',
+          lineNumber: 42,
+          columnNumber: 7,
+        },
+      },
+    };
+    expect(resolveFiberSource(fiber)).toEqual({
+      fileName: '/src/Button.tsx',
+      lineNumber: 42,
+      columnNumber: 7,
+    });
+  });
+
+  it('prefers _debugStack over the __source prop when both are present', () => {
+    const fiber: FiberNodeLike = {
+      _debugStack: stack('    at App (http://localhost:5173/src/A.tsx?t=1:1:1)'),
+      memoizedProps: {
+        __source: { fileName: '/src/Other.tsx', lineNumber: 9, columnNumber: 1 },
+      },
+    };
+    // Debug stack hits first; the __source prop is the last-resort channel.
+    expect(resolveFiberSource(fiber)).toEqual({
+      fileName: 'src/A.tsx',
+      lineNumber: 1,
+      columnNumber: 1,
+    });
+  });
+
+  it('returns undefined when all three channels miss', () => {
+    const fiber: FiberNodeLike = {
+      memoizedProps: { className: 'card', children: 'hi' },
+    };
+    expect(resolveFiberSource(fiber)).toBeUndefined();
+  });
+});
+
+describe('readJsxSourceProp', () => {
+  it('returns undefined for null / non-object props', () => {
+    expect(readJsxSourceProp(null)).toBeUndefined();
+    expect(readJsxSourceProp(undefined)).toBeUndefined();
+    expect(readJsxSourceProp('not an object')).toBeUndefined();
+    expect(readJsxSourceProp(123)).toBeUndefined();
+  });
+
+  it('returns undefined when __source is missing', () => {
+    expect(readJsxSourceProp({})).toBeUndefined();
+    expect(readJsxSourceProp({ className: 'x' })).toBeUndefined();
+  });
+
+  it('extracts a well-formed __source from element props', () => {
+    expect(
+      readJsxSourceProp({
+        children: 'hi',
+        __source: { fileName: 'src/App.tsx', lineNumber: 12, columnNumber: 3 },
+      }),
+    ).toEqual({ fileName: 'src/App.tsx', lineNumber: 12, columnNumber: 3 });
+  });
+
+  it('rejects a malformed __source (empty fileName, non-finite lineNumber)', () => {
+    expect(readJsxSourceProp({ __source: { fileName: '', lineNumber: 1 } })).toBeUndefined();
+    expect(readJsxSourceProp({ __source: { fileName: 'x.tsx', lineNumber: NaN } })).toBeUndefined();
+  });
+
+  it('omits columnNumber when it is missing or non-finite', () => {
+    expect(readJsxSourceProp({ __source: { fileName: 'x.tsx', lineNumber: 5 } })).toEqual({
+      fileName: 'x.tsx',
+      lineNumber: 5,
     });
   });
 });
