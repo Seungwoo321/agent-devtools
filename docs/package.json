@@ -1,7 +1,7 @@
 {
   "name": "@agent-devtools/docs",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "description": "agent-devtools 사용자 가이드 사이트 (Astro Starlight, ko/en)",
   "scripts": {
