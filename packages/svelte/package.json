@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/svelte",
-  "version": "1.2.1-beta.0",
+  "version": "1.2.1",
   "description": "Svelte adapter for agent-devtools — Svelte 4/5 component walker + DOM picker + closed Shadow DOM widget",
   "keywords": [
     "agent-devtools",

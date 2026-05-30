@@ -1,5 +1,13 @@
 # @agent-devtools/next
 
+## 1.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`19b1d2b`](https://github.com/Seungwoo321/agent-devtools/commit/19b1d2bb438c522f0135f17b3ab5eb671002a020)]:
+  - @agent-devtools/react@1.2.1
+  - @agent-devtools/core@1.2.1
+
 ## 1.2.1-beta.0
 
 ### Patch Changes

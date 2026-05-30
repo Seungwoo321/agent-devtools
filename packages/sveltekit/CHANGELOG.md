@@ -1,5 +1,13 @@
 # @agent-devtools/sveltekit
 
+## 1.2.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/svelte@1.2.1
+  - @agent-devtools/core@1.2.1
+
 ## 1.2.1-beta.0
 
 ### Patch Changes

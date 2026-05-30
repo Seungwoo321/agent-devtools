@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.1
+
+### Patch Changes
+
+- [#13](https://github.com/Seungwoo321/agent-devtools/pull/13) [`19b1d2b`](https://github.com/Seungwoo321/agent-devtools/commit/19b1d2bb438c522f0135f17b3ab5eb671002a020) Thanks [@Seungwoo321](https://github.com/Seungwoo321)! - Add a third independent source-extraction channel so picker source
+  locations survive future React-internal debug-metadata churn. React 18
+  → 19 silently dropped `_debugSource` and replaced it with `_debugStack`;
+  any future major could repeat the pattern. `resolveFiberSource` now
+  tries, in order:
+  1. `_debugSource` — React ≤ 18 path (legacy JSX pragma)
+  2. `_debugStack` — React 19 path (parse the captured Error's stack)
+  3. `memoizedProps.__source` — JSX source pragma on element props
+     (Babel/SWC plugin output). Independent of every React internal
+     `_debug*` field.
+
+  The existing behaviour is preserved exactly when channel 1 or 2 still
+  produces a hit. Channel 3 only kicks in when both miss, so the change
+  is a strict superset of the previous fallback chain.
+
+- Updated dependencies [[`56eb210`](https://github.com/Seungwoo321/agent-devtools/commit/56eb210502b621c2fdd2952bafb5c2eab4538512)]:
+  - @agent-devtools/widget-core@1.2.1
+  - @agent-devtools/core@1.2.1
+
 ## 1.2.1-beta.0
 
 ### Patch Changes
