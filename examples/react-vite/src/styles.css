@@ -55,6 +55,59 @@ h1 {
   color: #b6bcc6;
 }
 
+.order-summary {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.order-summary th,
+.order-summary td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #262a33;
+}
+
+.order-summary th {
+  color: #9aa1ab;
+  font-weight: 500;
+}
+
+.order-summary .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-summary tfoot td {
+  border-bottom: 0;
+}
+
+.order-summary tfoot tr:first-child td {
+  border-top: 1px solid #2c3140;
+  padding-top: 12px;
+}
+
+.order-summary .grand-total-row td {
+  font-size: 19px;
+  font-weight: 700;
+  padding-top: 12px;
+  transition: color 200ms ease;
+}
+
+.order-summary .is-wrong td {
+  color: #ff6b6b;
+}
+
+.order-summary .is-ok td {
+  color: #4ade80;
+}
+
+.order-summary .warn {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff6b6b;
+}
+
 .counter {
   display: flex;
   align-items: center;
