@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type JSX } from 'react';
+import { OrderSummary } from './checkout/OrderSummary.js';
 
 interface User {
   id: number;
@@ -32,6 +33,8 @@ export function App(): JSX.Element {
         Open the launcher button in the bottom-right corner, pick an element with the picker, type a
         question, and watch the streamed response.
       </p>
+
+      <OrderSummary />
 
       <Counter
         count={count}

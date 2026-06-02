@@ -36,13 +36,21 @@
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)
 
-위젯에서 비활성화된 "장바구니 담기" 버튼을 픽하고 "사이즈를 골랐는데 왜 계속 disabled 야?" 라고 묻는다. 에이전트는 React fiber 체인을 거슬러 `ProductDetail` 부모까지 따라가고, picker 가 함께 실어 보낸 import 들(`useCart`, `selectors/inventory.ts`)을 따라가며 핸들러와 selector 실제 코드를 읽는다. 그러고 나서 빠져 있는 의존을 설명하거나 곧바로 `Edit` 으로 고친다. "이 리스트가 mutation 후에 왜 갱신 안 돼?", "이 폼이 validation 에러를 삼키는데 어디서 잡고 있어?" 같은 질문도 같은 흐름으로 처리된다 — picker 가 이미 컨텍스트를 패키징했기에 에이전트가 grep 부터 시작하지 않는다.
+Checkout 카드의 터무니없이 부풀려진 **Grand total** 을 픽하고 _"이게 $11,691 일 리 없다, $1,400 근처여야 한다 — 숫자가 어느 파일에서 잘못되는지 추적해서 고쳐줘"_ 라고 묻는다. picker 가 컴포넌트 체인과 소스 라인을 함께 실어 보냈기에, 에이전트는 `OrderSummary.tsx` 를 읽고 import 를 따라 `cart.ts` 로 들어간 뒤 `money.ts` 를 열어 단위 계약(모든 금액은 정수 cents, `applyTaxCents` 는 이미 cents 를 반환, `formatCents` 가 100 으로 한 번만 나눔)을 확인한다. 그리고 세금을 한 번 더 100 배 하는 군더더기 `* 100` 을 범인으로 지목해, 정작 클릭하지도 않은 `cart.ts` 에 `Edit` 을 적용한다. Vite HMR 이 같은 탭 안에서 빨간 합계를 올바른 초록 `$1,402.92` 로 무너뜨린다 — IDE 없이. "이 리스트가 mutation 후에 왜 갱신 안 돼?", "이 폼이 validation 에러를 삼키는데 어디서 잡고 있어?" 같은 질문도 같은 흐름으로 처리된다 — picker 가 이미 컨텍스트를 패키징했기에 에이전트가 grep 부터 시작하지 않는다.
+
+<p align="center">
+  <img src="./assets/gallery-picker-evidence.png" alt="picker 가 PickedEvidence(컴포넌트 체인·소스 파일·셀렉터)를 에이전트에게 그대로 실어 보낸다" width="840" />
+</p>
 
 - 사용자 가이드 (en / ko): <https://agent-devtools-docs.vercel.app/>
 - 작동 원리 (한 장의 다이어그램): <https://agent-devtools-docs.vercel.app/guides/how-it-works/>
 - 컨텍스트·스코프: [`CONTEXT.md`](./CONTEXT.md)
 
 ## 카테고리 안에서의 위치
+
+<p align="center">
+  <img src="./assets/gallery-category.png" alt="agent-devtools 의 위치: 에이전트가 페이지 안에서 직접 편집 — IDE 불필요, 추가 구독 없음, 프로덕션 바이트 0" width="840" />
+</p>
 
 가장 가까운 이웃 도구들과의 사실 기반 비교. 우열이 아니라 축이 다르다.
 

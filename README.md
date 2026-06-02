@@ -36,13 +36,21 @@
 
 ![agent-devtools demo: launcher → picker → composer → live edit](./assets/demo.gif)
 
-Pick the disabled "Add to cart" button in the widget and ask "why does this stay disabled after I pick a size?" The agent walks the React fiber chain back to the parent `ProductDetail`, follows the imports the picker shipped along (`useCart`, `selectors/inventory.ts`), reads the actual handler and selector source, then either explains the dependency it's missing or applies an `Edit` to fix it. The same flow handles "why doesn't this list refresh after a mutation?" or "this form swallows the validation error — where is it caught?" — context the picker already packaged so the agent does not have to grep first.
+Pick the wildly inflated **Grand total** in the Checkout card and ask _"this should be about $1,400, not $11,691 — trace where the number goes wrong across the files and fix it."_ The picker ships the component chain and the source line, so the agent reads `OrderSummary.tsx`, follows the import into `cart.ts`, then opens `money.ts` to learn the unit contract (every amount is integer cents, `applyTaxCents` already returns cents, `formatCents` divides by 100 once), pins the fault to a stray `* 100` that scales the tax a second time, and applies an `Edit` to `cart.ts` — a file you never clicked. Vite HMR collapses the red total to the correct green `$1,402.92` in the same tab, no IDE involved. The same flow handles "why doesn't this list refresh after a mutation?" or "this form swallows the validation error — where is it caught?" — context the picker already packaged so the agent does not have to grep first.
+
+<p align="center">
+  <img src="./assets/gallery-picker-evidence.png" alt="The picker ships PickedEvidence — component chain, source file, and selector — straight to the agent" width="840" />
+</p>
 
 - User guide (en / ko): <https://agent-devtools-docs.vercel.app/>
 - How it works (single-diagram walk-through): <https://agent-devtools-docs.vercel.app/en/guides/how-it-works/>
 - Context and scope: [`CONTEXT.md`](./CONTEXT.md)
 
 ## Where this sits in the category
+
+<p align="center">
+  <img src="./assets/gallery-category.png" alt="Where agent-devtools sits: the agent edits inside the page — no IDE, no extra subscription, zero production bytes" width="840" />
+</p>
 
 A factual placement next to the closest neighbors — these tools all do something useful, the axes are just different.
 
