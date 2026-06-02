@@ -11,3 +11,77 @@
 .social-icons a:focus-visible {
   color: var(--sl-color-text-accent);
 }
+
+/* ------------------------------------------------------------------ *
+ * Landing (splash) sections — demo, picked evidence, fact strip.
+ * Built natively so they stay responsive and theme-aware (light/dark)
+ * via Starlight tokens rather than baked-in raster posters.
+ * ------------------------------------------------------------------ */
+
+/* Demo GIF figure */
+.adt-demo {
+  margin: 2.5rem auto 0;
+  max-width: 900px;
+  text-align: center;
+}
+.adt-demo img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--sl-color-gray-5);
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.28);
+}
+.adt-demo figcaption {
+  margin-top: 0.85rem;
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-sm);
+}
+
+/* "What the picker ships" — screenshot beside the evidence fields */
+.adt-evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) 1fr;
+  gap: 2rem;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+@media (max-width: 50rem) {
+  .adt-evidence {
+    grid-template-columns: 1fr;
+  }
+}
+.adt-evidence > img {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.32);
+}
+.adt-evidence ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+.adt-evidence li {
+  padding-left: 1.1rem;
+  border-left: 3px solid var(--sl-color-accent);
+  line-height: 1.5;
+}
+
+/* Fact strip — verifiable, no competitor comparison */
+.adt-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+.adt-facts span {
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  color: var(--sl-color-text);
+  background: var(--sl-color-gray-6);
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+}

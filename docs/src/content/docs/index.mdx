@@ -21,6 +21,17 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular, plain HTML 어댑터가 같은 fixed major 트랙으로 함께 출시됩니다. Vite 플러그인 · framework-agnostic 위젯 코어 · 모든 어댑터의 버전이 구조적으로 정렬됩니다.
 :::
 
+<figure class="adt-demo not-content">
+  <img
+    src="/demo.gif"
+    alt="실제 Claude 에이전트가 망가진 Checkout 합계를 픽하고 OrderSummary.tsx · cart.ts · money.ts 를 읽어 군더더기 * 100 을 제거하면, HMR 로 합계가 그 자리에서 바로잡히는 모습 — 전부 브라우저 탭 안에서."
+  />
+  <figcaption>
+    틀린 합계를 픽하고 평어로 묻기만 하면, 실제 Claude 에이전트가 여러 파일을
+    가로질러 원인을 추적하고 그 자리에서 고칩니다 — 탭을 떠나지 않고.
+  </figcaption>
+</figure>
+
 <CardGrid stagger>
   <Card title="UI 에서 바로 고친다" icon="pencil">
     플로팅 위젯에서 자연어 프롬프트를 보내면 로컬 Claude Code 가 그 자리에서
@@ -40,6 +51,37 @@ React, Vue (2 / 3), Next (App / Pages), Nuxt (2 / 3), Svelte, SvelteKit, Angular
     Next.js (App + Pages) / Nuxt 2·3 어댑터 지원.
   </Card>
 </CardGrid>
+
+## 픽이 에이전트에게 실어 보내는 것
+
+element 를 픽하면 위젯은 스크린샷이 아니라 **에이전트가 추론할 근거**를 함께 실어 보냅니다:
+
+<div class="adt-evidence not-content">
+  <img
+    src="/picker-evidence.png"
+    alt="agent-devtools composer 에 픽한 element 의 근거 tooltip — 소스 파일, 컴포넌트 체인, 고유 CSS selector 가 표시된 모습."
+  />
+  <ul>
+    <li>
+      <strong>컴포넌트 체인</strong> — 루트까지의 named 조상, 예:{' '}
+      <code>OrderSummary → App</code>.
+    </li>
+    <li>
+      <strong>소스 파일</strong> — element 가 렌더되는 실제 파일. 에이전트가
+      올바른 코드를 먼저 엽니다.
+    </li>
+    <li>
+      <strong>Selector + outerHTML</strong> — 정확한 노드. 소스 경로가 안 잡혀도
+      에이전트가 마크업을 찾을 수 있습니다.
+    </li>
+  </ul>
+</div>
+
+<div class="adt-facts not-content">
+  <span>IDE 불필요</span>
+  <span>본인 Claude Pro / Max 구독</span>
+  <span>프로덕션 번들 0바이트</span>
+</div>
 
 ## 다음 단계
 
