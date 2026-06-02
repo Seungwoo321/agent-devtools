@@ -56,6 +56,13 @@ coverage/
 # MCP tool artifacts (Playwright snapshots, etc.)
 .playwright-mcp/
 
+# Playwright E2E run output + marketing demo capture scratch (the final GIF
+# is committed under assets/; the .webm/frames are regenerable via
+# packages/e2e/scripts/capture-demo.mjs)
+packages/e2e/test-results/
+packages/e2e/playwright-report/
+packages/e2e/demo-capture/
+
 # npm pack smoke-test output
 .pack-out/
 
