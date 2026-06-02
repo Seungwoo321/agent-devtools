@@ -48,6 +48,10 @@ Checkout 카드의 터무니없이 부풀려진 **Grand total** 을 픽하고 _"
 
 ## 카테고리 안에서의 위치
 
+<p align="center">
+  <img src="./assets/gallery-category.png" alt="agent-devtools 의 위치: 에이전트가 페이지 안에서 직접 편집 — IDE 불필요, 추가 구독 없음, 프로덕션 바이트 0" width="840" />
+</p>
+
 가장 가까운 이웃 도구들과의 사실 기반 비교. 우열이 아니라 축이 다르다.
 
 | 축                     | agent-devtools                                                                                               | In-page → IDE 포워더 (예: Stagewise)    | 브라우저 devtools 확장 (예: React DevTools) | In-app 피드백 위젯 (예: ProductLift, Pastel) |

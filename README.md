@@ -48,6 +48,10 @@ Pick the wildly inflated **Grand total** in the Checkout card and ask _"this sho
 
 ## Where this sits in the category
 
+<p align="center">
+  <img src="./assets/gallery-category.png" alt="Where agent-devtools sits: the agent edits inside the page — no IDE, no extra subscription, zero production bytes" width="840" />
+</p>
+
 A factual placement next to the closest neighbors — these tools all do something useful, the axes are just different.
 
 | Axis                            | agent-devtools                                                                                                       | In-page → IDE forwarder (e.g. Stagewise)        | Browser devtools extension (e.g. React DevTools) | In-app feedback widget (e.g. ProductLift, Pastel) |
