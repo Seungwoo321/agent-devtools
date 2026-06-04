@@ -64,6 +64,14 @@ overlay 한 개로 구성된다. 각 조각이 호스트 페이지 DOM 안에서
 - **단축키는 별도 없음.** launcher 토글 전역 단축키는 현재 없다. 키보드로 닫는
   유일한 방법은 composer 가 열린 상태에서 `Escape` 를 누르는 것 (composer 만
   닫힘, launcher 는 그대로) 이다.
+- **미확인 에러 배지.** 런타임에 페이지가 에러를 던지면 launcher 우측 상단에
+  작은 빨간 카운트 배지가 붙어 미확인 에러 레코드 수를 보여준다. 99 를 넘으면
+  `99+` 로 줄고, `pointer-events: none` 이라 클릭을 절대 가로채지 않는다.
+  카운트는 mount 시점에 이미 버퍼에 있던 레코드 — 위젯 로드 전에 잡힌 에러
+  포함 — 로부터 시드되고, composer 의 캡처된 에러 배너에서 **Analyze** 를
+  클릭하면 0 으로 리셋된다
+  (`packages/widget-core/src/launcher/launcher.ts:88`,
+  `packages/widget-core/src/orchestrator/mount.ts:459`).
 
 ## Composer
 
@@ -93,6 +101,15 @@ overlay 한 개로 구성된다. 각 조각이 호스트 페이지 DOM 안에서
   handoff (Claude CLI 로 대화 이어받기), new conversation (세션 리셋) 버튼이
   있다. new conversation 은 message store 를 비우고 transport 의 `resetSession()`
   으로 서버측 ACP 세션을 새로 발급한다 (`packages/widget-core/src/orchestrator/mount.ts:560`).
+- **캡처된 에러 배너.** picked element chip 과 textarea 사이에 `role="status"`
+  배너가 있어 stream 스크롤 위치와 무관하게 항상 보인다. 미확인 에러 카운트가
+  0 인 동안에는 숨겨져 있고, 런타임 에러가 캡처되면 **"N runtime error(s)
+  captured"** 로 뜨며 **Analyze** 버튼을 보여준다. 클릭하면 근본 원인 분석
+  프롬프트가 미리 채워지고, 미확인 카운트가 리셋되며, 패널이 열리고 포커스된다.
+  submit 시 `observer.getRecords()` 의 캡처된 레코드가 page context 로 첨부된다.
+  analyze 핸들러가 연결돼 있지 않으면 버튼은 스스로 숨는다
+  (`packages/widget-core/src/composer/composer.ts:505`,
+  `packages/widget-core/src/orchestrator/mount.ts:470`).
 
 ## Settings panel
 
@@ -174,8 +191,12 @@ devtools 의 Application 패널에서 해당 키를 직접 지운다.
   source 파일 목록 `{ fileName, componentName, lineNumber, columnNumber? }`.
   중복 파일은 dedup, 최대 50개로 잘린다. `rootContainer` 옵션으로 받은 React
   root 부터 fiber 를 따라간다 (`packages/react/src/context/build.ts:19`).
-- `errors` — `createErrorObserver()` 가 mount 시점부터 수집해 둔 콘솔 에러/예외
-  레코드의 최근 50개 (`packages/widget-core/src/orchestrator/mount.ts:250`).
+- `errors` — `createErrorObserver()` 가 mount 시점부터 수집해 둔 에러 레코드
+  최근 최대 100개. `console.error` 호출, `window` error 이벤트, unhandled
+  promise rejection, 실패하거나 non-OK 인 `fetch` 요청을 모두 포함한다. 버퍼는
+  100개 ring buffer 라 가득 차면 가장 오래된 레코드부터 evict 된다
+  (`packages/widget-core/src/observers/observer.ts:8`,
+  `packages/widget-core/src/orchestrator/mount.ts:250`).
 - `picked` — Pick 으로 잡힌 element 가 있을 때만 채워지는 `PickedEvidence`
   (아래 항목 참고).
 

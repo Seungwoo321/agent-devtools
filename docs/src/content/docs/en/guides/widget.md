@@ -78,6 +78,15 @@ and toggles the composer open or closed on click.
   the launcher. The only way to close from the keyboard is to press
   `Escape` while the composer is open (this closes the composer only —
   the launcher stays put).
+- **Unread error badge.** When the page throws at runtime, the launcher
+  carries a small red count badge in its top-right corner showing the
+  number of unread error records. It collapses to `99+` past 99 and is
+  `pointer-events: none`, so it can never intercept a click. The count
+  seeds from any records already buffered at mount — including errors
+  trapped before the widget loaded — and resets to zero when you click
+  **Analyze** in the composer's captured-errors banner
+  (`packages/widget-core/src/launcher/launcher.ts:88`,
+  `packages/widget-core/src/orchestrator/mount.ts:459`).
 
 ## Composer
 
@@ -115,6 +124,16 @@ live inside one panel.
   clears the message store and asks the transport's `resetSession()` to
   hand out a fresh server-side ACP session
   (`packages/widget-core/src/orchestrator/mount.ts:560`).
+- **Captured-errors banner.** A `role="status"` banner sits between the
+  picked-element chip and the textarea, so it stays visible regardless of
+  stream scroll position. It is hidden while the unread error count is
+  zero; once runtime errors are captured it reads **"N runtime error(s)
+  captured"** and shows an **Analyze** button. Clicking it prefills a
+  root-cause prompt, resets the unread count, opens and focuses the panel,
+  and — on submit — attaches the captured records to the page context via
+  `observer.getRecords()`. The button hides itself when no analyze handler
+  is wired (`packages/widget-core/src/composer/composer.ts:505`,
+  `packages/widget-core/src/orchestrator/mount.ts:470`).
 
 ## Settings panel
 
@@ -219,9 +238,13 @@ Fields carried by `PageContext`
   deduplicated and the list is capped at 50 entries. The walk starts from
   the React root passed in via the `rootContainer` option
   (`packages/react/src/context/build.ts:19`).
-- `errors` — the most recent 50 console error / exception records that
-  `createErrorObserver()` has been collecting since mount time
-  (`packages/widget-core/src/orchestrator/mount.ts:250`).
+- `errors` — up to the 100 most recent error records that
+  `createErrorObserver()` has been collecting since mount time, covering
+  `console.error` calls, `window` error events, unhandled promise
+  rejections, and failed / non-OK `fetch` requests. The buffer is a
+  100-entry ring — the oldest record is evicted first once it is full
+  (`packages/widget-core/src/observers/observer.ts:8`,
+  `packages/widget-core/src/orchestrator/mount.ts:250`).
 - `picked` — the `PickedEvidence` captured by the picker, present only
   when an element has actually been picked (see the section below).
 
