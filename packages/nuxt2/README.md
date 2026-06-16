@@ -1,3 +1,5 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/nuxt2
 
 > Nuxt 2 module for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Registers a dev-only client plugin that calls `mountAgentDevtoolsVue2` from `@agent-devtools/vue2`, so legacy Nuxt 2 hosts get the floating chat widget without any manual entry-point wiring.
