@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { translateSdkMessage } from './sdk-to-acp.js';
+import { buildAvailableCommandsEnvelope, translateSdkMessage } from './sdk-to-acp.js';
 
 describe('translateSdkMessage', () => {
   it('drops system init messages — they carry no user-visible content', () => {
@@ -178,5 +178,70 @@ describe('translateSdkMessage', () => {
   it('returns [] for an assistant message with no content array', () => {
     expect(translateSdkMessage({ type: 'assistant', message: { content: null } })).toEqual([]);
     expect(translateSdkMessage({ type: 'assistant' })).toEqual([]);
+  });
+});
+
+describe('buildAvailableCommandsEnvelope', () => {
+  it('maps argumentHint to input.hint and carries name + description', () => {
+    expect(
+      buildAvailableCommandsEnvelope([
+        { name: 'compact', description: 'Compact the conversation', argumentHint: '[focus]' },
+      ]),
+    ).toEqual({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          {
+            name: 'compact',
+            description: 'Compact the conversation',
+            input: { hint: '[focus]' },
+          },
+        ],
+      },
+    });
+  });
+
+  it('omits input when argumentHint is empty or absent', () => {
+    expect(
+      buildAvailableCommandsEnvelope([
+        { name: 'clear', description: 'Clear history', argumentHint: '' },
+        { name: 'help', description: 'Show help' },
+      ]),
+    ).toEqual({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'clear', description: 'Clear history' },
+          { name: 'help', description: 'Show help' },
+        ],
+      },
+    });
+  });
+
+  it('is defensive about malformed entries — skips non-objects and unnamed commands, coerces missing description', () => {
+    expect(
+      buildAvailableCommandsEnvelope([
+        null,
+        'nope',
+        { description: 'no name here' },
+        { name: '' },
+        { name: 'ok' },
+      ]),
+    ).toEqual({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'ok', description: '' }],
+      },
+    });
+  });
+
+  it('yields an empty list when given a non-array', () => {
+    expect(buildAvailableCommandsEnvelope(undefined)).toEqual({
+      type: 'acp.session_update',
+      update: { sessionUpdate: 'available_commands_update', availableCommands: [] },
+    });
   });
 });
