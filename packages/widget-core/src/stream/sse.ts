@@ -18,7 +18,7 @@
  * would land under one constant `blockId` and the store would render
  * the entire conversation as a single ever-growing bubble.
  */
-import type { StreamEvent } from './types.js';
+import type { SlashCommandInfo, StreamEvent } from './types.js';
 
 export interface SSEParserState {
   buffer: string;
@@ -273,11 +273,53 @@ function toAcpSessionUpdateEvents(state: AcpDecoderState, update: unknown): read
       events.push({ type: 'tool-use-stop', blockId: u.toolCallId });
       return events;
     }
+    case 'available_commands_update': {
+      // Not a conversation item — the agent's slash-command catalogue. The
+      // transport routes this away from the `MessageStore` to a side-channel
+      // callback the composer subscribes to. We always emit the event (even
+      // with an empty list) so a cleared command set can propagate downstream.
+      const commands = readAcpAvailableCommands(u.availableCommands);
+      return [{ type: 'available-commands', commands }];
+    }
     default:
-      // agent_thought_chunk, usage_update, available_commands_update,
-      // plan_update, etc. — not surfaced in the conversation list.
+      // agent_thought_chunk, usage_update, plan_update, etc. — not surfaced
+      // in the conversation list and not (yet) routed elsewhere.
       return [];
   }
+}
+
+/**
+ * Parse the ACP `available_commands_update.availableCommands` array into the
+ * widget's `SlashCommandInfo[]`. Defensive throughout: a non-array yields an
+ * empty list, and any entry that isn't an object with a string `name` is
+ * skipped rather than throwing. `description` defaults to '' when absent, and
+ * `argumentHint` is filled from `input.hint` only when `input` is an object
+ * carrying a string `hint`.
+ */
+function readAcpAvailableCommands(value: unknown): readonly SlashCommandInfo[] {
+  if (!Array.isArray(value)) return [];
+  const commands: SlashCommandInfo[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.name !== 'string') continue;
+    const description = typeof e.description === 'string' ? e.description : '';
+    const argumentHint = readAcpCommandHint(e.input);
+    commands.push({
+      name: e.name,
+      description,
+      ...(argumentHint !== undefined && { argumentHint }),
+    });
+  }
+  return commands;
+}
+
+/** Pull the argument hint out of an ACP command's `input` (`{ hint: '...' }`),
+ * returning undefined when `input` is absent/null or carries no string hint. */
+function readAcpCommandHint(input: unknown): string | undefined {
+  if (typeof input !== 'object' || input === null) return undefined;
+  const hint = (input as Record<string, unknown>).hint;
+  return typeof hint === 'string' ? hint : undefined;
 }
 
 /** Pull the user-visible text out of an `agent_message_chunk.content`,
