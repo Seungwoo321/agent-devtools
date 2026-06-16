@@ -1,30 +1,29 @@
-# example-html
+[English] · [한국어](./README.ko.md)
 
-Plain HTML (no framework, no JS entry) served by
-[`@agent-devtools/html`](../../packages/html). Demonstrates that the runner
-injects the dev-only widget into every served page and that nothing leaks into
-the source files.
+# @agent-devtools/example-html
 
-## Run it
+End-to-end smoke for `@agent-devtools/html`. Plain static HTML (no framework, no JS entry) served by the `agent-devtools-html` runner, which injects the dev-only widget into every served page.
+
+## Layout
+
+- `index.html` — root page (`Acme Planner · Home`). Static markup; pick any element and the picker resolves it in DOM-only mode (`outerHTML`, selector, `tagName`, `id`, `class`, text).
+- `about.html` — second page proving the runner injects the widget into every served file, not just the index.
+- `package.json` — the `dev` script runs `agent-devtools-html . --port 3210`; there is no bundler plugin because there is no build step.
+
+## Run
 
 ```bash
+pnpm install
 pnpm --filter @agent-devtools/example-html dev
-# → http://127.0.0.1:3210/
 ```
 
-Open the URL, pick any element (the picker resolves plain elements in DOM-only
-mode — `outerHTML`, selector, `tagName`, `id`, `class`, text), and describe a
-change. The agent edits the HTML files in this folder.
+The dev server listens on `http://127.0.0.1:3210/`. Open the URL, pick any element, and describe a change — the agent edits the HTML files in this folder directly.
 
-## Checks
+## Production no-leak smoke
 
 ```bash
-# dev-injection: boot the runner, assert the bootstrap was injected
 pnpm --filter @agent-devtools/example-html smoke
-
-# no-leak: assert no widget-chain symbol is baked into the source HTML
 pnpm --filter @agent-devtools/example-html smoke:no-leak
 ```
 
-The repository-wide `pnpm smoke:integration` also boots this example's `dev`
-server and asserts the injection over HTTP, alongside every framework adapter.
+`smoke` boots the runner and asserts the bootstrap script tag was injected over HTTP. `smoke:no-leak` (also run via `build:check`) asserts no widget-chain identifier (`mountAgentDevtools`, `createDefaultTransport`, `@agent-devtools`, `__AGENT_DEVTOOLS_CONFIG__`) is baked into the source HTML — the widget exists only in the runner's injected response, never on disk. The repository-wide `pnpm smoke:integration` also boots this example's `dev` server and asserts the injection over HTTP, alongside every framework adapter.

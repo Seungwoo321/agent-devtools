@@ -7,49 +7,7 @@ description: A single-diagram walk-through of how agent-devtools connects the br
 
 agent-devtools wires four moving parts that already exist on your machine into a single loop. The widget lives inside the page you are developing; the dev server you already run grows a small HTTP surface; that surface talks to your local Claude Code Agent SDK; and the SDK edits files in your workspace.
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Browser tab (the page you are developing)                                    │
-│                                                                              │
-│   ┌────────────────────────────────────────────────────────────────────────┐ │
-│   │ Host app DOM (React / Vue / Next / Nuxt / Angular / Svelte / SvelteKit)│ │
-│   │                                                                        │ │
-│   │   ┌──────────────────────────────────────────────────────────────────┐ │ │
-│   │   │ agent-devtools widget                                            │ │ │
-│   │   │   - closed shadow root (no style / event bleed)                  │ │ │
-│   │   │   - picker overlay → PickedEvidence                              │ │ │
-│   │   │   - chat composer + message stream                               │ │ │
-│   │   └──────────────────────────────────────────────────────────────────┘ │ │
-│   └────────────────────────────────────────────────────────────────────────┘ │
-│                                  │                                           │
-│           Authorization: Bearer <pairing token>  (header only, never URL)    │
-│                                  ▼                                           │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                   │
-                              127.0.0.1
-                                   │
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Local dev server (same machine, loopback only)                               │
-│                                                                              │
-│   @agent-devtools/core                                                       │
-│     - HTTP router + SSE event stream                                         │
-│     - constant-time token check                                              │
-│     - workspace-relative path resolver                                       │
-│                                  │                                           │
-│                                  ▼                                           │
-│   @agent-devtools/harness-core                                               │
-│     - provider abstraction (ACP / SDK)                                       │
-│     - permission policy matrix (per action type)                             │
-│                                  │                                           │
-│                                  ▼                                           │
-│   Claude Code Agent SDK   ◄────  reuses ~/.claude OAuth session              │
-│     - tool calls: Read / Edit / Write / Bash / Glob / Grep                   │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-                       Your project files on disk
-                       (HMR picks them up automatically)
-```
+![One loop across the browser widget, the loopback dev server, and your local Claude Code Agent SDK — the picker reduces a click to PickedEvidence, the pairing token rides the Authorization header over 127.0.0.1 only, and Edit/Write lands in your files where HMR picks it up](/how-it-works.png)
 
 ## What each layer is doing
 
