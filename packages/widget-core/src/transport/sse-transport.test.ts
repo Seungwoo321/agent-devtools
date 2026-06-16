@@ -635,6 +635,151 @@ describe('createDefaultTransport', () => {
     expect(items[0]?.kind).toBe('assistant-text');
   });
 
+  it('routes available_commands_update to onCommands and not into the store', async () => {
+    const store = createMessageStore();
+    const commandsFrame = `event: message\ndata: ${JSON.stringify({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'review', description: 'Review the diff', input: { hint: '<path>' } },
+          { name: 'compact', description: 'Compact the conversation' },
+        ],
+      },
+    })}\n\n`;
+    const body = streamFrom([
+      commandsFrame,
+      'event: text-delta\ndata: {"blockId":"b1","text":"hi"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ]);
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const onCommands = vi.fn();
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      onCommands,
+    });
+
+    await transport.send(basePayload({ store }));
+
+    // Side-channel got the parsed command list…
+    expect(onCommands).toHaveBeenCalledTimes(1);
+    expect(onCommands).toHaveBeenCalledWith([
+      { name: 'review', description: 'Review the diff', argumentHint: '<path>' },
+      { name: 'compact', description: 'Compact the conversation' },
+    ]);
+    // …and the command event never became a conversation bubble — only the
+    // normal text-delta folded into the store.
+    const items = store.getItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe('assistant-text');
+  });
+
+  it('keeps pumping when onCommands throws', async () => {
+    const store = createMessageStore();
+    const commandsFrame = `event: message\ndata: ${JSON.stringify({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'review', description: 'Review the diff' }],
+      },
+    })}\n\n`;
+    const body = streamFrom([
+      commandsFrame,
+      'event: text-delta\ndata: {"blockId":"b1","text":"after"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ]);
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const onCommands = vi.fn(() => {
+      throw new Error('consumer blew up');
+    });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      onCommands,
+    });
+
+    // A throwing consumer must not reject the send or stop the pump.
+    await expect(transport.send(basePayload({ store }))).resolves.toBeUndefined();
+    expect(onCommands).toHaveBeenCalledTimes(1);
+    const items = store.getItems();
+    expect(items).toHaveLength(1);
+    const item = items[0];
+    expect(item?.kind).toBe('assistant-text');
+    if (item?.kind === 'assistant-text') {
+      expect(item.text).toBe('after');
+    }
+  });
+
+  it('drops available_commands_update silently when no onCommands is wired', async () => {
+    const store = createMessageStore();
+    const commandsFrame = `event: message\ndata: ${JSON.stringify({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'review', description: 'Review the diff' }],
+      },
+    })}\n\n`;
+    const body = streamFrom([
+      commandsFrame,
+      'event: text-delta\ndata: {"blockId":"b1","text":"ok"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ]);
+    const { fetch: fetchImpl } = makeFetch({ body });
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+    });
+
+    await transport.send(basePayload({ store }));
+
+    const items = store.getItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe('assistant-text');
+  });
+
+  it('routes commands to a listener installed after construction, overriding the construction-time option', async () => {
+    const store = createMessageStore();
+    const commandsFrame = `event: message\ndata: ${JSON.stringify({
+      type: 'acp.session_update',
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'review', description: 'Review the diff', input: { hint: '<path>' } },
+        ],
+      },
+    })}\n\n`;
+    const body = streamFrom([commandsFrame, 'event: done\ndata: {}\n\n']);
+    const { fetch: fetchImpl } = makeFetch({ body });
+    // The construction-time option seeds the initial listener; the
+    // post-construction `onCommands(...)` call must replace it so the
+    // orchestrator-installed sink (which only exists after the composer is
+    // built) wins on the next stream.
+    const initialListener = vi.fn();
+    const lateListener = vi.fn();
+    const transport = createDefaultTransport({
+      baseUrl: 'http://127.0.0.1:4317',
+      pairingToken: 'tok',
+      fetch: fetchImpl,
+      onCommands: initialListener,
+    });
+
+    transport.onCommands?.(lateListener);
+
+    await transport.send(basePayload({ store }));
+
+    // The later listener received the parsed catalogue…
+    expect(lateListener).toHaveBeenCalledTimes(1);
+    expect(lateListener).toHaveBeenCalledWith([
+      { name: 'review', description: 'Review the diff', argumentHint: '<path>' },
+    ]);
+    // …and the construction-time listener was overridden, not stacked.
+    expect(initialListener).not.toHaveBeenCalled();
+  });
+
   it('throws with the server-provided error detail on a non-OK response', async () => {
     const { fetch: fetchImpl } = makeFetch({
       status: 401,

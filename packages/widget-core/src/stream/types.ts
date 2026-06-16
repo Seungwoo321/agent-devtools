@@ -82,10 +82,37 @@ export type MessageItem =
   | ErrorItem;
 
 /**
+ * A single slash command the agent advertises via the ACP
+ * `available_commands_update` session notification. This is the canonical
+ * command shape the composer consumes for its slash-command menu — it lives
+ * here so the stream decoder, the transport side-channel, and the composer
+ * all share one definition.
+ *
+ * Commands are widget UI state, not conversation items, so they never enter
+ * the `MessageStore`; the transport routes them to a side-channel callback
+ * instead (see `available-commands` below).
+ */
+export interface SlashCommandInfo {
+  readonly name: string;
+  readonly description: string;
+  /**
+   * Hint text for the command's argument, when the agent provides one (ACP
+   * `input.hint`). Absent when the command takes no argument or the agent
+   * omitted the hint.
+   */
+  readonly argumentHint?: string;
+}
+
+/**
  * Stream events normalized from the server's SSE wire format. We keep a
  * single envelope shape so the store doesn't need to know whether the
  * underlying transport is fetch + ReadableStream, EventSource, or a unit
  * test stub.
+ *
+ * Most variants fold into the conversation `MessageStore`. The
+ * `available-commands` variant is the exception: it carries widget UI state
+ * (the slash-command list) rather than a conversation item, so the transport
+ * routes it to a side-channel callback and the store never sees it.
  */
 export type StreamEvent =
   | { type: 'message-start'; id: string }
@@ -96,4 +123,5 @@ export type StreamEvent =
   | { type: 'tool-use-stop'; blockId: string }
   | { type: 'tool-result'; toolUseId: string; content: string; isError?: boolean }
   | { type: 'error'; message: string }
+  | { type: 'available-commands'; commands: readonly SlashCommandInfo[] }
   | { type: 'done' };
