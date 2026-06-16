@@ -3,6 +3,7 @@ export type {
   ErrorItem,
   MessageItem,
   MessageRole,
+  SlashCommandInfo,
   StreamEvent,
   ToolResultItem,
   ToolUseItem,

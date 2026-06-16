@@ -340,13 +340,119 @@ describe('toStreamEvents (ACP envelope)', () => {
     const variants = [
       sessionUpdate({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 't' } }),
       sessionUpdate({ sessionUpdate: 'usage_update', size: 200000, used: 100 }),
-      sessionUpdate({ sessionUpdate: 'available_commands_update', availableCommands: [] }),
       sessionUpdate({ sessionUpdate: 'plan_update' }),
     ];
     for (const data of variants) {
       const state = testDecoder();
       expect(toStreamEvents(state, { event: 'message', data })).toEqual([]);
     }
+  });
+
+  it('lowers available_commands_update into a single available-commands event', () => {
+    const state = testDecoder();
+    const raw = {
+      event: 'message',
+      data: sessionUpdate({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'review', description: 'Review the current diff', input: { hint: '<path>' } },
+          { name: 'compact', description: 'Compact the conversation' },
+        ],
+      }),
+    };
+    expect(toStreamEvents(state, raw)).toEqual([
+      {
+        type: 'available-commands',
+        commands: [
+          { name: 'review', description: 'Review the current diff', argumentHint: '<path>' },
+          { name: 'compact', description: 'Compact the conversation' },
+        ],
+      },
+    ]);
+  });
+
+  it('omits argumentHint when input is absent, null, or carries no string hint', () => {
+    const state = testDecoder();
+    const raw = {
+      event: 'message',
+      data: sessionUpdate({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'a', description: 'no input' },
+          { name: 'b', description: 'null input', input: null },
+          { name: 'c', description: 'non-string hint', input: { hint: 42 } },
+        ],
+      }),
+    };
+    const events = toStreamEvents(state, raw);
+    expect(events).toHaveLength(1);
+    const event = events[0];
+    expect(event).toEqual({
+      type: 'available-commands',
+      commands: [
+        { name: 'a', description: 'no input' },
+        { name: 'b', description: 'null input' },
+        { name: 'c', description: 'non-string hint' },
+      ],
+    });
+    // argumentHint must be genuinely absent, not present-with-undefined.
+    if (event?.type === 'available-commands') {
+      for (const cmd of event.commands) {
+        expect('argumentHint' in cmd).toBe(false);
+      }
+    }
+  });
+
+  it('defaults a missing description to an empty string', () => {
+    const state = testDecoder();
+    const raw = {
+      event: 'message',
+      data: sessionUpdate({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'bare' }],
+      }),
+    };
+    expect(toStreamEvents(state, raw)).toEqual([
+      { type: 'available-commands', commands: [{ name: 'bare', description: '' }] },
+    ]);
+  });
+
+  it('skips malformed command entries without throwing', () => {
+    const state = testDecoder();
+    const raw = {
+      event: 'message',
+      data: sessionUpdate({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          null,
+          'not-an-object',
+          42,
+          { description: 'missing name' },
+          { name: 123, description: 'numeric name' },
+          { name: 'ok', description: 'kept' },
+        ],
+      }),
+    };
+    expect(toStreamEvents(state, raw)).toEqual([
+      { type: 'available-commands', commands: [{ name: 'ok', description: 'kept' }] },
+    ]);
+  });
+
+  it('emits an available-commands event with an empty list when the catalogue is cleared or unparseable', () => {
+    const state = testDecoder();
+    const cleared = {
+      event: 'message',
+      data: sessionUpdate({ sessionUpdate: 'available_commands_update', availableCommands: [] }),
+    };
+    expect(toStreamEvents(state, cleared)).toEqual([{ type: 'available-commands', commands: [] }]);
+    const nonArray = {
+      event: 'message',
+      data: sessionUpdate({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: 'nope',
+      }),
+    };
+    expect(toStreamEvents(state, nonArray)).toEqual([{ type: 'available-commands', commands: [] }]);
   });
 
   it('lowers acp.result into done', () => {
