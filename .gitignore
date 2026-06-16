@@ -36,6 +36,9 @@ Thumbs.db
 !.vscode/settings.shared.json
 .idea/
 
+# Claude Code — personal per-machine settings (plugin toggles, etc.)
+.claude/settings.local.json
+
 # env / secrets — NEVER COMMIT
 .env
 .env.*
