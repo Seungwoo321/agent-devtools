@@ -1,8 +1,13 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/vue2
 
-Vue 2 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Provides the floating chat widget, DOM picker, and Vue 2.7 component-tree walker for host applications still on Vue 2.
+> Vue 2 adapter for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Provides the floating chat widget, DOM picker, and Vue 2.7 component-tree walker for host applications still on Vue 2.
 
-> Dev-only. The mount entry refuses to run when `NODE_ENV === 'production'`. Bundler integrations (Vite, Nuxt 2 module) further strip imports from production builds — see [`dev-only-guard`](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/dev-only-guard.md).
+[![npm](https://img.shields.io/npm/v/@agent-devtools/vue2.svg)](https://www.npmjs.com/package/@agent-devtools/vue2)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
+
+**Dev-only.** The mount entry refuses to run when `NODE_ENV === 'production'`. Bundler integrations (Vite, Nuxt 2 module) further strip imports from production builds — see [`dev-only-guard`](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/dev-only-guard.md).
 
 ## What this adapter provides
 
