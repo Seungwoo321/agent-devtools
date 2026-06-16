@@ -2,9 +2,12 @@
 
 # @agent-devtools/nuxt
 
-Nuxt 3 module for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Mounts the floating widget on every client render in development and refuses to participate in production builds.
+> Nuxt 3 module for [agent-devtools](https://github.com/Seungwoo321/agent-devtools). Mounts the floating widget on every client render in development and refuses to participate in production builds.
 
-> **Dev-only.** This module never runs in `nuxt build` / `nuxt generate` output. It is the Nuxt-side wiring of the [2-layer dev-only guard](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/dev-only-guard.md).
+[![npm](https://img.shields.io/npm/v/@agent-devtools/nuxt.svg)](https://www.npmjs.com/package/@agent-devtools/nuxt)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
+
+**Dev-only.** This module never runs in `nuxt build` / `nuxt generate` output. It is the Nuxt-side wiring of the [2-layer dev-only guard](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/dev-only-guard.md).
 
 ## What this adapter provides
 
