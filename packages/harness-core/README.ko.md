@@ -13,7 +13,7 @@
 - **LLM provider 추상화** — OpenRouter, Groq, Cerebras, 공식 OpenAI API, OpenAI-호환 엔드포인트용 일급 provider. 옵션으로 Claude Agent SDK provider.
 - **Tier 해상도** — 무거운 호출과 가벼운 호출을 provider 단위로 분리하는 도메인 레벨 tiering 훅.
 - **도메인 확장 포인트** — `GenerationDomain`, `OperationDomain`, `DomainBinding`, `PromptProvider`, `ToolProvider`. DSL, 비즈니스 룰, 테넌트 정책은 의도적으로 비어 있고, consumer 가 주입합니다.
-- **세션 모델** — provider 중립적인 `SessionProvider` 와 스트리밍 이벤트 (`assistant-text`, `tool-use`, `tool-result`, `usage`, `done`) 를 통해 하니스 기반 UI 를 구축할 수 있습니다.
+- **세션 모델** — provider 중립적인 `SessionProvider`. 스트리밍 이벤트는 `type` 으로 `assistant_text`, `tool_use`, `tool_result`, `usage`, `done` 을 실어 하니스 기반 UI 를 구축할 수 있습니다.
 
 이 패키지는 in-page `@agent-devtools` 위젯 런타임과, dev-only 위젯 layer 없이 동일한 하니스만 쓰고 싶은 외부 SaaS consumer 가 공유합니다.
 
@@ -53,11 +53,11 @@ import {
   getDefaultProvider,
 } from '@agent-devtools/harness-core';
 
-const name = getDefaultProvider(); // 'openrouter' | 'groq' | 'cerebras' | 'openai'
-const provider = createProvider(name); // 대응되는 env 변수를 읽음
+const name = getDefaultProvider(); // 'openrouter' | 'groq' | 'cerebras' | 'openai' | undefined
+const provider = createProvider(name!, 'meta-llama/llama-3.1-8b-instruct:free');
 ```
 
-`createProvider` 는 `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` 를 읽고 해당 provider 를 구성합니다. 앱 코드에서는 의존성을 명시적으로 드러내기 위해 직접 인스턴스화를 권장합니다.
+`getDefaultProvider` 는 `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` 를 검사해 키가 존재하는 첫 provider 를 반환합니다 (없으면 `undefined`). 이어서 `createProvider(name, model)` 가 주어진 모델 ID 로 해당 provider 를 구성합니다. 앱 코드에서는 의존성을 명시적으로 드러내기 위해 직접 인스턴스화를 권장합니다.
 
 ### Loop 에 도메인 주입
 
@@ -71,17 +71,17 @@ for await (const event of orchestratorLoop(
   prompts,
   config,
 )) {
-  // event.kind === 'assistant-text' | 'tool-use' | 'tool-result' | 'usage' | 'done'
+  // event.type === 'start' | 'progress' | 'complete' | 'error'
 }
 ```
 
-- `input` — 사용자 입력과 선택적 `AbortSignal`.
-- `llm` — `LLMProvider` 또는 `SessionProvider` 인스턴스.
-- `adapter` — `GenerationDomain` / `OperationDomain`, `ToolProvider`, parser / validator 를 공급하는 `DomainBinding`.
+- `input` — `AgentInput`: 사용자 입력과 선택적 `AgentOptions` (`AbortSignal` 포함).
+- `llm` — `LLMProvider`. `sdkSessionLoop` 은 이 자리에 `SessionProvider` 를 받습니다.
+- `adapter` — parser, validator, 생성 계약을 공급하는 `GenerationDomain`.
 - `prompts` — 시스템 프롬프트와 tool description 을 렌더링하는 `PromptProvider`.
-- `config` — `LoopConfig` (`maxIterations`, `tierResolver`, 텔레메트리 훅 등).
+- `config` — `LoopConfig` (`maxIterations`, `qualityThreshold`, `tierResolver`, 텔레메트리 훅 등).
 
-`orchestratorLoop`, `modelDrivenLoop`, `sdkSessionLoop`, `langgraphLoop` 은 동일한 시그니처를 가지므로 주변 코드를 그대로 두고 전략만 교체할 수 있습니다.
+`orchestratorLoop`, `modelDrivenLoop`, `sdkSessionLoop`, `langgraphLoop` 은 동일한 5-인자 형태를 가지므로 주변 코드를 그대로 두고 전략만 교체할 수 있습니다. 각각 `event.type` 으로 구분되는 `StreamEvent` 값을 yield 합니다.
 
 ## Provider 매트릭스
 
