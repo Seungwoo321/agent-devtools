@@ -1,6 +1,8 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/e2e
 
-> Internal Playwright E2E smoke suite for agent-devtools examples.
+> Internal Playwright E2E smoke suite for [agent-devtools](https://github.com/Seungwoo321/agent-devtools) examples.
 
 This package is **private** and is not published to npm. It drives the `examples/react-vite` app under Chromium and exercises the widget end-to-end against both provider runtimes.
 
