@@ -36,7 +36,8 @@
   "files": [
     "bin",
     "dist",
-    "README.md"
+    "README.md",
+    "README.ko.md"
   ],
   "scripts": {
     "build": "tsup",
