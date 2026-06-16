@@ -17,7 +17,10 @@ import type { AgentRequestContext } from '../server/app.js';
 // Minimal Query stub: an async generator with the control-method shape the
 // SDK exposes. We don't exercise those methods here — the provider only uses
 // the AsyncIterable protocol — so they're stubbed for type compatibility.
-function makeQuery(events: unknown[], opts: { throws?: unknown } = {}): SdkQuery {
+function makeQuery(
+  events: unknown[],
+  opts: { throws?: unknown; supportedCommands?: () => Promise<unknown> } = {},
+): SdkQuery {
   async function* gen(): AsyncGenerator<unknown, void> {
     for (const e of events) yield e;
     if (opts.throws) throw opts.throws;
@@ -29,7 +32,7 @@ function makeQuery(events: unknown[], opts: { throws?: unknown } = {}): SdkQuery
     setModel: () => Promise.resolve(),
     setMaxThinkingTokens: () => Promise.resolve(),
     mergeSettings: () => Promise.resolve(),
-    supportedCommands: () => Promise.resolve([]),
+    supportedCommands: opts.supportedCommands ?? (() => Promise.resolve([])),
     supportedModels: () => Promise.resolve([]),
   }) as unknown as SdkQuery;
 }
@@ -70,6 +73,12 @@ describe('createSdkProvider', () => {
 
     const out = await collect(provider({ prompt: 'p' }, makeCtx()));
     expect(out).toEqual([
+      // System init triggers the available_commands_update (empty here — the
+      // default makeQuery stub resolves supportedCommands() to []).
+      {
+        type: 'acp.session_update',
+        update: { sessionUpdate: 'available_commands_update', availableCommands: [] },
+      },
       {
         type: 'acp.session_update',
         update: {
@@ -80,6 +89,99 @@ describe('createSdkProvider', () => {
       { type: 'acp.result', stopReason: 'end_turn' },
     ]);
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  describe('available_commands_update', () => {
+    function commandEnvelopes(out: unknown[]): unknown[] {
+      return out.filter(
+        (e) =>
+          typeof e === 'object' &&
+          e !== null &&
+          (e as { update?: { sessionUpdate?: string } }).update?.sessionUpdate ===
+            'available_commands_update',
+      );
+    }
+
+    it('emits exactly one envelope sourced from supportedCommands() on init', async () => {
+      const messages = [
+        { type: 'system', subtype: 'init', slash_commands: ['compact'] },
+        { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+      ];
+      const query = vi.fn(() =>
+        makeQuery(messages, {
+          supportedCommands: () =>
+            Promise.resolve([
+              { name: 'compact', description: 'Compact the conversation', argumentHint: '[focus]' },
+              { name: 'clear', description: 'Clear history', argumentHint: '' },
+            ]),
+        }),
+      );
+      const provider = createSdkProvider({ query });
+
+      const out = await collect(provider({ prompt: 'p' }, makeCtx()));
+      const commands = commandEnvelopes(out);
+      expect(commands).toEqual([
+        {
+          type: 'acp.session_update',
+          update: {
+            sessionUpdate: 'available_commands_update',
+            availableCommands: [
+              {
+                name: 'compact',
+                description: 'Compact the conversation',
+                input: { hint: '[focus]' },
+              },
+              { name: 'clear', description: 'Clear history' },
+            ],
+          },
+        },
+      ]);
+    });
+
+    it('falls back to init slash_commands names when supportedCommands() rejects', async () => {
+      const messages = [
+        { type: 'system', subtype: 'init', slash_commands: ['compact', 'clear'] },
+        { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+      ];
+      const query = vi.fn(() =>
+        makeQuery(messages, {
+          supportedCommands: () => Promise.reject(new Error('control channel closed')),
+        }),
+      );
+      const provider = createSdkProvider({ query });
+
+      const out = await collect(provider({ prompt: 'p' }, makeCtx()));
+      expect(commandEnvelopes(out)).toEqual([
+        {
+          type: 'acp.session_update',
+          update: {
+            sessionUpdate: 'available_commands_update',
+            availableCommands: [
+              { name: 'compact', description: '' },
+              { name: 'clear', description: '' },
+            ],
+          },
+        },
+      ]);
+    });
+
+    it('emits the commands envelope at most once even with multiple init messages', async () => {
+      const messages = [
+        { type: 'system', subtype: 'init', slash_commands: ['compact'] },
+        { type: 'system', subtype: 'init', slash_commands: ['compact'] },
+        { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+      ];
+      const query = vi.fn(() =>
+        makeQuery(messages, {
+          supportedCommands: () =>
+            Promise.resolve([{ name: 'compact', description: 'd', argumentHint: '' }]),
+        }),
+      );
+      const provider = createSdkProvider({ query });
+
+      const out = await collect(provider({ prompt: 'p' }, makeCtx()));
+      expect(commandEnvelopes(out)).toHaveLength(1);
+    });
   });
 
   it('passes prompt, permissionMode and an AbortController to the SDK', async () => {

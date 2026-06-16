@@ -39,7 +39,11 @@ import {
 } from './acp.js';
 import { formatContextPreamble } from './context-preamble.js';
 import { categorizeSdkToolName } from './permission-category.js';
-import { translateSdkMessage, type AcpEnvelope } from './sdk-to-acp.js';
+import {
+  buildAvailableCommandsEnvelope,
+  translateSdkMessage,
+  type AcpEnvelope,
+} from './sdk-to-acp.js';
 
 /** Subset of the SDK surface we depend on. Lets tests inject a fake. */
 type QueryFn = (params: { prompt: string; options?: SdkOptions }) => SdkQuery;
@@ -139,8 +143,21 @@ export function createSdkProvider(options: CreateSdkProviderOptions = {}): Agent
       return;
     }
 
+    let commandsEmitted = false;
     try {
       for await (const message of stream) {
+        // Surface the agent's available slash commands once. The system/init
+        // message names them but carries no descriptions or argument hints, so
+        // we ask the running query for the rich list (`supportedCommands()`,
+        // which returns `{ name, description, argumentHint }`). The SDK
+        // demultiplexes that control response from the message stream in its
+        // own reader, so awaiting here resolves even while paused inside this
+        // loop. On rejection (or empty), fall back to the init names with empty
+        // descriptions and no hints — never throw, never block the turn.
+        if (!commandsEmitted && isSystemInitMessage(message)) {
+          commandsEmitted = true;
+          yield await resolveAvailableCommands(stream, message);
+        }
         for (const envelope of translateSdkMessage(message)) {
           yield envelope;
         }
@@ -154,6 +171,38 @@ export function createSdkProvider(options: CreateSdkProviderOptions = {}): Agent
       context.signal.removeEventListener('abort', onAbort);
     }
   };
+}
+
+/** Narrow an SDK stream message to the system/init variant. */
+function isSystemInitMessage(message: unknown): message is { slash_commands?: unknown } {
+  if (typeof message !== 'object' || message === null) return false;
+  const m = message as Record<string, unknown>;
+  return m.type === 'system' && m.subtype === 'init';
+}
+
+/**
+ * Build the `available_commands_update` envelope for the current query.
+ *
+ * Primary source: `supportedCommands()` — the rich list with descriptions and
+ * argument hints. If it rejects (older runtime, control-channel failure), fall
+ * back to the init message's `slash_commands: string[]` names with empty
+ * descriptions and no hints. Failure here must never abort the turn, so a
+ * rejecting/throwing call degrades to the name-only envelope.
+ */
+async function resolveAvailableCommands(
+  stream: SdkQuery,
+  initMessage: { slash_commands?: unknown },
+): Promise<AcpEnvelope> {
+  try {
+    const commands = await stream.supportedCommands();
+    return buildAvailableCommandsEnvelope(commands);
+  } catch {
+    const names = Array.isArray(initMessage.slash_commands) ? initMessage.slash_commands : [];
+    const fallback = names
+      .filter((name): name is string => typeof name === 'string')
+      .map((name) => ({ name, description: '', argumentHint: '' }));
+    return buildAvailableCommandsEnvelope(fallback);
+  }
 }
 
 function toErrorEnvelope(error: unknown): AcpEnvelope {
