@@ -424,6 +424,81 @@ export function createAgentInfoFetcher(
   };
 }
 
+export interface CreateAgentCommandsFetcherOptions {
+  /** Base URL of the agent-devtools server (e.g. `http://127.0.0.1:4317`). */
+  readonly baseUrl: string;
+  /** Pairing token for the `Authorization: Bearer …` header. */
+  readonly pairingToken: string;
+  /** Override `globalThis.fetch` (tests). */
+  readonly fetch?: typeof fetch;
+}
+
+const COMMANDS_PATH = '/v1/agent/commands';
+
+/**
+ * Build a fetcher for the workspace slash-command catalogue
+ * (`GET /v1/agent/commands`). The server computes this list without a model
+ * turn and caches it per workspace, so the widget can prefetch it at mount and
+ * populate the composer's slash autocomplete on the FIRST keystroke — before
+ * any message is sent — matching the terminal's instant behaviour. The
+ * stream-based `available_commands_update` path still refreshes the catalogue
+ * when it changes.
+ *
+ * Returns `[]` on any failure (network throw, non-OK response, malformed
+ * payload) and never throws, so a slow or offline dev server never breaks
+ * mount — the autocomplete simply stays empty until the stream refresh lands.
+ *
+ * The wire payload is `{ commands: AvailableCommand[] }` where
+ * `AvailableCommand = { name; description; input?: { hint } | null }`; each is
+ * mapped to a `SlashCommandInfo` (`argumentHint` filled from `input.hint` only
+ * when `input` is an object carrying a string `hint`).
+ */
+export function createAgentCommandsFetcher(
+  options: CreateAgentCommandsFetcherOptions,
+): () => Promise<readonly SlashCommandInfo[]> {
+  const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+
+  return async function fetchAgentCommands(): Promise<readonly SlashCommandInfo[]> {
+    try {
+      const response = await fetchImpl(`${baseUrl}${COMMANDS_PATH}`, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${options.pairingToken}`,
+          accept: 'application/json',
+        },
+      });
+      if (!response.ok) return [];
+      const payload = (await response.json()) as { commands?: unknown };
+      if (!payload || typeof payload !== 'object' || !Array.isArray(payload.commands)) {
+        return [];
+      }
+      const commands: SlashCommandInfo[] = [];
+      for (const entry of payload.commands) {
+        if (!entry || typeof entry !== 'object') continue;
+        const candidate = entry as {
+          name?: unknown;
+          description?: unknown;
+          input?: unknown;
+        };
+        if (typeof candidate.name !== 'string' || candidate.name.length === 0) continue;
+        const command: { name: string; description: string; argumentHint?: string } = {
+          name: candidate.name,
+          description: typeof candidate.description === 'string' ? candidate.description : '',
+        };
+        if (candidate.input && typeof candidate.input === 'object') {
+          const hint = (candidate.input as { hint?: unknown }).hint;
+          if (typeof hint === 'string') command.argumentHint = hint;
+        }
+        commands.push(command);
+      }
+      return commands;
+    } catch {
+      return [];
+    }
+  };
+}
+
 export interface CreateRelatedImportsFetcherOptions {
   /** Base URL of the agent-devtools server (e.g. `http://127.0.0.1:4317`). */
   readonly baseUrl: string;

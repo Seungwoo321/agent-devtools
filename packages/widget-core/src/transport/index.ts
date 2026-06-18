@@ -1,10 +1,12 @@
 export {
+  createAgentCommandsFetcher,
   createAgentInfoFetcher,
   createDefaultTransport,
   createHandoffRequester,
   createRelatedImportsFetcher,
   createSourceSliceFetcher,
   StreamSilentError,
+  type CreateAgentCommandsFetcherOptions,
   type CreateAgentInfoFetcherOptions,
   type CreateDefaultTransportOptions,
   type CreateHandoffRequesterOptions,
