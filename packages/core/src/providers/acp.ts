@@ -43,7 +43,7 @@
  */
 import type { StopReason, Usage } from '@agentclientprotocol/sdk';
 import type { FileTools } from '../files/index.js';
-import type { AgentStreamFactory } from '../server/app.js';
+import type { AgentStreamFactory, AvailableCommand, CommandLister } from '../server/app.js';
 import { createDefaultAcpRuntime } from './acp-runtime.js';
 
 /**
@@ -55,6 +55,19 @@ export type AcpEvent =
   | { kind: 'result'; stopReason: StopReason; usage?: Usage | null }
   | { kind: 'error'; error: { name: string; message: string } };
 
+/**
+ * One workspace slash command in the ACP `AvailableCommand` shape (name,
+ * description, optional `input.hint`). The runtime captures these from the
+ * agent's `available_commands_update` notification, which the Claude Code
+ * ACP agent emits right after `newSession({cwd})` — no prompt required, so
+ * listing them never spends a model turn.
+ */
+export interface AcpAvailableCommand {
+  name: string;
+  description: string;
+  input?: { hint: string } | null;
+}
+
 /** Injection seam for the protocol layer. Default implementation spawns the binary. */
 export interface AcpRuntime {
   /**
@@ -65,6 +78,16 @@ export interface AcpRuntime {
    * implementations the underlying child + session are kept alive.
    */
   run(params: AcpRunParams): AsyncIterable<AcpEvent>;
+  /**
+   * List the workspace's slash commands WITHOUT invoking the model. Ensures
+   * a child + session for `cwd`, then waits (up to the runtime's own bound,
+   * or until `signal` aborts) for the agent's advertised
+   * `available_commands_update`. Resolves to an empty array on timeout /
+   * failure rather than throwing — the read endpoint depends on a graceful
+   * empty. Optional so existing/foreign runtimes need not implement it; the
+   * provider's lister returns `[]` when absent.
+   */
+  listCommands?(params: { cwd: string; signal: AbortSignal }): Promise<AcpAvailableCommand[]>;
 }
 
 /**
@@ -212,6 +235,35 @@ export function createAcpProvider(options: CreateAcpProviderOptions = {}): Agent
     } catch (error) {
       yield toErrorEvent(error);
     }
+  };
+}
+
+export interface CreateAcpCommandListerOptions {
+  /**
+   * Runtime whose `listCommands` capability backs the lister. Pass the SAME
+   * runtime instance the {@link createAcpProvider} uses so the lister reuses
+   * the pooled child + session rather than spawning a second agent. Defaults
+   * to a fresh default runtime (standalone use / tests).
+   */
+  runtime?: AcpRuntime;
+}
+
+/**
+ * Build the model-free command lister for the ACP provider. Backs
+ * `GET /v1/agent/commands`. Returns an empty list when no workspace `cwd` is
+ * configured or when the runtime does not implement `listCommands` — the
+ * route turns either into `{ commands: [] }` gracefully.
+ */
+export function createAcpCommandLister(options: CreateAcpCommandListerOptions = {}): CommandLister {
+  const runtime = options.runtime ?? createDefaultAcpRuntime();
+  return async ({ cwd, signal }): Promise<AvailableCommand[]> => {
+    if (cwd === undefined || runtime.listCommands === undefined) return [];
+    const commands = await runtime.listCommands({ cwd, signal });
+    return commands.map((c) => ({
+      name: c.name,
+      description: c.description,
+      ...(c.input != null && { input: { hint: c.input.hint } }),
+    }));
   };
 }
 
