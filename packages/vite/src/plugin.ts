@@ -670,6 +670,7 @@ function buildBootstrap(
   // fetcher is bound to the same config so the panel knows the workspace
   // root + registered providers without a second source of truth.
   return [
+    `import * as __agentDevtools from ${spec};`,
     `import { mountAgentDevtools, createDefaultTransport, createAgentInfoFetcher, createHandoffRequester, createRelatedImportsFetcher, createSourceSliceFetcher, createPageContextEnricher, createSettingsStore } from ${spec};`,
     `if (!window.__AGENT_DEVTOOLS_MOUNTED__) {`,
     `  window.__AGENT_DEVTOOLS_MOUNTED__ = true;`,
@@ -678,11 +679,20 @@ function buildBootstrap(
     `    var __settings = createSettingsStore();`,
     `    var __transport = __cfg ? createDefaultTransport(Object.assign({}, __cfg, { getSettings: function () { return __settings.get(); } })) : undefined;`,
     `    var __getServerInfo = __cfg ? createAgentInfoFetcher(__cfg) : undefined;`,
+    // Feature-detect the slash-command catalogue fetcher: the same injected
+    // bootstrap is reused across every adapter specifier, and most adapters do
+    // not re-export `createAgentCommandsFetcher` yet. A hard named import would
+    // be a link-time error for those adapters, so we read it off the module
+    // namespace and only build the fetcher when it is actually exported. The
+    // html runner (spec `@agent-devtools/widget-core`) gets the prefetch;
+    // other adapters degrade gracefully to the stream-only path.
+    `    var __getAgentCommands = (__cfg && typeof __agentDevtools.createAgentCommandsFetcher === 'function') ? __agentDevtools.createAgentCommandsFetcher(__cfg) : undefined;`,
     `    var __requestHandoff = __cfg ? createHandoffRequester(Object.assign({}, __cfg, { getClientSessionId: __transport ? function () { return __transport.getClientSessionId && __transport.getClientSessionId(); } : undefined })) : undefined;`,
     `    var __enrich = __cfg ? createPageContextEnricher({ fetchRelatedImports: createRelatedImportsFetcher(__cfg), fetchSourceSlice: createSourceSliceFetcher(__cfg) }) : undefined;`,
     `    var __opts = { settingsStore: __settings };`,
     `    if (__transport) __opts.transport = __transport;`,
     `    if (__getServerInfo) __opts.getServerInfo = __getServerInfo;`,
+    `    if (__getAgentCommands) __opts.getAgentCommands = __getAgentCommands;`,
     `    if (__requestHandoff) __opts.requestHandoff = __requestHandoff;`,
     `    if (__enrich) __opts.enrichPageContext = __enrich;`,
     shadowOpen ? `    __opts.shadowOpen = true;` : `    /* shadow closed (default) */`,

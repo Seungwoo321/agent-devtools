@@ -153,6 +153,16 @@ export interface MountAgentDevtoolsOptions {
    */
   getServerInfo?: () => Promise<AgentServerInfo | null>;
   /**
+   * Async slash-command catalogue fetcher (`GET /v1/agent/commands`). Called
+   * once after mount; the result is pushed into the composer's slash
+   * autocomplete so the workspace commands show on the FIRST keystroke —
+   * before any message is sent — matching the terminal's instant behaviour.
+   * Returns `[]` on any failure so a slow or offline dev server never breaks
+   * mount. This does NOT replace the stream-based `available_commands_update`
+   * refresh (`transport.onCommands`); both feed `composer.setCommands`.
+   */
+  getAgentCommands?: () => Promise<readonly SlashCommandInfo[]>;
+  /**
    * POSTs the in-memory conversation + page context to
    * `/v1/agent/handoff` and resolves with `{ file, command }`. When set,
    * the composer's "Continue in terminal" button opens a modal showing
@@ -401,6 +411,21 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       .then((info) => {
         if (destroyed) return;
         settingsPanel.setServerInfo(info);
+      })
+      .catch(() => undefined);
+  }
+  // Prefetch the slash-command catalogue so the composer's autocomplete is
+  // populated on the first keystroke, before any message is sent — matching
+  // the terminal's instant behaviour. The stream-based `transport.onCommands`
+  // path above still refreshes the catalogue when it changes; both feed
+  // `composer.setCommands`. A failed fetch resolves to `[]`, so it never
+  // breaks mount.
+  if (options.getAgentCommands) {
+    void options
+      .getAgentCommands()
+      .then((commands) => {
+        if (destroyed) return;
+        composer.setCommands(commands);
       })
       .catch(() => undefined);
   }
