@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createAcpProvider, type AcpEvent, type AcpRuntime, type PermissionPolicy } from './acp.js';
+import {
+  createAcpCommandLister,
+  createAcpProvider,
+  type AcpAvailableCommand,
+  type AcpEvent,
+  type AcpRuntime,
+  type PermissionPolicy,
+} from './acp.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
 import type { AgentRequestContext, PermissionMode } from '../server/app.js';
 
@@ -333,5 +340,69 @@ describe('createAcpProvider', () => {
     } finally {
       (ws as Workspace & { [Symbol.dispose]: () => void })[Symbol.dispose]();
     }
+  });
+});
+
+describe('createAcpCommandLister', () => {
+  function makeListerRuntime(
+    listCommands: (params: { cwd: string; signal: AbortSignal }) => Promise<AcpAvailableCommand[]>,
+  ): AcpRuntime {
+    return {
+      run: async function* run(): AsyncIterable<AcpEvent> {
+        // not exercised by the lister
+      },
+      listCommands,
+    };
+  }
+
+  it('maps the runtime commands into the AvailableCommand shape (input.hint preserved, null dropped)', async () => {
+    const runtime = makeListerRuntime(async () => [
+      { name: 'plan', description: 'Create a plan', input: { hint: '<goal>' } },
+      { name: 'review', description: 'Review the diff', input: null },
+      { name: 'commit', description: 'Commit changes' },
+    ]);
+    const lister = createAcpCommandLister({ runtime });
+    const commands = await lister({ cwd: '/ws', signal: new AbortController().signal });
+    expect(commands).toEqual([
+      { name: 'plan', description: 'Create a plan', input: { hint: '<goal>' } },
+      { name: 'review', description: 'Review the diff' },
+      { name: 'commit', description: 'Commit changes' },
+    ]);
+  });
+
+  it('forwards cwd and signal to the runtime', async () => {
+    let seen: { cwd: string; signal: AbortSignal } | undefined;
+    const runtime = makeListerRuntime(async (params) => {
+      seen = params;
+      return [];
+    });
+    const ac = new AbortController();
+    const lister = createAcpCommandLister({ runtime });
+    await lister({ cwd: '/some/ws', signal: ac.signal });
+    expect(seen?.cwd).toBe('/some/ws');
+    expect(seen?.signal).toBe(ac.signal);
+  });
+
+  it('returns [] when no cwd is configured (no workspace)', async () => {
+    let called = false;
+    const runtime = makeListerRuntime(async () => {
+      called = true;
+      return [{ name: 'plan', description: 'x' }];
+    });
+    const lister = createAcpCommandLister({ runtime });
+    const commands = await lister({ signal: new AbortController().signal });
+    expect(commands).toEqual([]);
+    expect(called).toBe(false);
+  });
+
+  it('returns [] when the runtime does not implement listCommands', async () => {
+    const runtime: AcpRuntime = {
+      run: async function* run(): AsyncIterable<AcpEvent> {
+        // no listCommands
+      },
+    };
+    const lister = createAcpCommandLister({ runtime });
+    const commands = await lister({ cwd: '/ws', signal: new AbortController().signal });
+    expect(commands).toEqual([]);
   });
 });
