@@ -10,6 +10,8 @@ export type {
   AgentStreamFactory,
   AgentStreamRequest,
   AgentRequestContext,
+  AvailableCommand,
+  CommandLister,
   ProviderId,
   PermissionMode,
 } from './app.js';

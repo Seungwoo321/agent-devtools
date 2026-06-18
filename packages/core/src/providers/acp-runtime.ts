@@ -42,6 +42,7 @@ import {
 } from '@agentclientprotocol/sdk';
 import {
   DEFAULT_PERMISSION_POLICY,
+  type AcpAvailableCommand,
   type AcpEvent,
   type AcpRunParams,
   type AcpRuntime,
@@ -100,10 +101,29 @@ export interface CreateDefaultAcpRuntimeOptions {
 const DEFAULT_KILL_GRACE_PERIOD_MS = 2000;
 
 /**
+ * How long {@link AcpChild.listCommands} waits for the agent's advertised
+ * `available_commands_update` after ensuring a session. The probe measured
+ * the cold-start emission at ~6–7s, so we wait a touch longer; the route
+ * layer applies its own (longer) hard cap and the call also unwinds early
+ * when the caller's `signal` aborts.
+ */
+const COMMANDS_ADVERTISE_TIMEOUT_MS = 10_000;
+
+/**
+ * Synthetic `clientSessionId` used by {@link AcpChild.listCommands}. It keys
+ * a session dedicated to slash command listing so it never shares state with
+ * a browser tab's conversation session. The command catalogue depends only
+ * on `cwd`, so one such session per child suffices and is reused across list
+ * calls.
+ */
+const COMMAND_LISTER_SESSION_KEY = '__agent-devtools:command-lister__';
+
+/**
  * Default ACP runtime. Exposes `shutdownAll()` on top of the base
  * `AcpRuntime.run` for graceful dev-server shutdown.
  */
 export interface DefaultAcpRuntime extends AcpRuntime {
+  listCommands(params: { cwd: string; signal: AbortSignal }): Promise<AcpAvailableCommand[]>;
   shutdownAll(): Promise<void>;
 }
 
@@ -128,6 +148,7 @@ export function createDefaultAcpRuntime(
 
   return {
     run: (params) => pool.run(params),
+    listCommands: (params) => pool.listCommands(params),
     shutdownAll: () => pool.shutdownAll(),
   };
 }
@@ -169,6 +190,18 @@ class AcpSessionPool {
     return pending;
   }
 
+  async listCommands(params: { cwd: string; signal: AbortSignal }): Promise<AcpAvailableCommand[]> {
+    let child: AcpChild;
+    try {
+      child = await this.getChild(params.cwd);
+    } catch {
+      // Spawn failed — graceful empty; the route turns this into
+      // `{ commands: [] }` and the caller (widget) degrades to no menu.
+      return [];
+    }
+    return child.listCommands(params);
+  }
+
   async shutdownAll(): Promise<void> {
     const childrenPromises = [...this.childByCwd.values()];
     this.childByCwd.clear();
@@ -200,6 +233,19 @@ interface SessionEntry {
    * unchanged across turns.
    */
   appliedModel?: string;
+  /**
+   * Latest slash command catalogue advertised by the agent for this session
+   * via `available_commands_update`. Captured outside any in-flight run so
+   * the model-free `listCommands` path can read it after `newSession`
+   * resolves. Undefined until the first advertisement arrives.
+   */
+  latestCommands?: AcpAvailableCommand[];
+  /**
+   * One-shot resolvers parked by `listCommands` while waiting for the first
+   * `available_commands_update`. Resolved (and cleared) the moment commands
+   * are captured. Kept as a set so concurrent listers all wake.
+   */
+  commandWaiters: Set<(commands: AcpAvailableCommand[]) => void>;
 }
 
 /**
@@ -241,7 +287,19 @@ class AcpChild {
         const self = ref.value;
         if (!self) return;
         const entry = self.bySessionId.get(notification.sessionId);
-        entry?.current?.queue.push({
+        if (!entry) return;
+        // Capture the slash command catalogue regardless of whether a run is
+        // in flight. The agent advertises it right after `newSession` (no
+        // prompt), so the model-free `listCommands` path depends on this
+        // being stashed outside any run's queue.
+        const commands = extractAvailableCommands(notification.update);
+        if (commands) {
+          entry.latestCommands = commands;
+          const waiters = [...entry.commandWaiters];
+          entry.commandWaiters.clear();
+          for (const resolve of waiters) resolve(commands);
+        }
+        entry.current?.queue.push({
           kind: 'notification',
           sessionUpdate: notification.update,
         });
@@ -365,6 +423,53 @@ class AcpChild {
     }
   }
 
+  /**
+   * Model-free slash command listing. Ensures a session for `cwd` using a
+   * dedicated synthetic `clientSessionId` (so it never collides with a
+   * browser tab's conversation session) and returns the agent's advertised
+   * catalogue. The advertisement may already be stashed (a prior list call,
+   * or it raced in before we parked a waiter) — return it immediately if so;
+   * otherwise wait for the first `available_commands_update`, bounded by both
+   * an internal timeout and the caller's `signal`. No prompt is ever sent.
+   */
+  async listCommands(params: { cwd: string; signal: AbortSignal }): Promise<AcpAvailableCommand[]> {
+    if (this.shuttingDown) return [];
+
+    let entry: SessionEntry;
+    try {
+      entry = await this.getOrCreateSession(COMMAND_LISTER_SESSION_KEY, params.cwd);
+    } catch {
+      return [];
+    }
+
+    if (entry.latestCommands) return entry.latestCommands;
+    if (params.signal.aborted) return [];
+
+    return new Promise<AcpAvailableCommand[]>((resolve) => {
+      let settled = false;
+      const finish = (commands: AcpAvailableCommand[]): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        params.signal.removeEventListener('abort', onAbort);
+        entry.commandWaiters.delete(waiter);
+        resolve(commands);
+      };
+      const waiter = (commands: AcpAvailableCommand[]): void => finish(commands);
+      const onAbort = (): void => finish([]);
+      const timer = setTimeout(() => finish([]), COMMANDS_ADVERTISE_TIMEOUT_MS);
+
+      // Re-check after parking: the advertisement could have landed between
+      // the synchronous `latestCommands` check above and here.
+      if (entry.latestCommands) {
+        finish(entry.latestCommands);
+        return;
+      }
+      entry.commandWaiters.add(waiter);
+      params.signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
   private async getOrCreateSession(clientSessionId: string, cwd: string): Promise<SessionEntry> {
     const existing = this.sessions.get(clientSessionId);
     if (existing) return existing;
@@ -418,6 +523,7 @@ class AcpChild {
       acpSessionId,
       current: null,
       lastDone: Promise.resolve(),
+      commandWaiters: new Set(),
     };
     this.sessions.set(clientSessionId, entry);
     this.bySessionId.set(acpSessionId, entry);
@@ -555,6 +661,35 @@ async function shutdownProcess(handle: AcpSpawnHandle, killGracePeriodMs: number
     }
     await exited;
   }
+}
+
+/**
+ * Narrow a raw ACP `sessionUpdate` payload to its advertised command list.
+ * Returns the `availableCommands` array when the update is an
+ * `available_commands_update`, else null. Defensive narrowing: the runtime
+ * receives the update as `unknown` from the protocol seam, so each field is
+ * checked rather than cast.
+ */
+function extractAvailableCommands(update: unknown): AcpAvailableCommand[] | null {
+  if (typeof update !== 'object' || update === null) return null;
+  const u = update as Record<string, unknown>;
+  if (u.sessionUpdate !== 'available_commands_update') return null;
+  if (!Array.isArray(u.availableCommands)) return [];
+  const out: AcpAvailableCommand[] = [];
+  for (const entry of u.availableCommands) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const name = typeof e.name === 'string' ? e.name : '';
+    if (name.length === 0) continue;
+    const description = typeof e.description === 'string' ? e.description : '';
+    const command: AcpAvailableCommand = { name, description };
+    if (typeof e.input === 'object' && e.input !== null) {
+      const hint = (e.input as Record<string, unknown>).hint;
+      if (typeof hint === 'string' && hint.length > 0) command.input = { hint };
+    }
+    out.push(command);
+  }
+  return out;
 }
 
 function toErrorPayload(error: unknown): { name: string; message: string } {
