@@ -31,5 +31,7 @@
     "@agent-devtools/vue2": "1.2.1",
     "@agent-devtools/widget-core": "1.2.1"
   },
-  "changesets": []
+  "changesets": [
+    "slash-command-autocomplete"
+  ]
 }
