@@ -1,3 +1,5 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/example-angular-vite
 
 End-to-end smoke for `@agent-devtools/angular`. A minimal standalone Angular 20 app served by Vite through `@analogjs/vite-plugin-angular`. The framework-aware vite plugin auto-detects Angular from `package.json` and mounts the floating widget.

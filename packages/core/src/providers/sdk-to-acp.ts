@@ -50,6 +50,14 @@ export type AcpSessionUpdate =
       toolCallId: string;
       status: 'completed';
       content?: ReadonlyArray<{ type: 'content'; content: { type: 'text'; text: string } }>;
+    }
+  | {
+      sessionUpdate: 'available_commands_update';
+      availableCommands: ReadonlyArray<{
+        name: string;
+        description: string;
+        input?: { hint: string };
+      }>;
     };
 
 /**
@@ -85,6 +93,82 @@ export function translateSdkMessage(message: unknown): readonly AcpEnvelope[] {
     default:
       return [];
   }
+}
+
+/**
+ * Build the `available_commands_update` envelope from the SDK's slash command
+ * list.
+ *
+ * The SDK exposes commands as `SlashCommand[]` (`{ name, description,
+ * argumentHint }`) via `Query.supportedCommands()`. The ACP wire shape the
+ * widget consumes (`AvailableCommand`) has no `argumentHint` field — the arg
+ * hint lives in `input.hint` (an `UnstructuredCommandInput`). We map:
+ *   - `name` → `name`
+ *   - `description` → `description`
+ *   - `argumentHint` → `input: { hint }` ONLY when the hint is a non-empty
+ *     string; omitted otherwise (absence over an empty hint, so the composer
+ *     does not render a blank argument placeholder).
+ *
+ * Inputs arrive as plain objects (the SDK type is erased at the seam and the
+ * init-message fallback path passes hand-built entries), so each field is
+ * narrowed defensively before use; non-object / missing fields coerce to
+ * empty.
+ */
+export function buildAvailableCommandsEnvelope(commands: unknown): AcpEnvelope {
+  return {
+    type: 'acp.session_update',
+    update: {
+      sessionUpdate: 'available_commands_update',
+      availableCommands: mapToAvailableCommands(commands),
+    },
+  };
+}
+
+/**
+ * Single source of truth for the `SlashCommand → AvailableCommand` shape
+ * mapping, shared by the SDK provider's streaming
+ * `available_commands_update` envelope (above) and the read-only
+ * `GET /v1/agent/commands` lister (`server/app.ts`). Both must map
+ * `argumentHint → input.hint` identically so the widget decodes one shape
+ * regardless of whether the commands arrived mid-stream or via prefetch.
+ *
+ * Accepts both the SDK's `SlashCommand` (`{ name, description, argumentHint
+ * }`) and the ACP `AvailableCommand` (`{ name, description, input }`) input
+ * vocabularies — the ACP runtime already speaks `input.hint` natively, the
+ * SDK speaks `argumentHint`. We prefer an explicit `argumentHint` when
+ * present, then fall back to an existing `input.hint`, so a pre-mapped ACP
+ * command round-trips unchanged.
+ */
+export function mapToAvailableCommands(commands: unknown): AvailableCommandLite[] {
+  const out: AvailableCommandLite[] = [];
+  if (!Array.isArray(commands)) return out;
+  for (const entry of commands) {
+    if (!isObject(entry)) continue;
+    const name = typeof entry.name === 'string' ? entry.name : '';
+    if (name.length === 0) continue;
+    const description = typeof entry.description === 'string' ? entry.description : '';
+    const hint = readArgumentHint(entry);
+    out.push({
+      name,
+      description,
+      ...(hint.length > 0 && { input: { hint } }),
+    });
+  }
+  return out;
+}
+
+/** The widget-facing command shape (ACP `AvailableCommand`, hint normalized). */
+export interface AvailableCommandLite {
+  name: string;
+  description: string;
+  input?: { hint: string };
+}
+
+function readArgumentHint(entry: Record<string, unknown>): string {
+  if (typeof entry.argumentHint === 'string') return entry.argumentHint;
+  const input = entry.input;
+  if (isObject(input) && typeof input.hint === 'string') return input.hint;
+  return '';
 }
 
 function translateAssistantMessage(m: Record<string, unknown>): readonly AcpEnvelope[] {

@@ -1,6 +1,16 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/example-sveltekit
 
-End-to-end smoke example for the SvelteKit adapter (`@agent-devtools/sveltekit`) running on Vite 8 with the Node adapter.
+End-to-end smoke for `@agent-devtools/sveltekit`. A minimal SvelteKit app on Vite 8 with the Node adapter that mounts the floating widget through a dev-only `onMount` call.
+
+## Layout
+
+- `src/routes/+page.svelte` — root route with a single `<Counter />` child.
+- `src/lib/Counter.svelte` — picker target. `describePickedSvelteKit` reads `__svelte_meta` and walks the component ancestor chain to resolve the source `.svelte` file.
+- `src/routes/+layout.svelte` — gates `import('@agent-devtools/sveltekit')` + `mountAgentDevtoolsSvelteKit()` behind `if (import.meta.env.PROD) return`, so the call site is tree-shaken out of the production client bundle.
+- `src/hooks.server.ts` — wires `createAgentDevtoolsHandle()` as a passthrough, the binding point for future server-side features (per-request pairing token injection, SSR bootstrap config emission).
+- `vite.config.ts` — wires `agentDevtools({ framework: 'sveltekit' })` alongside `@sveltejs/kit/vite`, which auto-detects the `@sveltejs/kit` dependency.
 
 ## Run
 
@@ -9,17 +19,12 @@ pnpm install
 pnpm --filter @agent-devtools/example-sveltekit dev
 ```
 
-Open http://127.0.0.1:3204. The widget appears in the bottom-right corner; the bootstrap script tag is injected by `@agent-devtools/vite` with `framework: 'sveltekit'`, which auto-detects the `@sveltejs/kit` dependency.
+The dev server listens on `http://127.0.0.1:3204`. The widget appears in the bottom-right corner; the bootstrap is mounted by `@agent-devtools/sveltekit` from the dev-only `onMount` in `+layout.svelte`.
 
-## Dev-only guard
+## Production no-leak smoke
 
-Two layers cooperate:
+```bash
+pnpm --filter @agent-devtools/example-sveltekit build:check
+```
 
-1. **Layer 1 (build-time)** — `+layout.svelte` gates the dynamic `import('@agent-devtools/sveltekit')` behind `if (!dev) return`. SvelteKit tree-shakes the call site out of the production client bundle. The Vite plugin (`@agent-devtools/vite`) additionally uses `apply: 'serve'`, so its middleware never runs during `vite build`.
-2. **Layer 2 (runtime)** — `mountAgentDevtoolsSvelteKit` throws when `NODE_ENV === 'production'`, defending the contract if Layer 1 is bypassed.
-
-`pnpm --filter @agent-devtools/example-sveltekit build:check` builds for production and runs `scripts/check-no-leak.mjs`, which greps every text file in `build/` and `.svelte-kit/output/` for any widget-chain symbol. CI fails the example if anything leaks.
-
-## Server handle
-
-`src/hooks.server.ts` wires `createAgentDevtoolsHandle()` as a passthrough. It exists as the binding point for future server-side features (per-request pairing token injection, SSR bootstrap config emission).
+`build:check` runs `vite build`, then `scripts/check-no-leak.mjs`, which greps every text file in `build/` and `.svelte-kit/output/` for any widget-chain identifier (`mountAgentDevtools`, `mountAgentDevtoolsSvelte`, `mountAgentDevtoolsSvelteKit`, `describePickedSvelte`, `describePickedSvelteKit`, `walkComponentAncestors`, etc.). Layer 1 (`if (import.meta.env.PROD) return` + the plugin's `apply: 'serve'`) keeps the mount chain out of the production bundle; if it is ever bypassed, `mountAgentDevtoolsSvelteKit` throws when `NODE_ENV === 'production'` as the Layer 2 backstop. CI fails the example if anything leaks.

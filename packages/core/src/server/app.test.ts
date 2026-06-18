@@ -3,7 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request, type IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, type AgentStreamFactory, type PermissionMode, type ProviderId } from './app.js';
+import {
+  createApp,
+  type AgentStreamFactory,
+  type CommandLister,
+  type PermissionMode,
+  type ProviderId,
+} from './app.js';
 import type { PermissionPolicy } from '../providers/acp.js';
 import type { AcpSessionStore } from '../providers/acp-session-store.js';
 import type {
@@ -41,6 +47,7 @@ async function startApp(
     pairingToken?: string;
     workspace?: Workspace;
     providers?: Partial<Record<ProviderId, AgentStreamFactory>>;
+    commandListers?: Partial<Record<ProviderId, CommandLister>>;
     defaultProvider?: ProviderId;
     defaultPermissionMode?: PermissionMode;
     defaultPermissionPolicy?: PermissionPolicy;
@@ -57,6 +64,7 @@ async function startApp(
   const providers = options.providers ?? (factory ? { acp: factory } : undefined);
   const handler = createApp({
     ...(providers && { providers }),
+    ...(options.commandListers && { commandListers: options.commandListers }),
     ...(options.defaultProvider && { defaultProvider: options.defaultProvider }),
     ...(options.defaultPermissionMode && { defaultPermissionMode: options.defaultPermissionMode }),
     ...(options.defaultPermissionPolicy && {
@@ -1168,6 +1176,138 @@ describe('createApp', () => {
       const body = res.body as { resumeCommand?: string; command: string };
       expect(body.resumeCommand).toBeUndefined();
       expect(body.command).toContain('claude --append-system-prompt-file');
+    });
+  });
+
+  describe('GET /v1/agent/commands', () => {
+    const sampleCommands = [
+      { name: 'plan', description: 'Create a plan', input: { hint: '<goal>' } },
+      { name: 'review', description: 'Review the diff' },
+    ];
+
+    it('returns { commands } from the matching lister (default provider)', async () => {
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: { acp: async () => sampleCommands },
+      });
+      const res = await getJson(`${app.url}/v1/agent/commands`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ commands: sampleCommands });
+    });
+
+    it('selects the lister by ?provider', async () => {
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: {
+          acp: async () => [],
+          sdk: async () => sampleCommands,
+        },
+      });
+      const res = await getJson(`${app.url}/v1/agent/commands?provider=sdk`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ commands: sampleCommands });
+    });
+
+    it('passes the workspace cwd to the lister', async () => {
+      const workspace = makeTmpWorkspace();
+      let seenCwd: string | undefined;
+      const app = await startApp(undefined, {
+        workspace,
+        commandListers: {
+          acp: async ({ cwd }) => {
+            seenCwd = cwd;
+            return sampleCommands;
+          },
+        },
+      });
+      await getJson(`${app.url}/v1/agent/commands`);
+      expect(seenCwd).toBe(workspace.root);
+    });
+
+    it('returns { commands: [] } when the lister throws (never 500)', async () => {
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: {
+          acp: async () => {
+            throw new Error('runtime exploded');
+          },
+        },
+      });
+      const res = await getJson(`${app.url}/v1/agent/commands`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ commands: [] });
+    });
+
+    it('returns { commands: [] } when no lister is registered for the provider', async () => {
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: {},
+      });
+      const res = await getJson(`${app.url}/v1/agent/commands`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ commands: [] });
+    });
+
+    it('returns { commands: [] } for an unknown provider query (graceful, not 422)', async () => {
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: { acp: async () => sampleCommands },
+      });
+      const res = await getJson(`${app.url}/v1/agent/commands?provider=bogus`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ commands: [] });
+    });
+
+    it('caches the result per (provider, cwd) — lister invoked once across mounts', async () => {
+      let calls = 0;
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: {
+          acp: async () => {
+            calls += 1;
+            return sampleCommands;
+          },
+        },
+      });
+      const first = await getJson(`${app.url}/v1/agent/commands`);
+      const second = await getJson(`${app.url}/v1/agent/commands`);
+      expect(first.body).toEqual({ commands: sampleCommands });
+      expect(second.body).toEqual({ commands: sampleCommands });
+      expect(calls).toBe(1);
+    });
+
+    it('does not cache an empty result — retries on the next mount', async () => {
+      let calls = 0;
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        commandListers: {
+          acp: async () => {
+            calls += 1;
+            // First call fails (empty), second succeeds.
+            return calls === 1 ? [] : sampleCommands;
+          },
+        },
+      });
+      const first = await getJson(`${app.url}/v1/agent/commands`);
+      const second = await getJson(`${app.url}/v1/agent/commands`);
+      expect(first.body).toEqual({ commands: [] });
+      expect(second.body).toEqual({ commands: sampleCommands });
+      expect(calls).toBe(2);
+    });
+
+    it('requires the pairing token like the other routes', async () => {
+      const app = await startApp(undefined, {
+        workspace: makeTmpWorkspace(),
+        pairingToken: 'secret-token',
+        commandListers: { acp: async () => sampleCommands },
+      });
+      const unauthorized = await getJson(`${app.url}/v1/agent/commands`);
+      expect(unauthorized.status).toBe(401);
+      const authorized = await getJson(`${app.url}/v1/agent/commands`, {
+        token: 'secret-token',
+      });
+      expect(authorized.status).toBe(200);
+      expect(authorized.body).toEqual({ commands: sampleCommands });
     });
   });
 });

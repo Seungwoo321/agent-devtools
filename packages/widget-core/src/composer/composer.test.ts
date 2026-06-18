@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createComposer, CHIP_BG, CHIP_BORDER } from './composer.js';
 import type { PickedEvidence } from '../context/types.js';
+import type { SlashCommandInfo } from '../stream/index.js';
 
 let container: HTMLElement;
 
@@ -1058,5 +1059,238 @@ describe('createComposer', () => {
     handle.destroy();
     expect(() => handle.setErrorCount(3)).not.toThrow();
     expect(handle.getErrorCount()).toBe(0);
+  });
+});
+
+describe('createComposer slash-command menu', () => {
+  const commands: readonly SlashCommandInfo[] = [
+    { name: 'review', description: 'Review the picked element', argumentHint: '[files…]' },
+    { name: 'refactor', description: 'Refactor the component' },
+    { name: 'explain', description: 'Explain what this does', argumentHint: '<topic>' },
+  ];
+
+  function getMenu(panel: HTMLElement): HTMLElement {
+    return panel.querySelector('[data-agent-devtools-composer-cmd-menu]') as HTMLElement;
+  }
+
+  function getItems(panel: HTMLElement): HTMLElement[] {
+    return Array.from(panel.querySelectorAll('[data-agent-devtools-composer-cmd-item]'));
+  }
+
+  function typeValue(ta: HTMLTextAreaElement, value: string): void {
+    ta.value = value;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function press(ta: HTMLTextAreaElement, key: string): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    ta.dispatchEvent(event);
+    return event;
+  }
+
+  it('opens the menu on "/" and lists all commands', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    expect(getMenu(handle.element).style.display).toBe('block');
+    expect(getItems(handle.element)).toHaveLength(3);
+    handle.destroy();
+  });
+
+  it('filters by prefix (case-insensitive)', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/RE');
+    const items = getItems(handle.element);
+    expect(items).toHaveLength(2);
+    const names = items.map(
+      (row) =>
+        (row.querySelector('[data-agent-devtools-composer-cmd-name]') as HTMLElement).textContent,
+    );
+    expect(names).toEqual(['/review', '/refactor']);
+    handle.destroy();
+  });
+
+  it('hides the menu when no command matches', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/zzz');
+    expect(getMenu(handle.element).style.display).toBe('none');
+    expect(getItems(handle.element)).toHaveLength(0);
+    handle.destroy();
+  });
+
+  it('closes the menu once a space follows the command', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/review');
+    expect(getMenu(handle.element).style.display).toBe('block');
+    typeValue(ta, '/review ');
+    expect(getMenu(handle.element).style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('renders name + description + argument hint, omitting the hint when absent', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    const items = getItems(handle.element);
+    // review has a hint
+    expect(
+      (items[0]!.querySelector('[data-agent-devtools-composer-cmd-name]') as HTMLElement)
+        .textContent,
+    ).toBe('/review');
+    expect(
+      (items[0]!.querySelector('[data-agent-devtools-composer-cmd-desc]') as HTMLElement)
+        .textContent,
+    ).toBe('Review the picked element');
+    expect(
+      (items[0]!.querySelector('[data-agent-devtools-composer-cmd-hint]') as HTMLElement)
+        .textContent,
+    ).toBe('[files…]');
+    // refactor has no hint
+    expect(items[1]!.querySelector('[data-agent-devtools-composer-cmd-hint]')).toBeNull();
+    handle.destroy();
+  });
+
+  it('ArrowDown / ArrowUp move the data-active highlight with wrap-around', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    const activeIndex = (): number =>
+      getItems(handle.element).findIndex((row) => row.hasAttribute('data-active'));
+    expect(activeIndex()).toBe(0);
+    press(ta, 'ArrowDown');
+    expect(activeIndex()).toBe(1);
+    press(ta, 'ArrowDown');
+    expect(activeIndex()).toBe(2);
+    press(ta, 'ArrowDown'); // wrap to top
+    expect(activeIndex()).toBe(0);
+    press(ta, 'ArrowUp'); // wrap to bottom
+    expect(activeIndex()).toBe(2);
+    handle.destroy();
+  });
+
+  it('marks the active row with aria-selected="true"', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    const items = getItems(handle.element);
+    expect(items[0]!.getAttribute('aria-selected')).toBe('true');
+    expect(items[1]!.getAttribute('aria-selected')).toBe('false');
+    handle.destroy();
+  });
+
+  it('nav keys call preventDefault and stopPropagation (no host leak)', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    for (const key of ['ArrowDown', 'ArrowUp']) {
+      const event = press(ta, key);
+      expect(event.defaultPrevented).toBe(true);
+    }
+    handle.destroy();
+  });
+
+  it('Enter confirms the highlighted command and does NOT submit', () => {
+    const onSubmit = vi.fn();
+    const handle = createComposer({ container, onSubmit, commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    press(ta, 'ArrowDown'); // highlight "refactor"
+    const event = press(ta, 'Enter');
+    expect(event.defaultPrevented).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(ta.value).toBe('/refactor ');
+    expect(ta.selectionStart).toBe('/refactor '.length);
+    expect(ta.selectionEnd).toBe('/refactor '.length);
+    expect(getMenu(handle.element).style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('Tab confirms the highlighted command without submitting', () => {
+    const onSubmit = vi.fn();
+    const handle = createComposer({ container, onSubmit, commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/ex');
+    const event = press(ta, 'Tab');
+    expect(event.defaultPrevented).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(ta.value).toBe('/explain ');
+    expect(getMenu(handle.element).style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('Escape closes only the menu, leaving the panel visible and text intact', () => {
+    const onClose = vi.fn();
+    const handle = createComposer({
+      container,
+      onSubmit: vi.fn(),
+      onClose,
+      commands,
+      visible: true,
+    });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/rev');
+    expect(getMenu(handle.element).style.display).toBe('block');
+    const event = press(ta, 'Escape');
+    expect(event.defaultPrevented).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(handle.element.style.display).toBe('flex');
+    expect(ta.value).toBe('/rev');
+    expect(getMenu(handle.element).style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('clicking a row confirms that command', () => {
+    const onSubmit = vi.fn();
+    const handle = createComposer({ container, onSubmit, commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    const items = getItems(handle.element);
+    items[2]!.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+    expect(ta.value).toBe('/explain ');
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(getMenu(handle.element).style.display).toBe('none');
+    handle.destroy();
+  });
+
+  it('setCommands updates the catalogue and re-renders an open menu', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, '/');
+    expect(getItems(handle.element)).toHaveLength(3);
+    handle.setCommands([
+      { name: 'deploy', description: 'Ship it' },
+      { name: 'diff', description: 'Show the diff' },
+    ]);
+    const items = getItems(handle.element);
+    expect(items).toHaveLength(2);
+    const names = items.map(
+      (row) =>
+        (row.querySelector('[data-agent-devtools-composer-cmd-name]') as HTMLElement).textContent,
+    );
+    expect(names).toEqual(['/deploy', '/diff']);
+    handle.destroy();
+  });
+
+  it('setCommands is a no-op after destroy', () => {
+    const handle = createComposer({ container, onSubmit: vi.fn(), commands });
+    handle.destroy();
+    expect(() => handle.setCommands([{ name: 'x', description: 'y' }])).not.toThrow();
+  });
+
+  it('with the menu closed, Enter still submits and Escape still calls onClose', () => {
+    const onSubmit = vi.fn();
+    const onClose = vi.fn();
+    const handle = createComposer({ container, onSubmit, onClose, commands });
+    const ta = getTextarea(handle.element);
+    typeValue(ta, 'just a normal prompt');
+    expect(getMenu(handle.element).style.display).toBe('none');
+    press(ta, 'Enter');
+    expect(onSubmit).toHaveBeenCalledWith({ text: 'just a normal prompt', picked: null });
+    press(ta, 'Escape');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    handle.destroy();
   });
 });

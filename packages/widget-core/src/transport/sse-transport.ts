@@ -33,6 +33,7 @@ import {
   parseSSEChunk,
   toStreamEvents,
   type MessageStore,
+  type SlashCommandInfo,
 } from '../stream/index.js';
 import type { AgentServerInfo, Settings } from '../settings/index.js';
 import type { AgentDevtoolsTransport, TransportPayload } from '../orchestrator/index.js';
@@ -113,6 +114,18 @@ export interface CreateDefaultTransportOptions {
    * 1200 + 2000 ≈ 4.1s across four retries). Default `2000`.
    */
   readonly preResponseRetryMaxBackoffMs?: number;
+  /**
+   * Side-channel for the agent's slash-command catalogue. The ACP
+   * `available_commands_update` notification decodes into an
+   * `available-commands` stream event which is widget UI state, not a
+   * conversation item — so instead of folding it into the `MessageStore`,
+   * the pump invokes this callback with the parsed command list. The
+   * composer subscribes here to drive its slash-command menu. A cleared
+   * catalogue arrives as an empty array, so the consumer can reset its menu.
+   * Omitted in non-widget contexts (curl, scripts) where there is no menu to
+   * feed. A throwing consumer cannot break the stream pump (guarded).
+   */
+  readonly onCommands?: (commands: readonly SlashCommandInfo[]) => void;
 }
 
 const DEFAULT_STREAM_SILENT_MS = 60_000;
@@ -225,6 +238,16 @@ export function createDefaultTransport(
   // on the very next `send()` call.
   let clientSessionId = loadOrMintSessionId(sessionStorage, sessionStorageKey, generate);
 
+  // Mutable command listener. Seeded from the construction-time
+  // `onCommands` option (so callers that already wire it keep working),
+  // but the orchestrator wires the real composer subscription *after*
+  // the transport is constructed — the composer doesn't exist yet at
+  // this point. `pumpStream` reads this `let` binding live, so a listener
+  // installed later via the `onCommands(...)` method takes effect on the
+  // next stream.
+  let commandListener: ((commands: readonly SlashCommandInfo[]) => void) | undefined =
+    options.onCommands;
+
   return {
     async send(payload: TransportPayload): Promise<void> {
       const settings = options.getSettings?.();
@@ -278,7 +301,23 @@ export function createDefaultTransport(
         throw new Error('agent server returned an empty body');
       }
 
-      await pumpStream(response.body, payload.store, payload.signal, streamSilentMs);
+      await pumpStream(
+        response.body,
+        payload.store,
+        payload.signal,
+        streamSilentMs,
+        // Read the live binding, not a captured snapshot, so a listener
+        // installed after construction (via `onCommands`) is observed.
+        commandListener,
+      );
+    },
+    onCommands(listener: (commands: readonly SlashCommandInfo[]) => void): void {
+      // Replace the current command listener. The orchestrator calls this
+      // once it has built the composer, handing the transport a sink that
+      // pushes the agent's slash-command catalogue into the composer's
+      // autocomplete menu. Replacing (not stacking) keeps a single active
+      // sink — the construction-time option is just the initial value.
+      commandListener = listener;
     },
     resetSession(): void {
       // Mint a new id and overwrite the persisted slot in place so the
@@ -381,6 +420,81 @@ export function createAgentInfoFetcher(
       return payload as AgentServerInfo;
     } catch {
       return null;
+    }
+  };
+}
+
+export interface CreateAgentCommandsFetcherOptions {
+  /** Base URL of the agent-devtools server (e.g. `http://127.0.0.1:4317`). */
+  readonly baseUrl: string;
+  /** Pairing token for the `Authorization: Bearer …` header. */
+  readonly pairingToken: string;
+  /** Override `globalThis.fetch` (tests). */
+  readonly fetch?: typeof fetch;
+}
+
+const COMMANDS_PATH = '/v1/agent/commands';
+
+/**
+ * Build a fetcher for the workspace slash-command catalogue
+ * (`GET /v1/agent/commands`). The server computes this list without a model
+ * turn and caches it per workspace, so the widget can prefetch it at mount and
+ * populate the composer's slash autocomplete on the FIRST keystroke — before
+ * any message is sent — matching the terminal's instant behaviour. The
+ * stream-based `available_commands_update` path still refreshes the catalogue
+ * when it changes.
+ *
+ * Returns `[]` on any failure (network throw, non-OK response, malformed
+ * payload) and never throws, so a slow or offline dev server never breaks
+ * mount — the autocomplete simply stays empty until the stream refresh lands.
+ *
+ * The wire payload is `{ commands: AvailableCommand[] }` where
+ * `AvailableCommand = { name; description; input?: { hint } | null }`; each is
+ * mapped to a `SlashCommandInfo` (`argumentHint` filled from `input.hint` only
+ * when `input` is an object carrying a string `hint`).
+ */
+export function createAgentCommandsFetcher(
+  options: CreateAgentCommandsFetcherOptions,
+): () => Promise<readonly SlashCommandInfo[]> {
+  const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+
+  return async function fetchAgentCommands(): Promise<readonly SlashCommandInfo[]> {
+    try {
+      const response = await fetchImpl(`${baseUrl}${COMMANDS_PATH}`, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${options.pairingToken}`,
+          accept: 'application/json',
+        },
+      });
+      if (!response.ok) return [];
+      const payload = (await response.json()) as { commands?: unknown };
+      if (!payload || typeof payload !== 'object' || !Array.isArray(payload.commands)) {
+        return [];
+      }
+      const commands: SlashCommandInfo[] = [];
+      for (const entry of payload.commands) {
+        if (!entry || typeof entry !== 'object') continue;
+        const candidate = entry as {
+          name?: unknown;
+          description?: unknown;
+          input?: unknown;
+        };
+        if (typeof candidate.name !== 'string' || candidate.name.length === 0) continue;
+        const command: { name: string; description: string; argumentHint?: string } = {
+          name: candidate.name,
+          description: typeof candidate.description === 'string' ? candidate.description : '',
+        };
+        if (candidate.input && typeof candidate.input === 'object') {
+          const hint = (candidate.input as { hint?: unknown }).hint;
+          if (typeof hint === 'string') command.argumentHint = hint;
+        }
+        commands.push(command);
+      }
+      return commands;
+    } catch {
+      return [];
     }
   };
 }
@@ -656,11 +770,27 @@ async function pumpStream(
   store: MessageStore,
   signal: AbortSignal,
   streamSilentMs: number,
+  onCommands?: (commands: readonly SlashCommandInfo[]) => void,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const parser = createSSEParserState();
   const acpState = createAcpDecoderState();
+  // Route each decoded event: command catalogues go to the side channel
+  // (widget UI state), everything else folds into the conversation store.
+  const route = (event: ReturnType<typeof toStreamEvents>[number]): void => {
+    if (event.type === 'available-commands') {
+      // A throwing consumer must not break the pump — swallow and keep
+      // reading the stream.
+      try {
+        onCommands?.(event.commands);
+      } catch {
+        /* consumer error is isolated from the stream */
+      }
+      return;
+    }
+    store.applyEvent(event);
+  };
   // Wake a blocked `reader.read()` when the caller aborts so we don't sit on
   // a half-open stream past the abort.
   const onAbort = (): void => {
@@ -681,7 +811,7 @@ async function pumpStream(
       const chunk = decoder.decode(value, { stream: true });
       for (const raw of parseSSEChunk(parser, chunk)) {
         for (const event of toStreamEvents(acpState, raw)) {
-          store.applyEvent(event);
+          route(event);
         }
       }
     }
@@ -690,7 +820,7 @@ async function pumpStream(
     if (tail) {
       for (const raw of parseSSEChunk(parser, tail)) {
         for (const event of toStreamEvents(acpState, raw)) {
-          store.applyEvent(event);
+          route(event);
         }
       }
     }

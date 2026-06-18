@@ -46,6 +46,10 @@ Pick the wildly inflated **Grand total** in the Checkout card and ask _"this sho
 - How it works (single-diagram walk-through): <https://agent-devtools-docs.vercel.app/en/guides/how-it-works/>
 - Context and scope: [`CONTEXT.md`](./CONTEXT.md)
 
+## Runtime errors surface themselves
+
+You do not have to pick anything for the agent to help. When the running page throws — an uncaught exception, an unhandled promise rejection, a `console.error`, or a failed / non-OK `fetch` — the widget catches it and counts it. The launcher grows a small red count badge (the number of unread errors, collapsing to `99+` past 99), and opening the composer shows a **"N runtime errors captured"** banner with an **Analyze** button. One click prefills a root-cause prompt and ships the captured records — message, stack, and the file/line when the stack carries one — to the agent, so you go from "something broke" to a proposed fix without retyping the error. Errors thrown before the widget even mounts are caught by an early trap and folded into the count the moment the launcher appears.
+
 ## Where this sits in the category
 
 <p align="center">

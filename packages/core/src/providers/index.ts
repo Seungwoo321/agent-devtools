@@ -1,11 +1,13 @@
-export { createSdkProvider } from './sdk.js';
-export type { CreateSdkProviderOptions } from './sdk.js';
-export { createAcpProvider, DEFAULT_PERMISSION_POLICY } from './acp.js';
+export { createSdkProvider, createSdkCommandLister } from './sdk.js';
+export type { CreateSdkProviderOptions, CreateSdkCommandListerOptions } from './sdk.js';
+export { createAcpProvider, createAcpCommandLister, DEFAULT_PERMISSION_POLICY } from './acp.js';
 export type {
+  AcpAvailableCommand,
   AcpEvent,
   AcpRunParams,
   AcpRuntime,
   CreateAcpProviderOptions,
+  CreateAcpCommandListerOptions,
   PermissionPolicy,
   PermissionResolution,
 } from './acp.js';

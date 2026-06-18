@@ -17,11 +17,16 @@
  * inline it to `'production' === 'production'` and the minifier can prove
  * the rest of the function body unreachable in production builds. This
  * elides every call-site identifier (`mountAgentDevtools`,
- * `createDefaultTransport`) from the emitted client chunk. Don't refactor
+ * `createDefaultTransport`, `createAgentCommandsFetcher`) from the emitted
+ * client chunk. Don't refactor
  * this into a helper function — that opacity defeats DCE and re-leaks the
  * symbols regression-checked by examples/next-pages/scripts/check-no-leak.mjs.
  */
-import { mountAgentDevtools, createDefaultTransport } from '@agent-devtools/react';
+import {
+  mountAgentDevtools,
+  createDefaultTransport,
+  createAgentCommandsFetcher,
+} from '@agent-devtools/react';
 import { resolveNextPagesRouteFile } from './route.js';
 
 export interface AgentDevtoolsBootstrapOptions {
@@ -47,6 +52,7 @@ export function bootstrapAgentDevtools(options: AgentDevtoolsBootstrapOptions = 
   mounted = true;
   mountAgentDevtools({
     transport: createDefaultTransport({ baseUrl, pairingToken }),
+    getAgentCommands: createAgentCommandsFetcher({ baseUrl, pairingToken }),
     resolveRouteFile: resolveNextPagesRouteFile,
   });
 }

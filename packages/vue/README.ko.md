@@ -7,6 +7,17 @@
 [![npm](https://img.shields.io/npm/v/@agent-devtools/vue.svg)](https://www.npmjs.com/package/@agent-devtools/vue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Seungwoo321/agent-devtools/blob/main/LICENSE)
 
+## 이 어댑터가 제공하는 것
+
+- **DOM → component 브리지** — `element.__vueParentComponent` (Vue 3.4+). own-property 읽기만 하고 proxy 순회는 하지 않습니다.
+- **Ancestor walker** — `walkComponentAncestors` 가 `.parent` 체인을 leaf-first 로 따라가며 정체성 (`name` / `__name` / `displayName` / `__file`) 이 잡히는 인스턴스만 yield 하고, depth 10 에서 cap 합니다.
+- **Source 추출** — dev 모드에서 `@vitejs/plugin-vue` 가 주입한 `instance.type.__file`. workspace 기준 상대 경로로 정규화됩니다. line/column 은 SFC source map 으로 후속 해상되며, 오늘은 추측 대신 line 을 `1` 로 둡니다.
+- **Component name** — `instance.type.name` → `instance.type.__name` → `__file` 의 basename → `'Unknown'`.
+- **Widget UI** — `@agent-devtools/widget-core` 의 framework-agnostic shell 에 위임합니다. 호스트 앱이 Vue 3 을 쓰더라도 Vue 3 은 widget 번들에 로드되지 않습니다.
+- **재사용처** — `@agent-devtools/nuxt` 가 이 walker 를 직접 import 합니다.
+
+어댑터 간 계약은 [picker-strategy.md](https://github.com/Seungwoo321/agent-devtools/blob/main/.claude/rules/picker-strategy.md) 를 참조하세요.
+
 ## 기능
 
 - **`mountAgentDevtoolsVue`** — floating widget 을 closed Shadow DOM 에 마운트하고 picker 를 Vue 3 vnode walker 에 연결합니다.

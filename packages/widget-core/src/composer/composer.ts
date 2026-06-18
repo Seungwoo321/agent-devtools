@@ -13,8 +13,19 @@
  *   - Enter (without Shift) submits when text is non-empty and not sending.
  *   - Shift+Enter inserts a newline.
  *   - Escape clears focus and hides the panel.
+ *
+ * When the slash-command autocomplete menu is open (the textarea holds a
+ * leading-slash prefix with at least one matching command), the menu intercepts
+ * navigation keys BEFORE the submit/close branches and consumes them so they
+ * never leak to the host page:
+ *   - ArrowDown / ArrowUp move the highlight (wrap-around).
+ *   - Enter or Tab confirm the highlighted command — inserting `"/name "` with
+ *     the caret left at the end for arguments — and close the menu WITHOUT
+ *     submitting.
+ *   - Escape closes only the menu, leaving the panel open and the text intact.
  */
 import type { PickedEvidence } from '../context/types.js';
+import type { SlashCommandInfo } from '../stream/index.js';
 
 const PANEL_ATTR = 'data-agent-devtools-composer';
 const PICK_TOGGLE_ATTR = 'data-agent-devtools-composer-pick';
@@ -27,6 +38,26 @@ const TEXTAREA_ATTR = 'data-agent-devtools-composer-input';
 const SEND_ATTR = 'data-agent-devtools-composer-send';
 const CLOSE_ATTR = 'data-agent-devtools-composer-close';
 const RESIZE_HANDLE_ATTR = 'data-agent-devtools-composer-resize';
+// Slash-command autocomplete menu. The menu lives inside `panel` (so it stays
+// in the closed shadow root with the rest of the widget) and floats just above
+// the textarea. Rows expose `data-agent-devtools-composer-cmd-item`; the
+// highlighted row carries `data-active` + `aria-selected="true"` so tests and
+// any future stylesheet can target it without depending on the painted `var()`
+// background a headless CSS engine drops.
+const CMD_MENU_ATTR = 'data-agent-devtools-composer-cmd-menu';
+const CMD_ITEM_ATTR = 'data-agent-devtools-composer-cmd-item';
+const CMD_ITEM_ACTIVE_ATTR = 'data-active';
+const CMD_NAME_ATTR = 'data-agent-devtools-composer-cmd-name';
+const CMD_DESC_ATTR = 'data-agent-devtools-composer-cmd-desc';
+const CMD_HINT_ATTR = 'data-agent-devtools-composer-cmd-hint';
+/**
+ * A value qualifies as a slash-command-in-progress only when it is a single
+ * leading slash followed by zero-or-more NON-space chars and nothing after.
+ * The capture group is the prefix the menu filters by (empty → show all).
+ * The moment the user types a space after the command name, the value stops
+ * matching and the menu closes — arguments are no longer command selection.
+ */
+const SLASH_COMMAND_RE = /^\/(\S*)$/;
 // Layer 2 of the runtime-resilience design. The orchestrator subscribes to
 // the error observer and pushes the live unread count down via
 // `setErrorCount`; this banner is the in-composer surfacing that gives the
@@ -176,6 +207,13 @@ export interface CreateComposerOptions {
   /** Required: called with `{ text, picked }` when the user submits. */
   readonly onSubmit: (payload: ComposerSubmitPayload) => void;
   /**
+   * Initial slash-command catalogue for the autocomplete menu. The
+   * orchestrator typically feeds the live list from the agent's
+   * `available_commands_update` notification via `setCommands`; this initial
+   * value lets the menu paint correctly on first render. Defaults to empty.
+   */
+  readonly commands?: readonly SlashCommandInfo[];
+  /**
    * Initial state of the header-level "Safe mode" toggle. The orchestrator
    * owns the canonical value (it lives in the shared settings store) and
    * feeds it in here so the toggle paints correctly on first render. When
@@ -264,6 +302,12 @@ export interface ComposerHandle {
    * top sticks to the viewport top.
    */
   setAnchor(anchor: ComposerAnchor): void;
+  /**
+   * Replace the slash-command catalogue used by the autocomplete menu. If the
+   * menu is currently open it re-filters against the live textarea prefix and
+   * re-renders in place.
+   */
+  setCommands(commands: readonly SlashCommandInfo[]): void;
   /** Set the textarea value programmatically. */
   setText(text: string): void;
   /** Current text. */
@@ -287,6 +331,15 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   let visible = options.visible ?? false;
   let destroyed = false;
   let chipTooltipSeq = 0;
+
+  // Slash-command autocomplete state. `commandCatalogue` is the full advertised
+  // list; `commandMatches` is the prefix-filtered subset currently rendered;
+  // `commandHighlight` indexes the active row within `commandMatches`. The menu
+  // is "open" iff `commandMatches.length > 0` AND the menu element is visible.
+  let commandCatalogue: readonly SlashCommandInfo[] = options.commands ?? [];
+  let commandMatches: readonly SlashCommandInfo[] = [];
+  let commandHighlight = 0;
+  let commandMenuOpen = false;
 
   const panel = doc.createElement('div');
   panel.setAttribute(PANEL_ATTR, '');
@@ -417,6 +470,15 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   textarea.rows = 3;
   applyTextareaStyles(textarea);
 
+  // Slash-command autocomplete menu. Appended to `panel` (closed shadow root)
+  // and absolutely positioned just above the textarea. Hidden until the user
+  // types a qualifying slash prefix with at least one match.
+  const commandMenu = doc.createElement('div');
+  commandMenu.setAttribute(CMD_MENU_ATTR, '');
+  commandMenu.setAttribute('role', 'listbox');
+  commandMenu.setAttribute('aria-label', 'Slash commands');
+  applyCommandMenuStyles(commandMenu);
+
   const footer = doc.createElement('footer');
   applyFooterStyles(footer);
   const sendButton = doc.createElement('button');
@@ -431,6 +493,7 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
   panel.appendChild(chipHost);
   panel.appendChild(errorBanner);
   panel.appendChild(textarea);
+  panel.appendChild(commandMenu);
   panel.appendChild(footer);
   container.appendChild(panel);
 
@@ -532,9 +595,158 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
 
   function onInput(): void {
     refreshSendDisabled();
+    syncCommandMenu();
+  }
+
+  /**
+   * Recompute the menu's open/closed state and contents from the current
+   * textarea value. Opens when the value is a slash-command-in-progress (a
+   * leading slash + zero-or-more non-space chars) AND at least one catalogue
+   * command name starts with the typed prefix (case-insensitive). Resets the
+   * highlight to the first match on every re-filter. Otherwise closes.
+   */
+  function syncCommandMenu(): void {
+    const match = SLASH_COMMAND_RE.exec(textarea.value);
+    if (!match) {
+      closeCommandMenu();
+      return;
+    }
+    const prefix = (match[1] ?? '').toLowerCase();
+    const next = commandCatalogue.filter((command) =>
+      command.name.toLowerCase().startsWith(prefix),
+    );
+    if (next.length === 0) {
+      closeCommandMenu();
+      return;
+    }
+    commandMatches = next;
+    commandHighlight = 0;
+    commandMenuOpen = true;
+    renderCommandMenu();
+  }
+
+  function closeCommandMenu(): void {
+    if (!commandMenuOpen && commandMatches.length === 0) {
+      commandMenu.style.display = 'none';
+      return;
+    }
+    commandMenuOpen = false;
+    commandMatches = [];
+    commandHighlight = 0;
+    commandMenu.innerHTML = '';
+    commandMenu.style.display = 'none';
+  }
+
+  function renderCommandMenu(): void {
+    commandMenu.innerHTML = '';
+    commandMenu.style.display = 'block';
+    commandMatches.forEach((command, index) => {
+      const row = doc!.createElement('div');
+      row.setAttribute(CMD_ITEM_ATTR, '');
+      row.setAttribute('role', 'option');
+      const active = index === commandHighlight;
+      applyCommandItemStyles(row, active);
+      if (active) {
+        row.setAttribute(CMD_ITEM_ACTIVE_ATTR, '');
+        row.setAttribute('aria-selected', 'true');
+      } else {
+        row.setAttribute('aria-selected', 'false');
+      }
+
+      const name = doc!.createElement('span');
+      name.setAttribute(CMD_NAME_ATTR, '');
+      name.textContent = `/${command.name}`;
+      applyCommandNameStyles(name);
+      row.appendChild(name);
+
+      const desc = doc!.createElement('span');
+      desc.setAttribute(CMD_DESC_ATTR, '');
+      desc.textContent = command.description;
+      applyCommandDescStyles(desc);
+      row.appendChild(desc);
+
+      // Only render the argument-hint slot when the agent actually supplied a
+      // non-empty hint — an absent or blank hint leaves the row clean rather
+      // than painting an empty monospace span.
+      if (command.argumentHint && command.argumentHint.trim().length > 0) {
+        const hint = doc!.createElement('span');
+        hint.setAttribute(CMD_HINT_ATTR, '');
+        hint.textContent = command.argumentHint;
+        applyCommandHintStyles(hint);
+        row.appendChild(hint);
+      }
+
+      // Confirm on pointerdown rather than click so the selection lands before
+      // the textarea's blur can fire — keeps the row clickable without a
+      // blur-close race (we don't close on blur anyway, but this is robust).
+      row.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        confirmCommand(index);
+      });
+
+      commandMenu.appendChild(row);
+    });
+  }
+
+  function moveCommandHighlight(delta: number): void {
+    const count = commandMatches.length;
+    if (count === 0) return;
+    commandHighlight = (commandHighlight + delta + count) % count;
+    renderCommandMenu();
+  }
+
+  /**
+   * Insert the chosen command into the textarea as `"/" + name + " "`, leaving
+   * the caret at the end ready for arguments, then close the menu. Does NOT
+   * submit — confirming a command is a distinct gesture from sending a turn.
+   */
+  function confirmCommand(index: number): void {
+    const command = commandMatches[index];
+    if (!command) return;
+    const value = `/${command.name} `;
+    textarea.value = value;
+    const caret = value.length;
+    try {
+      textarea.setSelectionRange(caret, caret);
+    } catch {
+      /* setSelectionRange can throw on detached/hidden inputs — caret is best-effort */
+    }
+    closeCommandMenu();
+    refreshSendDisabled();
+    textarea.focus();
   }
 
   function onKeyDown(event: KeyboardEvent): void {
+    // Menu-open handling runs BEFORE the submit/close branches so the keys are
+    // consumed by the autocomplete instead of the panel. Arrow/confirm/dismiss
+    // are stopPropagation-ed so they never leak to the host page.
+    if (commandMenuOpen && commandMatches.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        moveCommandHighlight(1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        event.stopPropagation();
+        moveCommandHighlight(-1);
+        return;
+      }
+      if ((event.key === 'Enter' && !event.shiftKey && !event.isComposing) || event.key === 'Tab') {
+        event.preventDefault();
+        event.stopPropagation();
+        confirmCommand(commandHighlight);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeCommandMenu();
+        return;
+      }
+    }
+
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       submit();
@@ -811,10 +1023,18 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       lastAnchor = anchor;
       applyAnchor(panel, anchor);
     },
+    setCommands(commands): void {
+      if (destroyed) return;
+      commandCatalogue = commands;
+      // Re-filter against the live prefix so an open menu reflects the new
+      // catalogue immediately (and closes if nothing matches now).
+      if (commandMenuOpen) syncCommandMenu();
+    },
     setText(text): void {
       if (destroyed) return;
       textarea.value = text;
       refreshSendDisabled();
+      syncCommandMenu();
     },
     getText(): string {
       return textarea.value;
@@ -838,6 +1058,9 @@ export function createComposer(options: CreateComposerOptions): ComposerHandle {
       errorBannerAction.removeEventListener('click', onErrorBannerActionClick);
       panel.removeEventListener('pointerdown', onPointerDown);
       for (const [, , detach] of handleListeners) detach();
+      // Drop the menu rows (each carries a pointerdown listener) before the
+      // panel detaches so no autocomplete handler outlives the composer.
+      commandMenu.innerHTML = '';
       panel.remove();
     },
   };
@@ -1374,4 +1597,65 @@ function applySendButtonStyles(button: HTMLButtonElement): void {
   s.fontSize = '13px';
   s.fontWeight = '500';
   s.cursor = 'pointer';
+}
+
+function applyCommandMenuStyles(menu: HTMLElement): void {
+  const s = menu.style;
+  // Float just above the textarea (which sits with a 12px margin) without
+  // pushing the layout. The textarea reserves a 12px margin on every side, so
+  // anchoring at `bottom: 64px` lifts the menu clear of the input box and the
+  // footer. Hidden until a qualifying prefix produces matches.
+  s.display = 'none';
+  s.position = 'absolute';
+  s.left = '12px';
+  s.right = '12px';
+  s.bottom = '64px';
+  s.zIndex = '4';
+  s.maxHeight = '220px';
+  s.overflowY = 'auto';
+  s.background = 'var(--adt-surface, #ffffff)';
+  s.border = '1px solid var(--adt-border, rgba(0, 0, 0, 0.16))';
+  s.borderRadius = '8px';
+  s.boxShadow = '0 6px 20px var(--adt-shadow, rgba(0, 0, 0, 0.18))';
+  s.padding = '4px';
+  s.fontSize = '12px';
+}
+
+function applyCommandItemStyles(row: HTMLElement, active: boolean): void {
+  const s = row.style;
+  s.display = 'flex';
+  s.alignItems = 'baseline';
+  s.gap = '8px';
+  s.padding = '6px 8px';
+  s.borderRadius = '6px';
+  s.cursor = 'pointer';
+  s.background = active ? 'var(--adt-overlay-weak, rgba(0, 0, 0, 0.08))' : 'transparent';
+}
+
+function applyCommandNameStyles(name: HTMLElement): void {
+  const s = name.style;
+  s.fontWeight = '600';
+  s.color = 'var(--adt-text, #1a1a1a)';
+  s.flex = '0 0 auto';
+  s.whiteSpace = 'nowrap';
+}
+
+function applyCommandDescStyles(desc: HTMLElement): void {
+  const s = desc.style;
+  s.color = 'var(--adt-text-muted, #666)';
+  s.flex = '1 1 auto';
+  s.minWidth = '0';
+  s.overflow = 'hidden';
+  s.textOverflow = 'ellipsis';
+  s.whiteSpace = 'nowrap';
+}
+
+function applyCommandHintStyles(hint: HTMLElement): void {
+  const s = hint.style;
+  s.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+  s.color = 'var(--adt-text-muted, #666)';
+  s.opacity = '0.8';
+  s.fontSize = '11px';
+  s.flex = '0 0 auto';
+  s.whiteSpace = 'nowrap';
 }

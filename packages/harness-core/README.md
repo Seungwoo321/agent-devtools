@@ -13,7 +13,7 @@
 - **LLM provider abstraction** — first-class providers for OpenRouter, Groq, Cerebras, the official OpenAI API, and any OpenAI-compatible endpoint. Optional Claude Agent SDK provider.
 - **Tier resolution** — domain-level tiering hooks for splitting heavy and cheap calls across providers.
 - **Domain extension points** — `GenerationDomain`, `OperationDomain`, `DomainBinding`, `PromptProvider`, `ToolProvider`. DSLs, business rules, and tenant policies are intentionally absent — the consumer supplies them.
-- **Session model** — provider-neutral `SessionProvider` with streaming events (`assistant-text`, `tool-use`, `tool-result`, `usage`, `done`) for harness-driven UIs.
+- **Session model** — provider-neutral `SessionProvider` whose streaming events carry a `type` of `assistant_text`, `tool_use`, `tool_result`, `usage`, or `done` for harness-driven UIs.
 
 The package is shared between the in-page `@agent-devtools` widget runtime and external SaaS consumers that want the same harness without the dev-only widget layer.
 
@@ -53,11 +53,11 @@ import {
   getDefaultProvider,
 } from '@agent-devtools/harness-core';
 
-const name = getDefaultProvider(); // 'openrouter' | 'groq' | 'cerebras' | 'openai'
-const provider = createProvider(name); // reads the matching env vars
+const name = getDefaultProvider(); // 'openrouter' | 'groq' | 'cerebras' | 'openai' | undefined
+const provider = createProvider(name!, 'meta-llama/llama-3.1-8b-instruct:free');
 ```
 
-`createProvider` reads `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, or `OPENAI_API_KEY` and constructs the appropriate provider. Prefer direct instantiation in app code so the dependency is explicit.
+`getDefaultProvider` inspects `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `OPENAI_API_KEY` and returns the first provider whose key is present (or `undefined`). `createProvider(name, model)` then constructs that provider for the given model id. Prefer direct instantiation in app code so the dependency is explicit.
 
 ### Plug a domain into a loop
 
@@ -71,17 +71,17 @@ for await (const event of orchestratorLoop(
   prompts,
   config,
 )) {
-  // event.kind === 'assistant-text' | 'tool-use' | 'tool-result' | 'usage' | 'done'
+  // event.type === 'start' | 'progress' | 'complete' | 'error'
 }
 ```
 
-- `input` — the user input plus an optional `AbortSignal`.
-- `llm` — an `LLMProvider` or `SessionProvider` instance.
-- `adapter` — a `DomainBinding` that supplies `GenerationDomain` / `OperationDomain`, `ToolProvider`, and parsers / validators.
+- `input` — an `AgentInput`: the user input plus optional `AgentOptions` (including an `AbortSignal`).
+- `llm` — an `LLMProvider`. `sdkSessionLoop` takes a `SessionProvider` in this position instead.
+- `adapter` — a `GenerationDomain` that supplies parsers, validators, and the generation contract.
 - `prompts` — a `PromptProvider` that renders the system prompt and tool descriptions.
-- `config` — `LoopConfig` (`maxIterations`, `tierResolver`, telemetry hooks).
+- `config` — `LoopConfig` (`maxIterations`, `qualityThreshold`, `tierResolver`, telemetry hooks).
 
-`orchestratorLoop`, `modelDrivenLoop`, `sdkSessionLoop`, and `langgraphLoop` share the same signature so a consumer can swap strategies without changing the surrounding code.
+`orchestratorLoop`, `modelDrivenLoop`, `sdkSessionLoop`, and `langgraphLoop` share the same five-argument shape so a consumer can swap strategies without changing the surrounding code. Each yields `StreamEvent` values discriminated by `event.type`.
 
 ## Provider matrix
 

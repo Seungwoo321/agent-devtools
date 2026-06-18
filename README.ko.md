@@ -46,6 +46,10 @@ Checkout 카드의 터무니없이 부풀려진 **Grand total** 을 픽하고 _"
 - 작동 원리 (한 장의 다이어그램): <https://agent-devtools-docs.vercel.app/guides/how-it-works/>
 - 컨텍스트·스코프: [`CONTEXT.md`](./CONTEXT.md)
 
+## 런타임 에러는 스스로 떠오른다
+
+에이전트의 도움을 받으려고 꼭 무언가를 Pick 할 필요는 없다. 실행 중인 페이지가 던지면 — uncaught 예외, unhandled promise rejection, `console.error`, 실패하거나 non-OK 인 `fetch` — 위젯이 잡아서 센다. launcher 에 작은 빨간 카운트 배지(미확인 에러 개수, 99 초과 시 `99+`)가 붙고, composer 를 열면 **"N runtime errors captured"** 배너와 **Analyze** 버튼이 나타난다. 한 번 클릭하면 근본 원인 분석 프롬프트가 미리 채워지고 캡처된 레코드 — 메시지, 스택, 스택에 있으면 파일/라인 — 가 에이전트로 함께 실린다. "뭔가 깨졌다" 에서 수정안까지, 에러를 다시 타이핑하지 않고 도달한다. 위젯이 mount 되기도 전에 던져진 에러도 early trap 이 잡아 두었다가 launcher 가 뜨는 순간 카운트에 합류시킨다.
+
 ## 카테고리 안에서의 위치
 
 <p align="center">

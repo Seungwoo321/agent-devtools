@@ -9,7 +9,7 @@ import type {
   PermissionUpdate,
   Query as SdkQuery,
 } from '@anthropic-ai/claude-agent-sdk';
-import { createSdkProvider } from './sdk.js';
+import { createSdkCommandLister, createSdkProvider } from './sdk.js';
 import type { PermissionPolicy } from './acp.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
 import type { AgentRequestContext } from '../server/app.js';
@@ -17,7 +17,10 @@ import type { AgentRequestContext } from '../server/app.js';
 // Minimal Query stub: an async generator with the control-method shape the
 // SDK exposes. We don't exercise those methods here — the provider only uses
 // the AsyncIterable protocol — so they're stubbed for type compatibility.
-function makeQuery(events: unknown[], opts: { throws?: unknown } = {}): SdkQuery {
+function makeQuery(
+  events: unknown[],
+  opts: { throws?: unknown; supportedCommands?: () => Promise<unknown> } = {},
+): SdkQuery {
   async function* gen(): AsyncGenerator<unknown, void> {
     for (const e of events) yield e;
     if (opts.throws) throw opts.throws;
@@ -29,7 +32,7 @@ function makeQuery(events: unknown[], opts: { throws?: unknown } = {}): SdkQuery
     setModel: () => Promise.resolve(),
     setMaxThinkingTokens: () => Promise.resolve(),
     mergeSettings: () => Promise.resolve(),
-    supportedCommands: () => Promise.resolve([]),
+    supportedCommands: opts.supportedCommands ?? (() => Promise.resolve([])),
     supportedModels: () => Promise.resolve([]),
   }) as unknown as SdkQuery;
 }
@@ -70,6 +73,12 @@ describe('createSdkProvider', () => {
 
     const out = await collect(provider({ prompt: 'p' }, makeCtx()));
     expect(out).toEqual([
+      // System init triggers the available_commands_update (empty here — the
+      // default makeQuery stub resolves supportedCommands() to []).
+      {
+        type: 'acp.session_update',
+        update: { sessionUpdate: 'available_commands_update', availableCommands: [] },
+      },
       {
         type: 'acp.session_update',
         update: {
@@ -80,6 +89,99 @@ describe('createSdkProvider', () => {
       { type: 'acp.result', stopReason: 'end_turn' },
     ]);
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  describe('available_commands_update', () => {
+    function commandEnvelopes(out: unknown[]): unknown[] {
+      return out.filter(
+        (e) =>
+          typeof e === 'object' &&
+          e !== null &&
+          (e as { update?: { sessionUpdate?: string } }).update?.sessionUpdate ===
+            'available_commands_update',
+      );
+    }
+
+    it('emits exactly one envelope sourced from supportedCommands() on init', async () => {
+      const messages = [
+        { type: 'system', subtype: 'init', slash_commands: ['compact'] },
+        { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+      ];
+      const query = vi.fn(() =>
+        makeQuery(messages, {
+          supportedCommands: () =>
+            Promise.resolve([
+              { name: 'compact', description: 'Compact the conversation', argumentHint: '[focus]' },
+              { name: 'clear', description: 'Clear history', argumentHint: '' },
+            ]),
+        }),
+      );
+      const provider = createSdkProvider({ query });
+
+      const out = await collect(provider({ prompt: 'p' }, makeCtx()));
+      const commands = commandEnvelopes(out);
+      expect(commands).toEqual([
+        {
+          type: 'acp.session_update',
+          update: {
+            sessionUpdate: 'available_commands_update',
+            availableCommands: [
+              {
+                name: 'compact',
+                description: 'Compact the conversation',
+                input: { hint: '[focus]' },
+              },
+              { name: 'clear', description: 'Clear history' },
+            ],
+          },
+        },
+      ]);
+    });
+
+    it('falls back to init slash_commands names when supportedCommands() rejects', async () => {
+      const messages = [
+        { type: 'system', subtype: 'init', slash_commands: ['compact', 'clear'] },
+        { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+      ];
+      const query = vi.fn(() =>
+        makeQuery(messages, {
+          supportedCommands: () => Promise.reject(new Error('control channel closed')),
+        }),
+      );
+      const provider = createSdkProvider({ query });
+
+      const out = await collect(provider({ prompt: 'p' }, makeCtx()));
+      expect(commandEnvelopes(out)).toEqual([
+        {
+          type: 'acp.session_update',
+          update: {
+            sessionUpdate: 'available_commands_update',
+            availableCommands: [
+              { name: 'compact', description: '' },
+              { name: 'clear', description: '' },
+            ],
+          },
+        },
+      ]);
+    });
+
+    it('emits the commands envelope at most once even with multiple init messages', async () => {
+      const messages = [
+        { type: 'system', subtype: 'init', slash_commands: ['compact'] },
+        { type: 'system', subtype: 'init', slash_commands: ['compact'] },
+        { type: 'result', subtype: 'success', stop_reason: 'end_turn' },
+      ];
+      const query = vi.fn(() =>
+        makeQuery(messages, {
+          supportedCommands: () =>
+            Promise.resolve([{ name: 'compact', description: 'd', argumentHint: '' }]),
+        }),
+      );
+      const provider = createSdkProvider({ query });
+
+      const out = await collect(provider({ prompt: 'p' }, makeCtx()));
+      expect(commandEnvelopes(out)).toHaveLength(1);
+    });
   });
 
   it('passes prompt, permissionMode and an AbortController to the SDK', async () => {
@@ -377,5 +479,85 @@ describe('createSdkProvider', () => {
       const edit = await canUseTool!('Edit', { file_path: '/x' }, NOOP_OPTIONS);
       expect(edit.behavior).toBe('allow');
     });
+  });
+});
+
+describe('createSdkCommandLister', () => {
+  it('maps supportedCommands() into the AvailableCommand shape (argumentHint → input.hint)', async () => {
+    const supportedCommands = (): Promise<unknown> =>
+      Promise.resolve([
+        { name: 'plan', description: 'Create a plan', argumentHint: '<goal>' },
+        // Empty hint is omitted (absence over a blank placeholder).
+        { name: 'review', description: 'Review the diff', argumentHint: '' },
+        // Missing hint is omitted too.
+        { name: 'commit', description: 'Commit changes' },
+      ]);
+    const query = vi.fn(() => makeQuery([], { supportedCommands }));
+    const lister = createSdkCommandLister({ query });
+
+    const commands = await lister({ cwd: '/ws', signal: new AbortController().signal });
+    expect(commands).toEqual([
+      { name: 'plan', description: 'Create a plan', input: { hint: '<goal>' } },
+      { name: 'review', description: 'Review the diff' },
+      { name: 'commit', description: 'Commit changes' },
+    ]);
+  });
+
+  it('asks for commands over the control channel without iterating the message stream (no model turn)', async () => {
+    let iterated = false;
+    function makeProbeQuery(): SdkQuery {
+      async function* gen(): AsyncGenerator<unknown, void> {
+        iterated = true;
+        yield { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } };
+      }
+      const iter = gen();
+      return Object.assign(iter, {
+        interrupt: () => Promise.resolve(),
+        setPermissionMode: () => Promise.resolve(),
+        setModel: () => Promise.resolve(),
+        setMaxThinkingTokens: () => Promise.resolve(),
+        mergeSettings: () => Promise.resolve(),
+        supportedCommands: () => Promise.resolve([{ name: 'plan', description: 'Create a plan' }]),
+        supportedModels: () => Promise.resolve([]),
+      }) as unknown as SdkQuery;
+    }
+    const lister = createSdkCommandLister({ query: () => makeProbeQuery() });
+    const commands = await lister({ cwd: '/ws', signal: new AbortController().signal });
+    expect(commands).toEqual([{ name: 'plan', description: 'Create a plan' }]);
+    // The provider tears the query down via return() without pulling messages,
+    // so the model-driven generator body never runs.
+    expect(iterated).toBe(false);
+  });
+
+  it('returns [] when supportedCommands() rejects (graceful, never throws)', async () => {
+    const lister = createSdkCommandLister({
+      query: () =>
+        makeQuery([], { supportedCommands: () => Promise.reject(new Error('control failed')) }),
+    });
+    const commands = await lister({ cwd: '/ws', signal: new AbortController().signal });
+    expect(commands).toEqual([]);
+  });
+
+  it('returns [] when query() itself throws', async () => {
+    const lister = createSdkCommandLister({
+      query: () => {
+        throw new Error('spawn failed');
+      },
+    });
+    const commands = await lister({ cwd: '/ws', signal: new AbortController().signal });
+    expect(commands).toEqual([]);
+  });
+
+  it('forwards cwd to the SDK query options', async () => {
+    let seenOptions: SdkOptions | undefined;
+    const query = vi.fn((params: { prompt: string; options?: SdkOptions }) => {
+      seenOptions = params.options;
+      return makeQuery([], {
+        supportedCommands: () => Promise.resolve([]),
+      });
+    });
+    const lister = createSdkCommandLister({ query });
+    await lister({ cwd: '/some/workspace', signal: new AbortController().signal });
+    expect(seenOptions?.cwd).toBe('/some/workspace');
   });
 });

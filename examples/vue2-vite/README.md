@@ -1,3 +1,5 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/example-vue2-vite
 
 End-to-end smoke for `@agent-devtools/vue2`. A minimal Vite + Vue 2.7 app that mounts the floating widget through the framework-aware Vite plugin.

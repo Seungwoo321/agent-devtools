@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountAgentDevtools, type AgentDevtoolsTransport } from './mount.js';
 import { createSettingsStore } from '../settings/index.js';
+import type { SlashCommandInfo } from '../stream/index.js';
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -325,6 +326,86 @@ describe('mountAgentDevtools', () => {
     const handle = mountAgentDevtools();
     handle.destroy();
     expect(() => handle.destroy()).not.toThrow();
+  });
+});
+
+describe('mountAgentDevtools — slash-command side channel', () => {
+  // The transport decodes the agent's `available_commands_update`
+  // notification into its `onCommands` listener; the orchestrator wires
+  // that listener (post-construction, because the composer doesn't exist
+  // when the transport is built) to push the catalogue into the composer's
+  // autocomplete menu.
+  it('subscribes to the transport command channel and feeds the composer autocomplete', () => {
+    let captured: ((commands: readonly { name: string; description: string }[]) => void) | null =
+      null;
+    const transport: AgentDevtoolsTransport = {
+      send: vi.fn().mockResolvedValue(undefined),
+      onCommands: (listener): void => {
+        captured = listener;
+      },
+    };
+    const handle = mountAgentDevtools({ transport });
+
+    // The orchestrator installed its sink during mount.
+    expect(captured).not.toBeNull();
+
+    // Drive a catalogue through the side channel end-to-end.
+    captured!([
+      { name: 'review', description: 'Review the diff' },
+      { name: 'refactor', description: 'Refactor the component' },
+    ]);
+
+    // The catalogue reached the composer: typing a matching slash prefix
+    // now opens the autocomplete menu with the pushed commands.
+    const textarea = handle.composer.element.querySelector('textarea')!;
+    textarea.value = '/re';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    const menu = handle.composer.element.querySelector(
+      '[data-agent-devtools-composer-cmd-menu]',
+    ) as HTMLElement;
+    expect(menu.style.display).toBe('block');
+    const items = handle.composer.element.querySelectorAll(
+      '[data-agent-devtools-composer-cmd-item]',
+    );
+    expect(items).toHaveLength(2);
+
+    handle.destroy();
+  });
+
+  it('is a no-op-safe when the transport omits onCommands (optional method)', () => {
+    const transport: AgentDevtoolsTransport = { send: vi.fn().mockResolvedValue(undefined) };
+    expect(() => mountAgentDevtools({ transport }).destroy()).not.toThrow();
+  });
+
+  // SCN5: submitting a slash command sends the raw text unchanged — NO
+  // client-side macro expansion — so the provider runtime expands it
+  // natively, and the user bubble shows the literal slash command text.
+  it('sends a slash command as raw text unchanged with no client-side expansion', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const handle = mountAgentDevtools({ transport: { send } });
+    const rawCommand = '/review the homepage';
+    handle.composer.setText(rawCommand);
+    handle.composer.element
+      .querySelector('textarea')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    // The user bubble shows the literal slash command text — no stripping,
+    // no expansion. (The store also appends an `assistant-pending`
+    // placeholder while the turn is active; SCN5 only constrains the user
+    // bubble, so assert on the first item rather than the total count.)
+    const items = handle.store.getItems();
+    const userItems = items.filter((it) => it.kind === 'user');
+    expect(userItems).toHaveLength(1);
+    expect(userItems[0]).toMatchObject({ kind: 'user', text: rawCommand });
+
+    // The transport receives the same raw text after the enrichment
+    // microtask resolves.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0].text).toBe(rawCommand);
+
+    handle.destroy();
   });
 });
 
@@ -1378,6 +1459,84 @@ describe('mountAgentDevtools — visibility persistence', () => {
       .find((r) => r.message === 'pre-mount host failure');
     expect(drained).toBeDefined();
     expect(drained?.kind).toBe('window-error');
+    handle.destroy();
+  });
+});
+
+describe('mountAgentDevtools slash-command prefetch (getAgentCommands)', () => {
+  function getCommandItems(handle: ReturnType<typeof mountAgentDevtools>): HTMLElement[] {
+    return Array.from(
+      handle.composer.element.querySelectorAll('[data-agent-devtools-composer-cmd-item]'),
+    );
+  }
+
+  function typeSlash(handle: ReturnType<typeof mountAgentDevtools>, value: string): void {
+    const ta = handle.composer.element.querySelector('textarea') as HTMLTextAreaElement;
+    ta.value = value;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  it('populates the composer autocomplete on the first keystroke before any message is sent', async () => {
+    let resolveCommands!: (commands: readonly SlashCommandInfo[]) => void;
+    const getAgentCommands = vi.fn(
+      () =>
+        new Promise<readonly SlashCommandInfo[]>((resolve) => {
+          resolveCommands = resolve;
+        }),
+    );
+    const handle = mountAgentDevtools({ getAgentCommands });
+    expect(getAgentCommands).toHaveBeenCalledTimes(1);
+
+    // Catalogue resolves at mount — no send required.
+    resolveCommands([
+      { name: 'review', description: 'Review the picked element', argumentHint: '[files…]' },
+      { name: 'refactor', description: 'Refactor the component' },
+    ]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // First keystroke ("/") opens the menu already showing the workspace commands.
+    typeSlash(handle, '/');
+    const items = getCommandItems(handle);
+    expect(items).toHaveLength(2);
+    const names = items.map(
+      (row) =>
+        (row.querySelector('[data-agent-devtools-composer-cmd-name]') as HTMLElement).textContent,
+    );
+    expect(names).toEqual(['/review', '/refactor']);
+    handle.destroy();
+  });
+
+  it('does not break mount when getAgentCommands rejects', async () => {
+    const getAgentCommands = vi.fn(() => Promise.reject(new Error('boom')));
+    const handle = mountAgentDevtools({ getAgentCommands });
+    await Promise.resolve();
+    await Promise.resolve();
+    // Widget still functional: typing a slash simply yields no menu items.
+    typeSlash(handle, '/');
+    expect(getCommandItems(handle)).toHaveLength(0);
+    expect(() => handle.destroy()).not.toThrow();
+  });
+
+  it('keeps the stream-based transport.onCommands refresh working independently', () => {
+    let pushCommands: ((commands: readonly SlashCommandInfo[]) => void) | undefined;
+    const transport: AgentDevtoolsTransport = {
+      send: vi.fn(),
+      onCommands(listener: (commands: readonly SlashCommandInfo[]) => void): void {
+        pushCommands = listener;
+      },
+    };
+    // No prefetch fetcher; only the stream side channel feeds the catalogue.
+    const handle = mountAgentDevtools({ transport });
+    expect(pushCommands).toBeDefined();
+    pushCommands?.([{ name: 'explain', description: 'Explain what this does' }]);
+    typeSlash(handle, '/');
+    const items = getCommandItems(handle);
+    expect(items).toHaveLength(1);
+    expect(
+      (items[0]!.querySelector('[data-agent-devtools-composer-cmd-name]') as HTMLElement)
+        .textContent,
+    ).toBe('/explain');
     handle.destroy();
   });
 });

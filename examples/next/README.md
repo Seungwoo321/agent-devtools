@@ -1,3 +1,5 @@
+[English] · [한국어](./README.ko.md)
+
 # @agent-devtools/example-next
 
 End-to-end smoke for `@agent-devtools/next`. Demonstrates both App Router and Pages Router integration paths.

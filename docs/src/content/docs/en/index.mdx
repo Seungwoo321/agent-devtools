@@ -17,6 +17,17 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+<figure class="adt-demo not-content">
+  <img
+    src="/demo.gif"
+    alt="A real Claude agent picks a broken Checkout grand total, reads OrderSummary.tsx, cart.ts and money.ts, removes a stray * 100, and the total fixes itself live via HMR — all inside the browser tab."
+  />
+  <figcaption>
+    Pick the broken total, ask in plain English, and watch a real Claude agent
+    trace the bug across files and fix it live — without ever leaving the tab.
+  </figcaption>
+</figure>
+
 <CardGrid stagger>
   <Card title="Edit from the UI" icon="pencil">
     Type a prompt into the floating widget; your local Claude Code edits the
@@ -37,6 +48,37 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     3.
   </Card>
 </CardGrid>
+
+## What the picker ships
+
+When you pick an element, the widget hands the agent the evidence to reason with — not a screenshot:
+
+<div class="adt-evidence not-content">
+  <img
+    src="/picker-evidence.png"
+    alt="The agent-devtools composer with a picked element's evidence tooltip showing its source file, component chain, and a unique CSS selector."
+  />
+  <ul>
+    <li>
+      <strong>Component chain</strong> — the named ancestors up to the root,
+      e.g. <code>OrderSummary → App</code>.
+    </li>
+    <li>
+      <strong>Source file</strong> — the authored file the element renders from,
+      so the agent opens the right code first.
+    </li>
+    <li>
+      <strong>Selector + outerHTML</strong> — the exact node, so the agent can
+      still locate the markup when no source path resolves.
+    </li>
+  </ul>
+</div>
+
+<div class="adt-facts not-content">
+  <span>No IDE</span>
+  <span>Your own Claude Pro / Max subscription</span>
+  <span>Zero bytes in your production bundle</span>
+</div>
 
 ## Next steps
 

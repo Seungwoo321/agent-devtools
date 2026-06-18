@@ -41,6 +41,7 @@ import {
   createStreamRenderer,
   type MessageItem,
   type MessageStore,
+  type SlashCommandInfo,
   type StreamRendererHandle,
 } from '../stream/index.js';
 import { createLauncher, type LauncherHandle } from '../launcher/index.js';
@@ -92,6 +93,19 @@ export interface AgentDevtoolsTransport {
    * for the same reason `resetSession` is.
    */
   getClientSessionId?(): string | undefined;
+  /**
+   * Subscribe to the agent's slash-command catalogue. The command list is
+   * session-level UI state for the composer's autocomplete menu, not a
+   * conversation item — the transport pushes the catalogue here whenever an
+   * `available-commands` event is decoded, and the orchestrator forwards it
+   * to the composer. The orchestrator wires this *after* the composer is
+   * built (the transport is constructed first, in the framework bootstrap),
+   * which is why it's a post-construction subscription rather than a
+   * construction-time option. Optional so non-default transports (test
+   * doubles, handoff-only harnesses) can omit it; the orchestrator skips the
+   * wiring when missing.
+   */
+  onCommands?(listener: (commands: readonly SlashCommandInfo[]) => void): void;
 }
 
 export interface MountAgentDevtoolsOptions {
@@ -138,6 +152,16 @@ export interface MountAgentDevtoolsOptions {
    * any failure so the widget stays usable while the dev server boots.
    */
   getServerInfo?: () => Promise<AgentServerInfo | null>;
+  /**
+   * Async slash-command catalogue fetcher (`GET /v1/agent/commands`). Called
+   * once after mount; the result is pushed into the composer's slash
+   * autocomplete so the workspace commands show on the FIRST keystroke —
+   * before any message is sent — matching the terminal's instant behaviour.
+   * Returns `[]` on any failure so a slow or offline dev server never breaks
+   * mount. This does NOT replace the stream-based `available_commands_update`
+   * refresh (`transport.onCommands`); both feed `composer.setCommands`.
+   */
+  getAgentCommands?: () => Promise<readonly SlashCommandInfo[]>;
   /**
    * POSTs the in-memory conversation + page context to
    * `/v1/agent/handoff` and resolves with `{ file, command }`. When set,
@@ -342,6 +366,12 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
     lastSafeMode = settings.safeMode;
     composer.setSafeMode(settings.safeMode);
   });
+  // Feed the composer's slash-command autocomplete off the transport's
+  // command side channel. The transport decodes the agent's
+  // `available_commands_update` notification into this listener; we forward
+  // the catalogue straight into the composer's menu. `setCommands` is a
+  // self-contained store setter (no throw path), so a plain call is safe.
+  options.transport?.onCommands?.((commands) => composer.setCommands(commands));
   // Insert the stream renderer above the textarea so the conversation
   // scrolls in the panel while the composer's input sticks to the bottom.
   const textarea = composer.element.querySelector('textarea');
@@ -381,6 +411,21 @@ export function mountAgentDevtools(options: MountAgentDevtoolsOptions = {}): Age
       .then((info) => {
         if (destroyed) return;
         settingsPanel.setServerInfo(info);
+      })
+      .catch(() => undefined);
+  }
+  // Prefetch the slash-command catalogue so the composer's autocomplete is
+  // populated on the first keystroke, before any message is sent — matching
+  // the terminal's instant behaviour. The stream-based `transport.onCommands`
+  // path above still refreshes the catalogue when it changes; both feed
+  // `composer.setCommands`. A failed fetch resolves to `[]`, so it never
+  // breaks mount.
+  if (options.getAgentCommands) {
+    void options
+      .getAgentCommands()
+      .then((commands) => {
+        if (destroyed) return;
+        composer.setCommands(commands);
       })
       .catch(() => undefined);
   }

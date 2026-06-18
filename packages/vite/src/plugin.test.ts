@@ -207,6 +207,13 @@ describe('agentDevtools()', () => {
     expect(boot).toContain('createAgentInfoFetcher');
     expect(boot).toContain('__opts.getServerInfo');
     expect(boot).toContain('settingsStore: __settings');
+    // Slash-command catalogue is prefetched at mount so the composer's
+    // autocomplete works on the first keystroke. The fetcher is feature-detected
+    // off the module namespace because most adapters do not re-export it yet —
+    // a hard named import would be a link-time error for those specifiers.
+    expect(boot).toContain('import * as __agentDevtools from');
+    expect(boot).toContain("typeof __agentDevtools.createAgentCommandsFetcher === 'function'");
+    expect(boot).toContain('__opts.getAgentCommands');
     // Terminal-handoff requester is bound to the same config so the modal's
     // POST /v1/agent/handoff inherits the same baseUrl + pairing token.
     expect(boot).toContain('createHandoffRequester');
