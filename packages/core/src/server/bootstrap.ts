@@ -11,13 +11,21 @@
  *   3. Compose the app with the workspace + token + provider map.
  *   4. Listen on the requested port (with fallback), bound to loopback.
  */
-import { createApp, type AgentStreamFactory, type PermissionMode, type ProviderId } from './app.js';
+import {
+  createApp,
+  type AgentStreamFactory,
+  type CommandLister,
+  type PermissionMode,
+  type ProviderId,
+} from './app.js';
 import { generatePairingToken } from './auth.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
 import {
+  createAcpCommandLister,
   createAcpProvider,
   createDefaultAcpRuntime,
   createDefaultAcpSessionStore,
+  createSdkCommandLister,
   createSdkProvider,
 } from '../providers/index.js';
 import type { PermissionPolicy } from '../providers/acp.js';
@@ -35,6 +43,13 @@ export interface StartAgentDevtoolsServerOptions {
    * `/v1/agent/stream` returns 501.
    */
   providers?: Partial<Record<ProviderId, AgentStreamFactory>>;
+  /**
+   * Model-free command listers backing `GET /v1/agent/commands`, keyed by the
+   * same `ProviderId` as `providers`. When omitted, the built-in `acp`/`sdk`
+   * listers are registered alongside the built-in providers (skipped when a
+   * custom `providers` map is supplied — the embedder then owns the runtime).
+   */
+  commandListers?: Partial<Record<ProviderId, CommandLister>>;
   /** Provider used when the request omits `provider`. Defaults to `'acp'`. */
   defaultProvider?: ProviderId;
   /** Permission mode used when the request omits `permissionMode`. Defaults to `'acceptEdits'`. */
@@ -77,16 +92,31 @@ export async function startAgentDevtoolsServer(
   // store to `createApp` so any provider that participates in the
   // mapping can light up the resume path.
   const acpSessionStore = createDefaultAcpSessionStore();
-  const providers: Partial<Record<ProviderId, AgentStreamFactory>> = options.providers ?? {
-    acp: createAcpProvider({
-      runtime: createDefaultAcpRuntime({ sessionStore: acpSessionStore }),
-    }),
-    sdk: createSdkProvider(),
-  };
+  // The built-in ACP provider and its command lister SHARE one runtime so the
+  // lister reuses the pooled child + session rather than spawning a second
+  // agent. When the embedder supplies its own `providers` map it owns the
+  // runtime lifecycle, so we only register listers it explicitly passed.
+  let providers: Partial<Record<ProviderId, AgentStreamFactory>>;
+  let commandListers: Partial<Record<ProviderId, CommandLister>>;
+  if (options.providers) {
+    providers = options.providers;
+    commandListers = options.commandListers ?? {};
+  } else {
+    const acpRuntime = createDefaultAcpRuntime({ sessionStore: acpSessionStore });
+    providers = {
+      acp: createAcpProvider({ runtime: acpRuntime }),
+      sdk: createSdkProvider(),
+    };
+    commandListers = options.commandListers ?? {
+      acp: createAcpCommandLister({ runtime: acpRuntime }),
+      sdk: createSdkCommandLister(),
+    };
+  }
   const handler = createApp({
     pairingToken,
     workspace,
     providers,
+    commandListers,
     acpSessionStore,
     ...(options.defaultProvider && { defaultProvider: options.defaultProvider }),
     ...(options.defaultPermissionMode && { defaultPermissionMode: options.defaultPermissionMode }),

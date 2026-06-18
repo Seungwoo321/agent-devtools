@@ -1,7 +1,19 @@
-import { createApp, type AgentStreamFactory, type PermissionMode, type ProviderId } from './app.js';
+import {
+  createApp,
+  type AgentStreamFactory,
+  type CommandLister,
+  type PermissionMode,
+  type ProviderId,
+} from './app.js';
 import { generatePairingToken } from './auth.js';
 import { createWorkspace, type Workspace } from '../files/index.js';
-import { createAcpProvider, createSdkProvider } from '../providers/index.js';
+import {
+  createAcpCommandLister,
+  createAcpProvider,
+  createDefaultAcpRuntime,
+  createSdkCommandLister,
+  createSdkProvider,
+} from '../providers/index.js';
 import type { PermissionPolicy } from '../providers/acp.js';
 import { DEFAULT_PORT, PORT_FALLBACK_ATTEMPTS, startServer, type StartedServer } from './server.js';
 
@@ -29,6 +41,14 @@ export interface RunCliOptions {
    * `/v1/agent/stream` responds 501. The widget picks one per request.
    */
   providers?: Partial<Record<ProviderId, AgentStreamFactory>>;
+  /**
+   * Model-free command listers backing `GET /v1/agent/commands`, keyed by the
+   * same `ProviderId` as `providers`. When omitted, the built-in `acp`/`sdk`
+   * listers are registered alongside the built-in providers (and skipped when
+   * a custom `providers` map is supplied, since the embedder then owns the
+   * runtime lifecycle the ACP lister would need to share).
+   */
+  commandListers?: Partial<Record<ProviderId, CommandLister>>;
   /** Provider used when the request omits `provider`. Defaults to `'acp'`. */
   defaultProvider?: ProviderId;
   /** Permission mode used when the request omits `permissionMode`. Defaults to `'acceptEdits'`. */
@@ -145,15 +165,32 @@ export async function runCli(
   const pairingToken = generatePairingToken();
   // When the caller doesn't pass an explicit providers map, register the
   // built-in defaults so the widget can talk to a working backend out of
-  // the box.
-  const providers: Partial<Record<ProviderId, AgentStreamFactory>> = options.providers ?? {
-    acp: createAcpProvider(),
-    sdk: createSdkProvider(),
-  };
+  // the box. The ACP provider and its command lister SHARE one runtime so
+  // the lister reuses the pooled child + session instead of spawning a
+  // second agent.
+  let providers: Partial<Record<ProviderId, AgentStreamFactory>>;
+  let commandListers: Partial<Record<ProviderId, CommandLister>>;
+  if (options.providers) {
+    providers = options.providers;
+    // The embedder owns the provider lifecycle; only register listers it
+    // explicitly supplied (an ACP lister needs the embedder's runtime).
+    commandListers = options.commandListers ?? {};
+  } else {
+    const acpRuntime = createDefaultAcpRuntime();
+    providers = {
+      acp: createAcpProvider({ runtime: acpRuntime }),
+      sdk: createSdkProvider(),
+    };
+    commandListers = options.commandListers ?? {
+      acp: createAcpCommandLister({ runtime: acpRuntime }),
+      sdk: createSdkCommandLister(),
+    };
+  }
   const handler = createApp({
     pairingToken,
     workspace,
     providers,
+    commandListers,
     ...(options.defaultProvider && { defaultProvider: options.defaultProvider }),
     ...(options.defaultPermissionMode && { defaultPermissionMode: options.defaultPermissionMode }),
     ...(options.defaultPermissionPolicy && {

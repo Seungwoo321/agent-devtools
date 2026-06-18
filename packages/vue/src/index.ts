@@ -18,6 +18,7 @@ export {
   createSourceSliceFetcher,
   createPageContextEnricher,
   createAgentInfoFetcher,
+  createAgentCommandsFetcher,
   createHandoffRequester,
   createSettingsStore,
 } from '@agent-devtools/widget-core';

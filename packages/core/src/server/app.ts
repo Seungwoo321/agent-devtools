@@ -128,6 +128,34 @@ export type AgentStreamFactory = (
   context: AgentRequestContext,
 ) => AsyncIterable<unknown>;
 
+/**
+ * The widget-facing slash command shape. Mirrors the ACP `AvailableCommand`
+ * (`@agentclientprotocol/sdk`) so the widget reuses its existing
+ * `available_commands_update` decoder for the prefetch path — `argumentHint`
+ * (SDK) is already normalized into `input.hint` by the lister, so listers
+ * always return this shape regardless of their native provider vocabulary.
+ */
+export interface AvailableCommand {
+  name: string;
+  description: string;
+  input?: { hint: string };
+}
+
+/**
+ * Reads a workspace's slash command catalogue WITHOUT invoking the model.
+ * Both providers expose a model-free control path for this:
+ *   - ACP: the agent advertises `available_commands_update` right after
+ *     `newSession({cwd})`, no prompt required (verified empirically).
+ *   - SDK: `Query.supportedCommands()` is a control call that resolves
+ *     without a model turn.
+ * The lister must resolve gracefully (empty list, never throw out) so the
+ * `GET /v1/agent/commands` route can always answer the widget's prefetch.
+ */
+export type CommandLister = (ctx: {
+  cwd?: string;
+  signal: AbortSignal;
+}) => Promise<AvailableCommand[]>;
+
 export interface AppOptions {
   /**
    * Registered runtime providers. Map of `ProviderId` → factory. If empty,
@@ -135,6 +163,16 @@ export interface AppOptions {
    * per request; if its choice is not registered the route returns 422.
    */
   providers?: Partial<Record<ProviderId, AgentStreamFactory>>;
+  /**
+   * Optional parallel registry of model-free command listers, keyed by the
+   * same `ProviderId` as `providers`. Backs `GET /v1/agent/commands` so the
+   * widget can prefetch the slash command catalogue at mount and offer
+   * autocomplete on the first keystroke — before any conversation. Kept
+   * separate from `providers` so the existing `AgentStreamFactory` contract
+   * is untouched; a provider may register a stream factory without a lister
+   * (the route then returns an empty list for it).
+   */
+  commandListers?: Partial<Record<ProviderId, CommandLister>>;
   /**
    * Provider used when the request body omits `provider`. Defaults to
    * `'acp'`. Must be a key in `providers` if `providers` is non-empty.
@@ -196,12 +234,23 @@ export interface AppOptions {
 
 const DEFAULT_MAX_BODY = 1 * 1024 * 1024;
 
+/**
+ * Upper bound on a single command-lister invocation. The ACP path waits for
+ * the agent to spawn, run `newSession`, and emit `available_commands_update`,
+ * which the probe measured at ~6–7s cold. We give generous headroom but
+ * still cap it so a stuck agent never hangs the widget's mount-time prefetch
+ * — on timeout the route answers `{ commands: [] }` and the cache stays
+ * unpopulated so a later mount can retry.
+ */
+const COMMAND_LISTER_TIMEOUT_MS = 15_000;
+
 export function createApp(options: AppOptions = {}) {
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY;
   const toEvent = options.toEvent;
   const workspace = options.workspace;
   const files = workspace ? createFileTools(workspace) : undefined;
   const providers = options.providers ?? {};
+  const commandListers = options.commandListers ?? {};
   const defaultProvider: ProviderId = options.defaultProvider ?? 'acp';
   const defaultPermissionMode: PermissionMode = options.defaultPermissionMode ?? 'acceptEdits';
   const defaultPermissionPolicy = options.defaultPermissionPolicy;
@@ -233,6 +282,52 @@ export function createApp(options: AppOptions = {}) {
         ...(defaultPermissionPolicy !== undefined && { defaultPermissionPolicy }),
       }),
     );
+  };
+
+  // Read-only slash command catalogue for the widget's mount-time prefetch.
+  // `?provider=<id>` selects the lister (default `defaultProvider`). The
+  // workspace cwd is fixed for the server lifetime, so the resolved list is
+  // cached per `(provider, cwd)` — repeated mounts (new browser tabs, HMR
+  // reloads) hit the cache instead of re-spawning the agent. Only successful
+  // resolutions are cached; a failure/timeout returns `{ commands: [] }` and
+  // leaves the slot empty so a later mount can retry.
+  const commandsCache = new Map<string, AvailableCommand[]>();
+
+  const agentCommandsRoute: RouteHandler = async ({ url, res, signal }) => {
+    const requestedProvider = url.searchParams.get('provider') ?? defaultProvider;
+
+    res.setHeader('content-type', 'application/json');
+
+    if (!PROVIDER_IDS.includes(requestedProvider as ProviderId)) {
+      // Unknown provider id — graceful empty rather than 422, so a stale
+      // widget query string never breaks the mount-time prefetch.
+      res.statusCode = 200;
+      res.end(JSON.stringify({ commands: [] }));
+      return;
+    }
+    const provider = requestedProvider as ProviderId;
+
+    const cwd = workspace?.root;
+    const cacheKey = `${provider} ${cwd ?? ''}`;
+    const cached = commandsCache.get(cacheKey);
+    if (cached) {
+      res.statusCode = 200;
+      res.end(JSON.stringify({ commands: cached }));
+      return;
+    }
+
+    const lister = commandListers[provider];
+    let commands: AvailableCommand[] = [];
+    if (lister) {
+      commands = await runCommandLister(lister, cwd, signal);
+      // Cache only a non-empty success — an empty list usually means the
+      // lister timed out or failed; caching it would pin the failure for the
+      // server lifetime and defeat the retry-on-next-mount intent.
+      if (commands.length > 0) commandsCache.set(cacheKey, commands);
+    }
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ commands }));
   };
 
   const agentStreamRoute: RouteHandler = async ({ req, res, signal }) => {
@@ -396,6 +491,7 @@ export function createApp(options: AppOptions = {}) {
   const router = createRouter([
     { method: 'GET', path: '/health', handler: healthRoute },
     { method: 'GET', path: '/v1/agent/info', handler: agentInfoRoute },
+    { method: 'GET', path: '/v1/agent/commands', handler: agentCommandsRoute },
     { method: 'POST', path: '/v1/agent/stream', handler: agentStreamRoute },
     { method: 'POST', path: '/v1/agent/handoff', handler: agentHandoffRoute },
   ]);
@@ -413,6 +509,40 @@ export function createApp(options: AppOptions = {}) {
     }
     await router(req, res);
   };
+}
+
+/**
+ * Invoke a command lister with a hard timeout and total failure containment.
+ * The route must never hang or 500 the widget's mount-time prefetch, so any
+ * rejection, throw, or timeout collapses to an empty list. The timeout fires
+ * its own `AbortSignal` (chained to the request signal) so the lister can
+ * unwind its work (e.g. the SDK short-lived query) rather than leaking it.
+ */
+async function runCommandLister(
+  lister: CommandLister,
+  cwd: string | undefined,
+  requestSignal: AbortSignal,
+): Promise<AvailableCommand[]> {
+  const controller = new AbortController();
+  const onRequestAbort = (): void => controller.abort();
+  if (requestSignal.aborted) {
+    controller.abort();
+  } else {
+    requestSignal.addEventListener('abort', onRequestAbort, { once: true });
+  }
+  const timer = setTimeout(() => controller.abort(), COMMAND_LISTER_TIMEOUT_MS);
+  try {
+    const commands = await lister({
+      ...(cwd !== undefined && { cwd }),
+      signal: controller.signal,
+    });
+    return Array.isArray(commands) ? commands : [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+    requestSignal.removeEventListener('abort', onRequestAbort);
+  }
 }
 
 class PayloadTooLargeError extends Error {

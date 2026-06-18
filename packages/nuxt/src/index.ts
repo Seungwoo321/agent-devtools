@@ -17,6 +17,13 @@
  * `@agent-devtools/vite` plugin running in the same Nuxt project (Nuxt 3
  * uses Vite by default and the Vite plugin's `framework: 'auto'` detection
  * picks `nuxt` from the host project's package.json).
+ *
+ * Because the actual server-connected mount happens through the Vite
+ * plugin's injected bootstrap (the runtime plugin only supplies
+ * `resolveRouteFile`), the slash-command catalogue prefetch needs no extra
+ * wiring here — re-exporting `createAgentCommandsFetcher` below lets that
+ * bootstrap's feature-detect build the fetcher and prefetch the catalogue
+ * at mount, matching the other adapters.
  */
 import { defineNuxtModule, addPlugin, createResolver } from '@nuxt/kit';
 
@@ -75,6 +82,7 @@ export {
   createSourceSliceFetcher,
   createPageContextEnricher,
   createAgentInfoFetcher,
+  createAgentCommandsFetcher,
   createHandoffRequester,
   createSettingsStore,
 } from '@agent-devtools/widget-core';

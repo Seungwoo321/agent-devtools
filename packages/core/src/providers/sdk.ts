@@ -31,7 +31,7 @@ import {
   type PermissionResult,
   type Query as SdkQuery,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentStreamFactory } from '../server/app.js';
+import type { AgentStreamFactory, AvailableCommand, CommandLister } from '../server/app.js';
 import {
   DEFAULT_PERMISSION_POLICY,
   type PermissionPolicy,
@@ -41,6 +41,7 @@ import { formatContextPreamble } from './context-preamble.js';
 import { categorizeSdkToolName } from './permission-category.js';
 import {
   buildAvailableCommandsEnvelope,
+  mapToAvailableCommands,
   translateSdkMessage,
   type AcpEnvelope,
 } from './sdk-to-acp.js';
@@ -169,6 +170,78 @@ export function createSdkProvider(options: CreateSdkProviderOptions = {}): Agent
       yield toErrorEnvelope(error);
     } finally {
       context.signal.removeEventListener('abort', onAbort);
+    }
+  };
+}
+
+export interface CreateSdkCommandListerOptions {
+  /** Override the SDK `query()` for tests. Production callers omit this. */
+  query?: QueryFn;
+  /**
+   * Optional path to the Claude Code executable, forwarded to the SDK as
+   * `pathToClaudeCodeExecutable`. Omit to use the SDK's built-in default.
+   */
+  pathToClaudeCodeExecutable?: string;
+}
+
+/**
+ * Build the model-free command lister for the SDK provider. Backs
+ * `GET /v1/agent/commands`.
+ *
+ * `Query.supportedCommands()` is a CONTROL call — it asks the running Claude
+ * Code child for its slash command catalogue without sending a prompt turn,
+ * so it spends no credit. We open a short-lived `query()` purely to obtain
+ * the control channel, await `supportedCommands()`, then tear the query down
+ * (`abort()` + generator `return()`) WITHOUT iterating its message stream, so
+ * the model is never engaged. Any failure resolves to an empty list — the
+ * route depends on a graceful empty.
+ */
+export function createSdkCommandLister(options: CreateSdkCommandListerOptions = {}): CommandLister {
+  const queryFn: QueryFn = options.query ?? defaultQuery;
+  return async ({ cwd, signal }): Promise<AvailableCommand[]> => {
+    const controller = new AbortController();
+    const onAbort = (): void => controller.abort();
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    const sdkOptions: SdkOptions = {
+      abortController: controller,
+      systemPrompt: { type: 'preset', preset: 'claude_code' },
+      settingSources: ['user', 'project', 'local'],
+      ...(cwd !== undefined && { cwd }),
+      ...(options.pathToClaudeCodeExecutable && {
+        pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+      }),
+    };
+
+    let stream: SdkQuery | undefined;
+    try {
+      // The prompt is never consumed: we ask for the command catalogue over
+      // the control channel and tear the query down before iterating, so the
+      // model never runs this prompt.
+      stream = queryFn({ prompt: '', options: sdkOptions });
+      const commands = await stream.supportedCommands();
+      return mapToAvailableCommands(commands);
+    } catch {
+      return [];
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+      // Best-effort teardown of the short-lived query so the child process
+      // and control channel are released. Both calls are guarded — a fake
+      // query in tests may not implement them.
+      try {
+        controller.abort();
+      } catch {
+        // ignore
+      }
+      try {
+        await stream?.return?.(undefined);
+      } catch {
+        // ignore
+      }
     }
   };
 }
