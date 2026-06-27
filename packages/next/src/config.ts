@@ -1,11 +1,19 @@
 /**
- * `next.config.{js,mjs,ts}` wrapper. Two responsibilities:
+ * `next.config.{js,mjs,ts}` wrapper. Three responsibilities:
  *
  *   1. (Dev) Inject AGENT_DEVTOOLS_NEXT_* env entries so the client-side
  *      bootstrap module knows the base URL and pairing token without the
  *      caller having to import them through a separate file.
  *
- *   2. (Prod) Install a webpack alias that maps the widget chain to
+ *   2. (Dev) Install a same-origin proxy rewrite. The in-page widget fetches
+ *      `${PROXY_PATH}/v1/agent/*` on the Next dev origin and Next forwards to
+ *      the loopback agent server. The agent server exposes no `Access-Control-*`
+ *      surface (it stays loopback-only), so a direct cross-origin fetch from
+ *      the page to `127.0.0.1:<port>` would be CORS-blocked. The injected base
+ *      URL is therefore the proxy path, not the raw agent URL — mirroring the
+ *      Vite plugin's proxy middleware.
+ *
+ *   3. (Prod) Install a webpack alias that maps the widget chain to
  *      `false` (empty module). This is Layer 1 of the dev-only guard for
  *      the Next adapter: a user-side `'use client'` component that does
  *      `import { bootstrapAgentDevtools } from '@agent-devtools/next/bootstrap'`
@@ -68,6 +76,20 @@ const ENABLED_ENV = 'AGENT_DEVTOOLS_NEXT_ENABLED';
 const BASE_URL_ENV = 'AGENT_DEVTOOLS_NEXT_BASE_URL';
 const PAIRING_TOKEN_ENV = 'AGENT_DEVTOOLS_NEXT_PAIRING_TOKEN';
 
+// Same-origin mount the widget fetches through (mirrors the Vite plugin's
+// PROXY_PATH). Next rewrites forward `${PROXY_PATH}/v1/agent/*` to the loopback
+// agent server, so browser requests never cross origins and the agent server
+// keeps its no-CORS, loopback-only posture.
+const PROXY_PATH = '/__agent_devtools';
+
+type RewriteRule = { source: string; destination: string };
+type RewriteSet = {
+  beforeFiles: RewriteRule[];
+  afterFiles: RewriteRule[];
+  fallback: RewriteRule[];
+};
+type RewriteResult = RewriteRule[] | Partial<RewriteSet>;
+
 // Aliased to `false` (empty module) in production webpack builds. We
 // deliberately KEEP `@agent-devtools/next/bootstrap` in the graph because
 // it is the tiny shim whose body early-returns on
@@ -108,10 +130,45 @@ export function withAgentDevtools<TConfig extends NextConfigLike>(
 
   const env = collectEnv(nextConfig);
   env[ENABLED_ENV] = 'true';
-  if (options.baseUrl) env[BASE_URL_ENV] = options.baseUrl;
   if (options.pairingToken) env[PAIRING_TOKEN_ENV] = options.pairingToken;
 
-  return { ...nextConfig, env, webpack };
+  // No agent server URL → nothing to proxy or wire. Leave the enabled flag
+  // only; the bootstrap no-ops when it finds no base URL.
+  if (!options.baseUrl) {
+    return { ...nextConfig, env, webpack };
+  }
+
+  // Inject the SAME-ORIGIN proxy path as the base URL, not the raw agent URL.
+  // The agent server has no `Access-Control-*` surface, so the in-page widget
+  // must reach it same-origin via the rewrite below — a direct cross-origin
+  // fetch to `127.0.0.1:<port>` would be CORS-blocked.
+  env[BASE_URL_ENV] = PROXY_PATH;
+
+  const agentBaseUrl = options.baseUrl.replace(/\/+$/, '');
+  const proxyRule: RewriteRule = {
+    source: `${PROXY_PATH}/:path*`,
+    destination: `${agentBaseUrl}/:path*`,
+  };
+  const previousRewrites = nextConfig.rewrites;
+  const rewrites = async (): Promise<RewriteSet> => {
+    const prev =
+      typeof previousRewrites === 'function'
+        ? await (previousRewrites as () => RewriteResult | Promise<RewriteResult>)()
+        : undefined;
+    if (Array.isArray(prev)) {
+      return { beforeFiles: [proxyRule], afterFiles: prev, fallback: [] };
+    }
+    if (prev && typeof prev === 'object') {
+      return {
+        beforeFiles: [proxyRule, ...(prev.beforeFiles ?? [])],
+        afterFiles: prev.afterFiles ?? [],
+        fallback: prev.fallback ?? [],
+      };
+    }
+    return { beforeFiles: [proxyRule], afterFiles: [], fallback: [] };
+  };
+
+  return { ...nextConfig, env, webpack, rewrites };
 }
 
 function collectEnv(config: NextConfigLike): Record<string, string> {
