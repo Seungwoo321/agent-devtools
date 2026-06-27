@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mountSpy = vi.fn();
 const transportSpy = vi.fn((args: unknown) => ({ kind: 'transport', args }));
+const commandsFetcherSpy = vi.fn((args: unknown) => ({ kind: 'commands', args }));
 
 vi.mock('@agent-devtools/react', () => ({
   mountAgentDevtools: (options: unknown) => mountSpy(options),
   createDefaultTransport: (args: unknown) => transportSpy(args),
+  createAgentCommandsFetcher: (args: unknown) => commandsFetcherSpy(args),
 }));
 
 describe('bootstrapAgentDevtools', () => {
