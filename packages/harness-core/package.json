@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/harness-core",
-  "version": "1.3.3-beta.0",
+  "version": "1.3.3",
   "description": "Generic agent harness — domain-agnostic loop strategies + LLM provider abstraction. Source for both @agent-devtools and external SaaS consumers.",
   "license": "MIT",
   "type": "module",

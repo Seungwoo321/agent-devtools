@@ -1,5 +1,13 @@
 # @agent-devtools/angular
 
+## 1.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`469188f`](https://github.com/Seungwoo321/agent-devtools/commit/469188f05949c641c01cc603e99672524bc202e7)]:
+  - @agent-devtools/core@1.3.3
+  - @agent-devtools/widget-core@1.3.3
+
 ## 1.3.3-beta.0
 
 ### Patch Changes
