@@ -1,5 +1,13 @@
 # @agent-devtools/vue
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/core@1.3.1
+  - @agent-devtools/widget-core@1.3.1
+
 ## 1.3.1-beta.0
 
 ### Patch Changes
