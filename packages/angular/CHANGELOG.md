@@ -1,5 +1,13 @@
 # @agent-devtools/angular
 
+## 1.3.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/core@1.3.2
+  - @agent-devtools/widget-core@1.3.2
+
 ## 1.3.2-beta.0
 
 ### Patch Changes
