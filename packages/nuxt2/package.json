@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/nuxt2",
-  "version": "1.3.2",
+  "version": "1.3.3-beta.0",
   "description": "Nuxt 2 module for agent-devtools — re-exports the Vue 2 widget + adds dev-only injection through the Nuxt 2 module API",
   "keywords": [
     "agent-devtools",
