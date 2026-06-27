@@ -54,7 +54,7 @@ describe('withAgentDevtools', () => {
     expect(result.reactStrictMode).toBe(true);
   });
 
-  it('propagates baseUrl and pairingToken into env', () => {
+  it('injects the same-origin proxy path as base URL (not the raw agent URL) and the pairing token', () => {
     vi.stubEnv('NODE_ENV', 'development');
     const result = withAgentDevtools(
       {},
@@ -62,9 +62,47 @@ describe('withAgentDevtools', () => {
     ) as Record<string, unknown>;
     expect(result.env).toMatchObject({
       AGENT_DEVTOOLS_NEXT_ENABLED: 'true',
-      AGENT_DEVTOOLS_NEXT_BASE_URL: 'http://127.0.0.1:4317',
+      // The browser must reach the agent server same-origin via the rewrite —
+      // never the raw cross-origin loopback URL (no CORS surface there).
+      AGENT_DEVTOOLS_NEXT_BASE_URL: '/__agent_devtools',
       AGENT_DEVTOOLS_NEXT_PAIRING_TOKEN: 'tok-abc',
     });
+  });
+
+  it('adds a same-origin proxy rewrite to the agent server when baseUrl is set', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const result = withAgentDevtools(
+      {},
+      { baseUrl: 'http://127.0.0.1:4317/', pairingToken: 'tok-abc' },
+    ) as { rewrites?: () => Promise<{ beforeFiles: { source: string; destination: string }[] }> };
+    expect(typeof result.rewrites).toBe('function');
+    const set = await result.rewrites!();
+    expect(set.beforeFiles).toContainEqual({
+      source: '/__agent_devtools/:path*',
+      destination: 'http://127.0.0.1:4317/:path*',
+    });
+  });
+
+  it('composes the proxy rewrite ahead of pre-existing rewrites', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const userRule = { source: '/old/:path*', destination: '/new/:path*' };
+    const result = withAgentDevtools(
+      { rewrites: () => Promise.resolve([userRule]) },
+      { baseUrl: 'http://127.0.0.1:4317', pairingToken: 'tok' },
+    ) as unknown as { rewrites: () => Promise<{ beforeFiles: unknown[]; afterFiles: unknown[] }> };
+    const set = await result.rewrites();
+    expect(set.beforeFiles).toContainEqual({
+      source: '/__agent_devtools/:path*',
+      destination: 'http://127.0.0.1:4317/:path*',
+    });
+    expect(set.afterFiles).toContainEqual(userRule);
+  });
+
+  it('does not add a rewrite when no baseUrl is provided', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const result = withAgentDevtools({}, { pairingToken: 'tok' }) as Record<string, unknown>;
+    expect(result.rewrites).toBeUndefined();
+    expect((result.env as Record<string, string>).AGENT_DEVTOOLS_NEXT_BASE_URL).toBeUndefined();
   });
 
   it('preserves pre-existing env entries when merging', () => {
