@@ -1,5 +1,13 @@
 # @agent-devtools/html
 
+## 1.3.3-beta.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/vite@1.3.3-beta.0
+  - @agent-devtools/widget-core@1.3.3-beta.0
+
 ## 1.3.2
 
 ### Patch Changes

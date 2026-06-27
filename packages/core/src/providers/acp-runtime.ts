@@ -477,7 +477,14 @@ class AcpChild {
     // Phase 1: try to resume a session persisted across dev-server
     // restarts. Only meaningful when (a) we have a store and (b) the
     // agent supports session/load.
-    const store = this.deps.sessionStore;
+    //
+    // The command-lister session is exempt: it only ever lists slash commands
+    // and never carries a conversation turn, so the agent writes no transcript
+    // for it. A persisted id would therefore always fail `loadSession` after a
+    // restart — an expected `resourceNotFound` that surfaces as noisy agent
+    // stderr on every reload. Keep it ephemeral (skip the store) so it just
+    // mints a fresh session each run instead of attempting an unresumable load.
+    const store = clientSessionId === COMMAND_LISTER_SESSION_KEY ? null : this.deps.sessionStore;
     if (store && this.supportsLoadSession) {
       const stored = await store.get(cwd, clientSessionId);
       if (stored !== undefined) {

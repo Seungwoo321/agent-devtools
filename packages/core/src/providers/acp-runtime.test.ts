@@ -420,6 +420,35 @@ describe('createDefaultAcpRuntime — session-store wiring', () => {
     expect(store.deleteCalls).toHaveLength(0);
   });
 
+  it('keeps the command-lister session ephemeral — never consults the store or calls loadSession', async () => {
+    const store = makeInMemoryStore();
+    // A stale command-lister entry left by a previous boot. It can never be
+    // resumed (the lister never has a transcript), so the runtime must ignore
+    // it instead of attempting a loadSession that always fails with -32002.
+    // Seed the underlying map directly so the recorder reflects only the
+    // runtime's own store traffic, not this setup.
+    store.state.set('/workspace __agent-devtools:command-lister__', 'acp-stale-lister');
+
+    const { runtime, harness } = await setup(store, {
+      commandsOnNewSession: { commands: [{ name: 'foo', description: 'bar' }] },
+    });
+
+    const commands = await runtime.listCommands({
+      cwd: '/workspace',
+      signal: new AbortController().signal,
+    });
+
+    expect(commands.map((c) => c.name)).toContain('foo');
+    // No resume attempt for the reserved key — it mints a fresh session...
+    expect(harness.recorder.loadSessionCalls).toHaveLength(0);
+    expect(harness.recorder.newSessionCalls).toHaveLength(1);
+    // ...and the store is never touched for the command-lister key.
+    expect(store.getCalls).not.toContainEqual(['/workspace', '__agent-devtools:command-lister__']);
+    expect(store.setCalls.some(([, cs]) => cs === '__agent-devtools:command-lister__')).toBe(false);
+    // The stale entry is left as-is (not deleted) — we simply don't read it.
+    expect(store.deleteCalls).toHaveLength(0);
+  });
+
   it('in-process cache hit short-circuits the store on the second run within one runtime', async () => {
     const store = makeInMemoryStore();
     const { runtime, harness } = await setup(store);
