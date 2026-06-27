@@ -1,5 +1,14 @@
 # @agent-devtools/nuxt
 
+## 1.3.1-beta.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @agent-devtools/core@1.3.1-beta.0
+  - @agent-devtools/vue@1.3.1-beta.0
+  - @agent-devtools/widget-core@1.3.1-beta.0
+
 ## 1.3.0
 
 ### Patch Changes

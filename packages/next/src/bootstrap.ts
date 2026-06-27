@@ -60,16 +60,19 @@ export function bootstrapAgentDevtools(options: AgentDevtoolsBootstrapOptions = 
 }
 
 function readEnv(): { enabled?: string; baseUrl?: string; pairingToken?: string } {
-  const proc =
-    typeof globalThis !== 'undefined'
-      ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-      : undefined;
-  const env = proc?.env;
-  if (!env) return {};
+  // Read each value as a LITERAL `process.env.<KEY>` expression so the bundler
+  // substitutes it at compile time (Next's `env`-config inlining via webpack
+  // DefinePlugin / Turbopack). The App Router client bundle has no runtime
+  // `process` object, so a dynamic `globalThis.process.env[key]` lookup resolves
+  // to undefined and the widget never mounts — literal member access is the only
+  // form the bundler can statically replace. (Mirrors the `process.env.NODE_ENV`
+  // literal already relied on in bootstrapAgentDevtools above.)
   const result: { enabled?: string; baseUrl?: string; pairingToken?: string } = {};
-  if (env.AGENT_DEVTOOLS_NEXT_ENABLED) result.enabled = env.AGENT_DEVTOOLS_NEXT_ENABLED;
-  if (env.AGENT_DEVTOOLS_NEXT_BASE_URL) result.baseUrl = env.AGENT_DEVTOOLS_NEXT_BASE_URL;
-  if (env.AGENT_DEVTOOLS_NEXT_PAIRING_TOKEN)
-    result.pairingToken = env.AGENT_DEVTOOLS_NEXT_PAIRING_TOKEN;
+  if (process.env.AGENT_DEVTOOLS_NEXT_ENABLED)
+    result.enabled = process.env.AGENT_DEVTOOLS_NEXT_ENABLED;
+  if (process.env.AGENT_DEVTOOLS_NEXT_BASE_URL)
+    result.baseUrl = process.env.AGENT_DEVTOOLS_NEXT_BASE_URL;
+  if (process.env.AGENT_DEVTOOLS_NEXT_PAIRING_TOKEN)
+    result.pairingToken = process.env.AGENT_DEVTOOLS_NEXT_PAIRING_TOKEN;
   return result;
 }
