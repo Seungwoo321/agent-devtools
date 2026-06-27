@@ -1,6 +1,6 @@
 {
   "name": "@agent-devtools/next-pages",
-  "version": "1.3.2-beta.0",
+  "version": "1.3.2",
   "description": "Next.js Pages Router adapter for agent-devtools — wraps the React widget for legacy pages/_app.tsx hosts",
   "keywords": [
     "agent-devtools",
